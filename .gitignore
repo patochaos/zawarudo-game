@@ -1,0 +1,32 @@
+# Godot-generated state
+.godot/
+
+# Exported builds and packages
+build/
+
+# Node / Cloudflare generated state
+backend/node_modules/
+backend/.wrangler/
+backend/dist/
+*.log
+
+# Deployment CLI state
+.vercel/
+
+# Local test and rendering artifacts
+.playwright-mcp/
+.tmp-render/
+/host-debug.png.import
+
+# Local assistant settings
+.claude/settings.local.json
+
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
