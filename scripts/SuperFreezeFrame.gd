@@ -9,6 +9,7 @@ class_name SuperFreezeFrame
 const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
+const PANEL_MAX_H := 430.0
 const PORTRAIT := preload("res://assets/art/super-portrait-v1.png")
 
 
@@ -20,10 +21,12 @@ class CutInArt:
 	var elapsed: float = 0.0
 	var duration: float = DURATION
 	var playing: bool = false
+	var _tone_texture: ImageTexture
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		size = Vector2(W, H)
+		_tone_texture = _build_tone_texture()
 		visible = false
 		set_process(true)
 
@@ -64,7 +67,7 @@ class CutInArt:
 		# expands vertically. The slight horizontal shake is deterministic.
 		draw_rect(Rect2(0.0, 0.0, W, H), ink)
 		var shake := Vector2(sin(elapsed * 74.0), cos(elapsed * 61.0)) * (4.0 * (1.0 - intro))
-		var panel_h: float = lerpf(18.0, 430.0, ease(intro, 0.45))
+		var panel_h: float = lerpf(18.0, PANEL_MAX_H, ease(intro, 0.45))
 		var top: float = H * 0.5 - panel_h * 0.5
 		var panel := PackedVector2Array([
 			Vector2(-45.0, top + 42.0) + shake,
@@ -75,14 +78,17 @@ class CutInArt:
 		draw_colored_polygon(panel, Color(deep.r, deep.g, deep.b, alpha))
 		draw_polyline(panel, Color(accent.r, accent.g, accent.b, 0.95 * alpha), 6.0, true)
 
-		# Screen-tone dots and converging speed lines keep the portrait lively
-		# even though gameplay itself is genuinely stopped.
-		for row in 13:
-			for col in 31:
-				var dot := Vector2(22.0 + float(col) * 42.0, top + 15.0 + float(row) * 31.0)
-				if dot.y < top + panel_h:
-					draw_circle(dot + shake, 1.3 + float((row + col) % 3) * 0.55,
-						Color(accent.r, accent.g, accent.b, 0.12 * alpha))
+		# The 403 screen-tone dots used to be individual draw calls every frame,
+		# which visibly stuttered in the WebGL build. They are rasterised once at
+		# startup, then cropped as the panel opens so the animation stays identical.
+		if _tone_texture != null:
+			var visible_tone_h := minf(panel_h, PANEL_MAX_H)
+			draw_texture_rect_region(_tone_texture,
+				Rect2(shake.x, top + shake.y, W, visible_tone_h),
+				Rect2(0.0, 0.0, W, visible_tone_h),
+				Color(accent.r, accent.g, accent.b, 0.12 * alpha))
+		# Converging speed lines keep the portrait lively even though gameplay
+		# itself is genuinely stopped.
 		var vanishing := Vector2(330.0 if owner_index == 0 else 950.0, H * 0.5) + shake
 		for i in 22:
 			var edge_y: float = top + float(i) / 21.0 * panel_h
@@ -99,6 +105,26 @@ class CutInArt:
 		var flash: float = maxf(0.0, 1.0 - u / 0.055)
 		if flash > 0.0:
 			draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.98, 0.88, flash * 0.82))
+
+	func _build_tone_texture() -> ImageTexture:
+		var image := Image.create(int(W), int(PANEL_MAX_H), false, Image.FORMAT_RGBA8)
+		image.fill(Color.TRANSPARENT)
+		for row in 13:
+			for col in 31:
+				var centre := Vector2(22.0 + float(col) * 42.0, 15.0 + float(row) * 31.0)
+				_stamp_circle(image, centre, 1.3 + float((row + col) % 3) * 0.55)
+		return ImageTexture.create_from_image(image)
+
+	func _stamp_circle(image: Image, centre: Vector2, radius: float) -> void:
+		var reach := int(ceil(radius + 0.5))
+		for y in range(maxi(0, int(centre.y) - reach),
+			mini(image.get_height(), int(centre.y) + reach + 1)):
+			for x in range(maxi(0, int(centre.x) - reach),
+				mini(image.get_width(), int(centre.x) + reach + 1)):
+				var distance := Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(centre)
+				var coverage := clampf(radius + 0.5 - distance, 0.0, 1.0)
+				if coverage > 0.0:
+					image.set_pixel(x, y, Color(1.0, 1.0, 1.0, coverage))
 
 	func _draw_copy(top: float, panel_h: float, accent: Color, alpha: float, shake: Vector2) -> void:
 		var copy_x: float = 600.0 if owner_index == 0 else 80.0
@@ -139,12 +165,33 @@ class CutInArt:
 
 
 var _art: CutInArt
+var _portrait_warmup: TextureRect
 
 
 func _ready() -> void:
 	layer = 40
+	# Force the large portrait onto the GPU during startup instead of paying the
+	# texture-upload cost on the first SUPER. One almost-transparent pixel is
+	# rendered for two frames and is imperceptible behind the opening scene.
+	_portrait_warmup = TextureRect.new()
+	_portrait_warmup.texture = PORTRAIT
+	_portrait_warmup.position = Vector2.ZERO
+	_portrait_warmup.size = Vector2.ONE
+	_portrait_warmup.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_portrait_warmup.stretch_mode = TextureRect.STRETCH_SCALE
+	_portrait_warmup.modulate = Color(1.0, 1.0, 1.0, 0.001)
+	_portrait_warmup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_portrait_warmup)
 	_art = CutInArt.new()
 	add_child(_art)
+	_retire_portrait_warmup.call_deferred()
+
+
+func _retire_portrait_warmup() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if is_instance_valid(_portrait_warmup):
+		_portrait_warmup.queue_free()
 
 
 func play(who: int, tint: Color) -> void:

@@ -34,7 +34,7 @@ func _ready() -> void:
 	var heading := _label(Vector2(300.0, 138.0), 680.0, 44, GOLD)
 	heading.text = "ONLINE DUEL"
 	var copy := _label(Vector2(330.0, 202.0), 620.0, 18, TEXT)
-	copy.text = "Each player uses their own keyboard and mouse.\nPlans stay private until both players lock fate."
+	copy.text = "Each player uses their own screen and controls.\nPlans stay private until both players lock fate."
 
 	_create = _button(Vector2(410.0, 286.0), Vector2(460.0, 52.0), "CREATE PRIVATE ROOM")
 	_create.pressed.connect(func(): create_requested.emit(level))

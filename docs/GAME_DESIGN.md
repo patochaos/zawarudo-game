@@ -33,7 +33,8 @@ ya no corrige: descubre si entendió bien la situación.
 - Duelo táctico 2D de vista lateral.
 - Planificación simultánea por turnos y resolución física en tiempo real.
 - Partidas cortas, al mejor de tres impactos.
-- Un jugador contra IA o dos jugadores en local.
+- Un jugador contra IA, dos jugadores en local, o un todos-contra-todos de
+  cuatro participantes con P1 humano y tres IAs independientes.
 - Precisión, lectura espacial y anticipación por encima de la velocidad de
   reacción.
 
@@ -328,6 +329,10 @@ premio fortuito.
 - Al menos una solución de arco o ruta alternativa frente a la cobertura
   central.
 - Apariciones sostenidas y sin impacto gratuito inmediato.
+- Distribución de cuatro esquinas: P1/P2 abajo y P3/P4 en extremos superiores,
+  nunca dos combatientes adyacentes sobre el mismo piso inicial.
+- Una columna vertebral vertical permanente que conecte las apariciones bajas y
+  altas aun después de destruir toda la cobertura temporal.
 - Cobertura rompible fuera del corredor principal de lanzamiento, de modo que
   destruirla abra posibilidades.
 - Diferenciación visual inmediata entre estructura permanente y cobertura
@@ -338,8 +343,8 @@ premio fortuito.
 
 | Arena | Pregunta táctica principal |
 |---|---|
-| Sacred Duel | ¿Cómo uso las habitaciones laterales sin renunciar al gran espacio aéreo central? |
-| Flight | ¿Cómo pienso trayectorias cuando combatientes y cuchillos pueden regresar por ambos ejes? |
+| Shattered Sanctum | ¿Subo o bajo por las galerías de tres alturas para rodear el santuario y alcanzar el portal lateral elevado? |
+| Flight | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
 
 ### Portales y continuidad espacial
 

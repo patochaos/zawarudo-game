@@ -13,6 +13,10 @@ var jumps: PackedByteArray = PackedByteArray()   # per tick: 1 = jump impulse on
 ## Per tick: 1 = the jump key was still down. Releasing it while still rising
 ## snips the climb, which is what gives a tap a short hop and a hold a full one.
 var holds: PackedByteArray = PackedByteArray()
+## Per tick: 1 = down+jump was pressed, dropping the body through the thin ledge
+## it is standing on. A separate channel from `jumps` because it is the opposite
+## verb sharing one button, and both have to replay exactly as recorded.
+var drops: PackedByteArray = PackedByteArray()
 
 var shot_tick: int = -1     # tick the arrow is loosed on; -1 = no shot this turn
 var aim_angle: float = 0.0  # WORLD degrees: 0 = right, +90 = straight up
@@ -42,16 +46,22 @@ func hold_at(t: int) -> bool:
 	return t >= 0 and t < holds.size() and holds[t] == 1
 
 
-func record(dir: int, jump: bool, hold: bool) -> void:
+func drop_at(t: int) -> bool:
+	return t >= 0 and t < drops.size() and drops[t] == 1
+
+
+func record(dir: int, jump: bool, hold: bool, drop: bool = false) -> void:
 	dirs.append(dir + 1)
 	jumps.append(1 if jump else 0)
 	holds.append(1 if hold else 0)
+	drops.append(1 if drop else 0)
 
 
 func clear_path() -> void:
 	dirs.clear()
 	jumps.clear()
 	holds.clear()
+	drops.clear()
 
 
 func has_shot() -> bool:
@@ -66,6 +76,12 @@ func aim_vector() -> Vector2:
 ## Which way the shot points horizontally: +1 right, -1 left.
 func aim_side() -> int:
 	return 1 if cos(deg_to_rad(aim_angle)) >= 0.0 else -1
+
+
+## Flip the horizontal side without changing how high the bow is aimed.
+func set_aim_side(side: int) -> void:
+	var elev := elevation()
+	aim_angle = elev if side >= 0 else 180.0 - elev
 
 
 ## Angle above the horizon, always in [-90, 90] regardless of side.
@@ -105,6 +121,7 @@ func to_network_dict() -> Dictionary:
 		"dirs": Array(dirs),
 		"jumps": Array(jumps),
 		"holds": Array(holds),
+		"drops": Array(drops),
 		"shot_tick": shot_tick,
 		"aim_angle": aim_angle,
 		"power": power,
@@ -116,6 +133,7 @@ func apply_network_dict(data: Dictionary) -> void:
 	dirs = PackedByteArray(data.get("dirs", []))
 	jumps = PackedByteArray(data.get("jumps", []))
 	holds = PackedByteArray(data.get("holds", []))
+	drops = PackedByteArray(data.get("drops", []))
 	shot_tick = int(data.get("shot_tick", -1))
 	aim_angle = float(data.get("aim_angle", 0.0))
 	power = clampf(float(data.get("power", 0.5)), 0.0, 1.0)

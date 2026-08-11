@@ -1,0 +1,85 @@
+<meta name="screen-orientation" content="landscape">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  #zawarudo-rotate-device {
+    display: none;
+  }
+
+  @media (orientation: portrait) and (pointer: coarse) {
+    #zawarudo-rotate-device {
+      align-items: center;
+      background: rgba(7, 2, 12, 0.96);
+      color: #f0ebff;
+      display: flex;
+      flex-direction: column;
+      font-family: ui-monospace, "Cascadia Mono", monospace;
+      gap: 18px;
+      inset: 0;
+      justify-content: center;
+      letter-spacing: 0.12em;
+      position: fixed;
+      text-align: center;
+      z-index: 2147483647;
+    }
+
+    #zawarudo-rotate-device .phone {
+      border: 3px solid rgba(195, 78, 255, 0.9);
+      border-radius: 10px;
+      box-shadow: 0 0 28px rgba(195, 78, 255, 0.22);
+      height: 82px;
+      position: relative;
+      transform: rotate(-90deg);
+      width: 48px;
+    }
+
+    #zawarudo-rotate-device .phone::after {
+      background: #f6b02e;
+      border-radius: 50%;
+      bottom: 5px;
+      content: "";
+      height: 5px;
+      left: 50%;
+      position: absolute;
+      transform: translateX(-50%);
+      width: 5px;
+    }
+
+    #zawarudo-rotate-device strong {
+      color: #f6b02e;
+      font-size: clamp(18px, 5vw, 28px);
+      font-weight: 700;
+    }
+
+    #zawarudo-rotate-device span {
+      color: rgba(240, 235, 255, 0.66);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      max-width: 290px;
+    }
+  }
+</style>
+<script>
+  (() => {
+    const tryLandscape = async () => {
+      if (window.innerWidth >= window.innerHeight) return;
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+        }
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("landscape");
+        }
+      } catch (_) {
+        // Safari/iPhone may reject both APIs; the rotate veil remains visible.
+      }
+    };
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const veil = document.createElement("div");
+      veil.id = "zawarudo-rotate-device";
+      veil.innerHTML = '<div class="phone"></div><strong>ROTATE DEVICE</strong><span>TOUCH TO TRY LANDSCAPE</span>';
+      veil.addEventListener("pointerdown", tryLandscape);
+      document.body.appendChild(veil);
+    });
+  })();
+</script>

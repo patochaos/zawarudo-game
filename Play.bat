@@ -7,6 +7,9 @@ setlocal
 cd /d "%~dp0"
 
 set "EXE=build\windows\TacticalDuel.exe"
+REM A running Windows build cannot be overwritten. When an export had to use
+REM the fallback name, launch whichever build is newest instead of a stale EXE.
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$c = Get-Item -ErrorAction SilentlyContinue 'build\windows\TacticalDuel.exe','build\windows\ZAWARUDO-latest.exe'; $c | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName"`) do set "EXE=%%i"
 
 if exist "%EXE%" (
     start "" "%EXE%"
@@ -14,7 +17,7 @@ if exist "%EXE%" (
 )
 
 echo.
-echo   Build not found:  %CD%\%EXE%
+echo   Build not found:  %EXE%
 echo.
 echo   Export it from the Godot editor ^(Project ^> Export ^> Windows^),
 echo   or run Build.bat, or use Play-Source.bat to run the code directly.
