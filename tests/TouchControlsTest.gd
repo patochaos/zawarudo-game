@@ -96,11 +96,12 @@ func _run() -> void:
 	_check(not controls.visible and not controls.has_active_touches() and not controls.aim_latched,
 		"the overlay must disappear and clear touch state during execution")
 
-	var result_actions := [false, false, false, false]
+	var result_actions := [false, false, false, false, false]
 	controls.level_previous_requested.connect(func(): result_actions[0] = true)
 	controls.level_next_requested.connect(func(): result_actions[1] = true)
 	controls.replay_requested.connect(func(): result_actions[2] = true)
 	controls.rematch_requested.connect(func(): result_actions[3] = true)
+	controls.report_requested.connect(func(): result_actions[4] = true)
 	manager.state = Phase.GAME_OVER
 	await process_frame
 	controls._press_touch(10, controls.LEVEL_PREV_RECT.get_center())
@@ -111,13 +112,18 @@ func _run() -> void:
 	controls._release_touch(12)
 	controls._press_touch(13, controls.REMATCH_RECT.get_center())
 	controls._release_touch(13)
-	_check(result_actions == [true, true, true, true],
-		"the result overlay must expose level, replay and rematch actions")
+	controls._press_touch(14, controls.REPORT_RECT.get_center())
+	controls._release_touch(14)
+	_check(result_actions == [true, true, true, true, true],
+		"the result overlay must expose level, report, replay and rematch actions")
 	manager.state = Phase.REPLAY
 	await process_frame
 	_check(controls.visible \
 		and controls._action_at(controls.REPLAY_EXIT_RECT.get_center()) == "replay",
 		"touch replay must expose a way back to the result screen")
+	controls.queue_free()
+	manager.queue_free()
+	await process_frame
 
 	if _failures == 0:
 		print("Touch controls: all tests passed")

@@ -34,6 +34,17 @@ func _run() -> void:
 	_check(game._ai_target_for(1) != 1 and game._ai_target_for(1) > 0,
 		"an AI must be able to choose another AI as its rival")
 
+	var cursors_before := []
+	for i in range(1, 4):
+		cursors_before.append(game._ai_searches[i]._cursor)
+	game._tick_ai(0.0)
+	var searches_advanced := 0
+	for i in range(1, 4):
+		if game._ai_searches[i]._cursor > cursors_before[i - 1]:
+			searches_advanced += 1
+	_check(searches_advanced == 1,
+		"four-player planning must advance only one AI search per frame")
+
 	for i in range(1, 4):
 		game._ai_searches[i].finish()
 		game._ai_searches[i].apply()
@@ -45,16 +56,28 @@ func _run() -> void:
 	_check(game.state == Phase.COMMITTING,
 		"the turn must commit after the human and all three AIs confirm")
 
+	game._begin_execution()
 	game._on_player_hit(2, game.players[2].position, 3)
 	_check(game.score[3] == 1 and game.score[0] == 0 and game.score[1] == 0 and game.score[2] == 0,
 		"a four-player hit must score for the knife owner")
-	game._begin_execution()
+	var first_hit_pause: float = game._hit_pause_left
+	_check(is_equal_approx(first_hit_pause, game.HIT_PAUSE_DURATION),
+		"the first execution hit must use the short hit-stop duration")
+	# Model the first pause having elapsed before another knife lands later in the
+	# same execution. That later impact must not start a second apparent stall.
+	game._hit_pause_left = 0.0
+	game._on_player_hit(1, game.players[1].position, 3)
+	_check(is_zero_approx(game._hit_pause_left),
+		"later four-player hits must not restart the same execution's hit-stop")
 	game._end_execution()
 	_check(game.turn == 2 and game.players[2].alive,
 		"a defeated fighter must respawn when the next four-player turn begins")
 	_check(game._ai_searches[1] != null and game._ai_searches[2] != null \
 			and game._ai_searches[3] != null,
 		"all three AI searches must be rebuilt for the next turn")
+	game._begin_execution()
+	_check(not game._hit_pause_used_this_execution and is_zero_approx(game._hit_pause_left),
+		"a new execution must restore one fresh hit-stop opportunity")
 
 	game._on_menu_start(false, 0, 2)
 	game._ui.refresh()

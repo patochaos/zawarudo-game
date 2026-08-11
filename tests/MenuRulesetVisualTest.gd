@@ -11,7 +11,8 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
-	game._menu._select(game._menu.ROW_MODE_AI_B)
+	game._menu._activate(game._menu.ROW_PLAY)
+	game._menu._select(game._menu.LOCAL_AI_CLOSE)
 	await process_frame
 	await process_frame
 
@@ -19,7 +20,7 @@ func _capture() -> void:
 	var image := root.get_texture().get_image()
 	var error := image.save_png(ProjectSettings.globalize_path(output))
 	if error == OK:
-		print("Version B menu preview saved: %s" % output)
+		print("Close menu preview saved: %s" % output)
 	else:
-		push_error("Could not save Version B menu preview (error %d)" % error)
+		push_error("Could not save Close menu preview (error %d)" % error)
 	quit(error)

@@ -11,9 +11,13 @@ const CLOCK_CENTRE := Vector2(640.0, 438.0)
 const CLOCK_RADIUS := 286.0
 
 var gm
+var reduced_flashes: bool = false
 var _phase: int = -1
 var _freeze_flash: float = 0.0
 var _resume_flash: float = 0.0
+var _impact_flash: float = 0.0
+var _impact_at: Vector2 = Vector2.ZERO
+var _impact_color: Color = Color.WHITE
 var _motes: PackedVector2Array = PackedVector2Array()
 
 
@@ -29,22 +33,31 @@ func _ready() -> void:
 func phase_changed(next_phase: int) -> void:
 	_phase = next_phase
 	if next_phase == Phase.PLANNING:
-		_freeze_flash = 1.0
+		_freeze_flash = 0.35 if reduced_flashes else 1.0
 		_resume_flash = 0.0
 	elif next_phase == Phase.EXECUTING:
-		_resume_flash = 1.0
+		_resume_flash = 0.35 if reduced_flashes else 1.0
 		_freeze_flash = 0.0
+	queue_redraw()
+
+
+func impact_flash(at: Vector2, color: Color) -> void:
+	_impact_at = at
+	_impact_color = color
+	_impact_flash = 0.45 if reduced_flashes else 1.0
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	if gm == null:
 		return
-	visible = gm.state in [Phase.PLANNING, Phase.COMMITTING, Phase.EXECUTING]
+	visible = gm.state in [Phase.PLANNING, Phase.COMMITTING, Phase.EXECUTING] \
+		or _impact_flash > 0.0
 	if not visible:
 		return
 	_freeze_flash = maxf(0.0, _freeze_flash - delta / 0.62)
 	_resume_flash = maxf(0.0, _resume_flash - delta / 0.24)
+	_impact_flash = maxf(0.0, _impact_flash - delta / 0.16)
 	queue_redraw()
 
 
@@ -55,6 +68,8 @@ func _draw() -> void:
 		_draw_frozen_world()
 	if _resume_flash > 0.0:
 		_draw_release_pulse(_resume_flash)
+	if _impact_flash > 0.0:
+		_draw_impact(_impact_flash)
 
 
 func _draw_frozen_world() -> void:
@@ -123,3 +138,15 @@ func _draw_release_pulse(u: float) -> void:
 		Color(0.80, 0.42, 1.0, 0.55 * u), 2.0)
 	draw_string(ThemeDB.fallback_font, Vector2(440.0, 304.0), "TIME FLOWS",
 		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 25, Color(1.0, 0.92, 0.66, u))
+
+
+func _draw_impact(u: float) -> void:
+	var strength := 0.32 if reduced_flashes else 1.0
+	draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.94, 0.82, 0.18 * u * strength))
+	var reach: float = 42.0 + (1.0 - u) * 96.0
+	draw_arc(_impact_at, reach, 0.0, TAU, 36,
+		Color(_impact_color.r, _impact_color.g, _impact_color.b, 0.95 * u), 4.0)
+	for i in 8:
+		var d := Vector2.from_angle(float(i) * TAU / 8.0 + PI * 0.125)
+		draw_line(_impact_at + d * 12.0, _impact_at + d * reach,
+			Color(1.0, 0.96, 0.72, 0.9 * u), 3.0)

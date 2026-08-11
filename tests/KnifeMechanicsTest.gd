@@ -36,6 +36,7 @@ class DummyCutIn:
 func _init() -> void:
 	_test_synchronised_sweep()
 	_test_velocity_response()
+	_test_secret_triple_fan()
 	_test_drag_collapses_the_arc()
 	_test_deflected_knives_fall_as_debris()
 	_test_volley_filter_and_manager_resolution()
@@ -72,6 +73,28 @@ func _test_velocity_response() -> void:
 	_check(bounced[0].x < 0.0 and bounced[1].x > 0.0, "head-on knives must bounce apart")
 	_check(bounced[0].length() < 55.0 and bounced[1].length() < 55.0,
 		"clashed knives must lose enough force to become floaty")
+
+
+func _test_secret_triple_fan() -> void:
+	var gm = GAME_MANAGER.new()
+	var aim := Vector2(1.0, -0.35).normalized()
+	var normal: Array[Vector2] = gm.knife_launch_velocities(aim, 0.6)
+	var secret: Array[Vector2] = gm.knife_launch_velocities(aim, 0.6, true)
+	_check(normal.size() == 2 and secret.size() == 3,
+		"the secret rule must change the ordinary fan from two knives to three")
+	_check(secret[0].is_equal_approx(normal[0]) and secret[2].is_equal_approx(normal[1]),
+		"the outer secret knives must preserve the normal fan edges")
+	var base: Vector2 = gm.knife_launch_velocity(aim, 0.6)
+	_check(secret[1].is_equal_approx(base),
+		"the added third knife must travel directly along the player's aim")
+	_check(is_equal_approx(secret[0].length(), base.length()) \
+		and is_equal_approx(secret[1].length(), base.length()) \
+		and is_equal_approx(secret[2].length(), base.length()),
+		"all three knives must use identical ordinary speed and physics")
+	var left: Array[Vector2] = gm.knife_launch_velocities(Vector2(-aim.x, aim.y), 0.6, true)
+	_check(left.size() == 3 and left[0].x < 0.0 and left[1].x < 0.0 and left[2].x < 0.0,
+		"the normal three-knife fan must mirror when aiming left")
+	gm.free()
 
 
 ## Drag has to bleed the throw, not the fall. If it damped both components it

@@ -184,14 +184,9 @@ func _ready() -> void:
 	add_child(_portrait_warmup)
 	_art = CutInArt.new()
 	add_child(_art)
-	_retire_portrait_warmup.call_deferred()
-
-
-func _retire_portrait_warmup() -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if is_instance_valid(_portrait_warmup):
-		_portrait_warmup.queue_free()
+	# A deferred free still presents the texture once, but does not leave a
+	# coroutine waiting on a SuperFreezeFrame that a short headless test may free.
+	_portrait_warmup.call_deferred("queue_free")
 
 
 func play(who: int, tint: Color) -> void:

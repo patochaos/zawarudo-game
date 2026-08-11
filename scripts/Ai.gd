@@ -137,6 +137,12 @@ func finish() -> void:
 		pass
 
 
+## Locks the best result already evaluated without synchronously draining the
+## rest of the queue. Used only when the shared planning clock expires.
+func complete_early() -> void:
+	done = true
+
+
 ## Replays the decision through the normal piloting API, so stamina, the ghost
 ## and the recording all end up exactly as if a human had done it.
 func apply() -> void:

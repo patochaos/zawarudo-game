@@ -26,12 +26,16 @@ const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
 const TOUCH_CONTROLS_SCRIPT := preload("res://scripts/TouchControls.gd")
 const HAZARD_SCRIPT := preload("res://scripts/Hazard.gd")
 const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
+const TUTORIAL_SCRIPT := preload("res://scripts/TutorialLayer.gd")
+const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
 ## Upper bound on projected collision sets held at once, so a long AI search
 ## cannot grow the cache without limit.
 const SOLIDS_CACHE_LIMIT := 900
+## Brief presentation-only hit-stop. At 60 Hz this holds roughly three frames.
+const HIT_PAUSE_DURATION := 0.045
 
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
@@ -55,9 +59,9 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export var ai_aim_jitter: float = 2.0        # degrees of slop on the AI's aim
 @export var ai_think_min: float = 0.8         # it takes a beat before confirming
 @export var ai_think_max: float = 2.2
-## Microseconds of search the AI may burn per frame. Its full sweep costs tens
-## of milliseconds, so it is sliced rather than done in one hitch.
-@export var ai_slice_usec: int = 3000
+## Soft budget for the one AI search advanced each frame. A single candidate
+## cannot be pre-empted, so keeping this low avoids visible planning hitches.
+@export var ai_slice_usec: int = 1200
 
 @export_group("Match")
 ## Hits needed to take the match. A hit does not end the round — the victim
@@ -114,7 +118,6 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 ## not have to predict exactly; a full wind-up is a tight, fast pair.
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
-
 @export_group("Knife Clash")
 ## Knives collide with each other in mid-air. Both survive, both get knocked off
 ## line and slowed, so a deflected pair falls in floaty arcs that nobody planned
@@ -246,6 +249,7 @@ var banner_time: float = 0.0
 var rng := RandomNumberGenerator.new()
 var _ai_think: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _ai_searches: Array = [null, null, null, null]
+var _ai_step_cursor: int = 0
 var _menu
 var _tuning
 var planning_time_left: float = 0.0
@@ -377,6 +381,22 @@ var _ui
 var _online_client: OnlineClient
 var _online_lobby: OnlineLobby
 var _touch_controls: TouchControls
+var _tutorial
+var tutorial_mode: bool = false
+var _telemetry
+var _telemetry_finished: bool = true
+var hit_freeze_enabled: bool = true
+var reduced_flashes: bool = false
+var _hit_pause_left: float = 0.0
+var _hit_pause_used_this_execution: bool = false
+var _secret_triple_match: bool = false
+var _settings: Dictionary = {
+	"sound": 1.0,
+	"hit_freeze": true,
+	"reduced_flashes": false,
+	"maximized": true,
+	"telemetry": true,
+}
 
 
 func _ready() -> void:
@@ -431,6 +451,7 @@ func _ready() -> void:
 	_touch_controls.menu_requested.connect(_on_touch_menu)
 	_touch_controls.rematch_requested.connect(_on_touch_rematch)
 	_touch_controls.replay_requested.connect(_on_touch_replay)
+	_touch_controls.report_requested.connect(copy_match_report)
 	_touch_controls.level_previous_requested.connect(func(): _cycle_rematch_level(-1))
 	_touch_controls.level_next_requested.connect(func(): _cycle_rematch_level(1))
 	_ui.set_touch_mode(touch_enabled)
@@ -440,11 +461,19 @@ func _ready() -> void:
 	_super_freeze = SUPER_FREEZE_SCRIPT.new()
 	add_child(_super_freeze)
 
+	_tutorial = TUTORIAL_SCRIPT.new()
+	add_child(_tutorial)
+
+	_telemetry = TELEMETRY_SCRIPT.new()
+	add_child(_telemetry)
+
 	_menu = MENU_SCRIPT.new()
 	add_child(_menu)
 	_menu.start_requested.connect(_on_menu_start)
 	_menu.freeplay_requested.connect(_on_menu_freeplay)
 	_menu.online_requested.connect(_on_menu_online)
+	_menu.tutorial_requested.connect(_on_menu_tutorial)
+	_menu.option_changed.connect(_on_option_changed)
 
 	_online_client = ONLINE_CLIENT_SCRIPT.new()
 	add_child(_online_client)
@@ -473,6 +502,8 @@ func _ready() -> void:
 	_spawn_players()
 	_tuning.build(self)
 	_tuning.visible = false
+	_load_settings()
+	_menu.configure_options(_settings)
 	_assign_pads()
 	Input.joy_connection_changed.connect(func(_d, _c): _assign_pads())
 	_prev_mouse = get_viewport().get_mouse_position()
@@ -497,6 +528,9 @@ func _open_menu() -> void:
 		_finish_match_replay()
 	if _super_freeze != null:
 		_super_freeze.cancel()
+	if _tutorial != null:
+		_tutorial.stop()
+	tutorial_mode = false
 	state = Phase.MENU
 	banner_time = 0.0
 	_ui.visible = false     # the arena stays as a backdrop; the HUD would be noise
@@ -507,6 +541,7 @@ func _open_menu() -> void:
 
 
 func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
+	tutorial_mode = false
 	online_mode = false
 	online_player = -1
 	_apply_ruleset(_menu.ruleset)
@@ -518,9 +553,30 @@ func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
 	_load_level(lvl)
 	restart()
 	_sfx.play("title")
+	_begin_match_telemetry("ai_%s" % ("close" if prototype_mode else "wide") \
+		if ai else "local_%dp" % requested_players)
+
+
+func _on_menu_tutorial() -> void:
+	tutorial_mode = true
+	online_mode = false
+	online_player = -1
+	_apply_ruleset(0)
+	vs_ai = false
+	_set_player_count(1)
+	_ui.visible = true
+	_ui.show_controls(true)
+	_tuning.visible = false
+	_menu.close()
+	_load_level(0)
+	restart()
+	_tutorial.start(self)
+	_sfx.play("title")
+	_begin_match_telemetry("tutorial")
 
 
 func _on_menu_online(lvl: int) -> void:
+	tutorial_mode = false
 	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
@@ -649,6 +705,7 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int) -> void:
 	_load_level(lvl)
 	restart()
 	_sfx.play("title")
+	_begin_match_telemetry("online")
 
 
 func _apply_online_turn_plans(message: Dictionary) -> void:
@@ -703,6 +760,7 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 ## movement and shooting can be judged by feel, with the tuning values editable
 ## live. Whatever you set here is what the real match uses afterwards.
 func _on_menu_freeplay(lvl: int) -> void:
+	tutorial_mode = false
 	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
@@ -711,6 +769,48 @@ func _on_menu_freeplay(lvl: int) -> void:
 	_load_level(lvl)
 	_reset_freeplay()
 	state = Phase.FREEPLAY
+
+
+func _load_settings() -> void:
+	_settings["maximized"] = DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		for key in _settings.keys():
+			_settings[key] = cfg.get_value("options", key, _settings[key])
+	_apply_settings()
+
+
+func _save_settings() -> void:
+	var cfg := ConfigFile.new()
+	for key in _settings.keys():
+		cfg.set_value("options", key, _settings[key])
+	var error := cfg.save("user://settings.cfg")
+	if error != OK:
+		push_warning("Could not save options (error %d)" % error)
+
+
+func _on_option_changed(key: String, value: Variant) -> void:
+	if not _settings.has(key):
+		return
+	_settings[key] = value
+	_apply_settings()
+	_save_settings()
+
+
+func _apply_settings() -> void:
+	hit_freeze_enabled = bool(_settings["hit_freeze"])
+	reduced_flashes = bool(_settings["reduced_flashes"])
+	if _sfx != null:
+		_sfx.set_volume(float(_settings["sound"]))
+	if _time_stop != null:
+		_time_stop.reduced_flashes = reduced_flashes
+	if _telemetry != null:
+		_telemetry.enabled = bool(_settings["telemetry"])
+	if DisplayServer.get_name() != "headless":
+		var desired := DisplayServer.WINDOW_MODE_MAXIMIZED if bool(_settings["maximized"]) \
+			else DisplayServer.WINDOW_MODE_WINDOWED
+		if DisplayServer.window_get_mode() != desired:
+			DisplayServer.window_set_mode(desired)
 
 
 func _reset_freeplay() -> void:
@@ -881,7 +981,8 @@ func _apply_movers(abs_tick: int) -> void:
 
 func _load_level(index: int) -> void:
 	level_index = posmod(index, Levels.count())
-	var lv := Levels.build_prototype() if prototype_mode else Levels.build(level_index)
+	var lv := Levels.build_tutorial() if tutorial_mode else \
+		(Levels.build_prototype() if prototype_mode else Levels.build(level_index))
 	level_name = lv["name"]
 	level_wrap = Levels.wrap_label(lv)
 	rematch_level_index = level_index
@@ -1027,11 +1128,11 @@ func _add_player(i: int) -> void:
 	players.append(p)
 
 
-## Local matches can switch between the duel roster and one human plus three
-## AI opponents without rebuilding the scene. Online and Free Play stay at two.
+## Local matches can switch between the one-player tutorial, the duel roster,
+## and one human plus three AI opponents without rebuilding the scene.
 func _set_player_count(requested: int) -> void:
 	_ai_searches.fill(null)
-	player_count = clampi(requested, 2, MAX_PLAYERS)
+	player_count = clampi(requested, 1, MAX_PLAYERS)
 	while players.size() > player_count:
 		var p: Player = players.pop_back()
 		_player_layer.remove_child(p)
@@ -1067,11 +1168,24 @@ func knife_launch_velocity(aim: Vector2, power: float) -> Vector2:
 
 ## One direct knife plus one small upward branch in Close Camera. The upward
 ## sign mirrors with facing, so the second knife rises on both sides.
-func knife_launch_velocities(aim: Vector2, power: float) -> Array[Vector2]:
+func knife_launch_velocities(aim: Vector2, power: float, secret_triple: bool = false) -> Array[Vector2]:
+	secret_triple = secret_triple or _secret_triple_match
 	var base: Vector2 = knife_launch_velocity(aim, power)
 	var side: float = -1.0 if base.x < 0.0 else 1.0
+	var offsets: PackedFloat32Array = knife_offsets(power)
+	if secret_triple:
+		offsets.clear()
+		if prototype_mode:
+			offsets.append(-prototype_secondary_lob_angle)
+			offsets.append(0.0)
+			offsets.append(prototype_secondary_lob_angle)
+		else:
+			var half_spread := knife_spread_for(power) * 0.5
+			offsets.append(-half_spread)
+			offsets.append(0.0)
+			offsets.append(half_spread)
 	var out: Array[Vector2] = []
-	for off in knife_offsets(power):
+	for off in offsets:
 		var signed_offset: float = -side * off if prototype_mode else off
 		out.append(base.rotated(deg_to_rad(signed_offset)))
 	return out
@@ -1144,6 +1258,13 @@ func replay_time_left() -> float:
 # -------------------------------------------------------------- main loop ----
 
 func _physics_process(delta: float) -> void:
+	# Hit-stop pauses wall-clock presentation only. No deterministic tick is
+	# consumed, so offline, replay and lockstep simulation remain identical.
+	if _hit_pause_left > 0.0 and state == Phase.EXECUTING:
+		_hit_pause_left = maxf(0.0, _hit_pause_left - delta)
+		_preview.queue_redraw()
+		_ui.refresh()
+		return
 	match state:
 		Phase.MENU:
 			return
@@ -1163,12 +1284,18 @@ func _physics_process(delta: float) -> void:
 			return
 		Phase.PLANNING:
 			_poll_planning_input(delta)
+			var tutorial_waiting: bool = tutorial_mode and _tutorial != null \
+				and not _tutorial.timed_turns_started
+			if tutorial_waiting and _tutorial.observe_planning():
+				_ui.refresh()
+				return
 			_auto_ready_finished_plans(delta)
 			_tick_ai(delta)
 			_update_facing()
 			_rebuild_ghost_paths()
-			planning_time_left -= delta
-			if planning_time_left <= 0.0:
+			if not tutorial_waiting:
+				planning_time_left -= delta
+			if not tutorial_waiting and planning_time_left <= 0.0:
 				planning_time_left = 0.0
 				if online_mode:
 					# Each client submits independently; execution only begins after
@@ -1523,6 +1650,8 @@ func _award_super_charge(shooter: int) -> void:
 ## Advances only at execution boundaries, so the telegraph and active lifetime
 ## are expressed in whole player decisions rather than wall-clock seconds.
 func _advance_temporal_core() -> void:
+	if tutorial_mode:
+		return
 	if _core_collected_this_execution:
 		hitless_execution_streak = 0
 		return
@@ -1603,6 +1732,8 @@ func _check_core_collection() -> void:
 		super_meter[i] = 1.0
 		super_armed[i] = false
 		players[i].queue_redraw()
+	if _telemetry != null:
+		_telemetry.record("core_claimed", turn, {"players": collectors.duplicate()})
 	_core_collected_this_execution = true
 	core_active = false
 	core_announced = false
@@ -1674,13 +1805,27 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 	_effects.add(Effects.Kind.KILL, at, victim.color)
 	_remember_aftermath("HIT", at, victim.color.lightened(0.35))
 	_sfx.play("hit")
+	# One short accent per execution keeps a crowded four-player volley from
+	# turning several legitimate impacts into a chain of apparent frame stalls.
+	if hit_freeze_enabled and state == Phase.EXECUTING and not _hit_pause_used_this_execution:
+		_hit_pause_left = HIT_PAUSE_DURATION
+		_hit_pause_used_this_execution = true
+	if _time_stop != null:
+		_time_stop.impact_flash(at, victim.color)
 	if state == Phase.FREEPLAY:
 		return          # the sandbox keeps no score and never ends
 	_hit_this_execution = true
+	if _telemetry != null:
+		_telemetry.record("hit", turn, {
+			"victim": victim_idx + 1,
+			"shooter": shooter_idx + 1 if shooter_idx >= 0 else 0,
+			"x": int(round(at.x)),
+			"y": int(round(at.y)),
+		})
 	# A returning knife may hit its owner. The hit still removes them for this
 	# window, but it must not award a point to an arbitrary rival.
 	if scorer < 0 or scorer >= players.size() or scorer == victim_idx:
-		banner_text = "PLAYER %d HIT BY THEIR OWN KNIFE" % (victim_idx + 1)
+		banner_text = "P%d  SELF-HIT" % (victim_idx + 1)
 		banner_color = victim.color
 		banner_time = banner_duration
 		return
@@ -1690,10 +1835,11 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		state = Phase.GAME_OVER
 		winner = scorer
 		_prime_game_over_pad_state()
-		banner_text = "PLAYER %d WINS THE MATCH" % (scorer + 1)
+		banner_text = "P%d  WINS" % (scorer + 1)
 		banner_color = PLAYER_COLORS[scorer]
+		_finish_match_telemetry()
 	else:
-		banner_text = "PLAYER %d HIT     %s" % [victim_idx + 1, _score_text()]
+		banner_text = "P%d  →  HIT  →  P%d" % [scorer + 1, victim_idx + 1]
 		banner_color = PLAYER_COLORS[scorer]
 	banner_time = banner_duration
 
@@ -1756,6 +1902,7 @@ func _begin_planning(first: bool) -> void:
 	# Every AI gets an independent blind search and a small confirmation delay,
 	# so a four-player planning phase remains readable rather than snapping READY.
 	_ai_searches.fill(null)
+	_ai_step_cursor = 0
 	for i in players.size():
 		if not is_ai(i) or not players[i].alive:
 			continue
@@ -1768,23 +1915,40 @@ func _begin_planning(first: bool) -> void:
 		_ai_think[i] = rng.randf_range(ai_think_min, ai_think_max)
 
 
-## The search runs in slices so it never costs a visible frame.
+func start_tutorial_timed_turns() -> void:
+	if not tutorial_mode or state != Phase.PLANNING:
+		return
+	planning_duration = 5.0
+	planning_time_left = planning_duration
+	banner_text = "TIMED TURNS"
+	banner_color = Color(1.0, 0.78, 0.30)
+	banner_time = 1.5
+
+
+## Advance one opponent per frame in round-robin order. Giving every AI its own
+## slice in the same frame multiplied the soft budget by three in four-player
+## matches, and one expensive candidate could overrun each slice.
 func _tick_ai(delta: float) -> void:
-	var active_ai := 0
-	for i in players.size():
-		if is_ai(i) and players[i].alive and not players[i].plan.confirmed:
-			active_ai += 1
-	var slice_per_ai := maxi(500, ai_slice_usec / maxi(active_ai, 1))
 	var rebuilt := false
+	for offset in players.size():
+		var i: int = (_ai_step_cursor + offset) % players.size()
+		if not is_ai(i) or players[i].plan.confirmed or not players[i].alive:
+			continue
+		var search = _ai_searches[i]
+		if search == null or search.done:
+			continue
+		search.step(ai_slice_usec)
+		_ai_step_cursor = (i + 1) % players.size()
+		if search.done:
+			search.apply()
+			rebuilt = true
+		break
+
 	for i in players.size():
 		if not is_ai(i) or players[i].plan.confirmed or not players[i].alive:
 			continue
 		var search = _ai_searches[i]
 		if search != null and not search.done:
-			search.step(slice_per_ai)
-			if search.done:
-				search.apply()
-				rebuilt = true
 			continue
 		_ai_think[i] -= delta
 		if _ai_think[i] <= 0.0:
@@ -1812,13 +1976,14 @@ func _begin_commit() -> void:
 
 
 func _begin_execution() -> void:
-	# Safety net: if the window opens before the sliced search finished (very
-	# short planning phases), finish it in one go rather than shipping no plan.
+	# Use the best candidate found so far if the planning clock beats the sliced
+	# search. Finishing several searches synchronously caused a large hitch at the
+	# exact moment a four-player execution began.
 	var rebuilt := false
 	for i in players.size():
 		var search = _ai_searches[i]
 		if search != null and not search.done:
-			search.finish()
+			search.complete_early()
 			search.apply()
 			rebuilt = true
 	# apply() adds recorded ticks, so the cached ghost is now stale — and the
@@ -1835,6 +2000,8 @@ func _begin_execution() -> void:
 	_super_cutins_shown.fill(false)
 	exec_tick = 0
 	exec_ticks_total = exec_ticks()
+	_hit_pause_left = 0.0
+	_hit_pause_used_this_execution = false
 	_hit_this_execution = false
 	_core_collected_this_execution = false
 	_blasts_this_execution = 0
@@ -2155,6 +2322,7 @@ func _update_facing() -> void:
 
 
 func restart() -> void:
+	_secret_triple_match = false
 	if _super_freeze != null:
 		_super_freeze.cancel()
 	_replay_frames.clear()
@@ -2398,6 +2566,8 @@ func _request_rematch() -> void:
 	else:
 		_load_level(rematch_level_index)
 		restart()
+		_begin_match_telemetry("tutorial" if tutorial_mode else \
+			("ai_%s" % ("close" if prototype_mode else "wide") if vs_ai else "local_2p"))
 
 
 func _cycle_rematch_level(direction: int) -> void:
@@ -2438,6 +2608,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			KEY_F10:
 				_load_level(level_index + 1)
 				_reset_freeplay()
+			KEY_F7:
+				_activate_secret_triple_match()
+			KEY_F8:
+				_fill_test_super(k.shift_pressed)
 			_:
 				_tuning.handle_key(k.keycode, k.shift_pressed)
 		return
@@ -2482,6 +2656,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_cycle_rematch_level(-1)
 			elif k.keycode == KEY_RIGHT:
 				_cycle_rematch_level(1)
+			elif k.keycode == KEY_C:
+				copy_match_report()
 			return
 
 		if k.keycode == KEY_SHIFT:
@@ -2512,6 +2688,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_cycle_rematch_level(1)
 			KEY_M:
 				_sfx.toggle_mute()
+			KEY_C:
+				copy_match_report()
 		return
 
 	match k.keycode:
@@ -2537,18 +2715,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			execution_duration = 0.75
 			return
 		KEY_F7:
-			execution_duration = 1.20
+			_activate_secret_triple_match()
 			return
 		KEY_F8:
-			# Playtest shortcut: waiting for clashes or a Core every time would make
-			# iteration unnecessarily slow. It fills the meter but does not arm it.
-			var who: int = 1 if k.shift_pressed else 0
-			super_meter[who] = 1.0
-			super_armed[who] = false
-			players[who].queue_redraw()
-			banner_text = "PLAYER %d — SUPER READY (TEST)" % (who + 1)
-			banner_color = PLAYER_COLORS[who].lightened(0.35)
-			banner_time = 1.4
+			_fill_test_super(k.shift_pressed)
 			return
 		KEY_F9:
 			restart()
@@ -2600,6 +2770,8 @@ func _toggle_super(i: int) -> void:
 	banner_color = Color(1.0, 0.94, 0.58) if super_armed[i] \
 		else PLAYER_COLORS[i].lightened(0.25)
 	banner_time = 1.1
+	if _telemetry != null:
+		_telemetry.record("super_toggled", turn, {"player": i + 1, "armed": super_armed[i]})
 
 
 ## Un-fires the shot and drops the confirmation. The piloted path survives, so
@@ -2616,6 +2788,8 @@ func _rollback(i: int) -> void:
 	p.plan.super_volley = -1
 	charging[i] = false
 	_charge_t[i] = 0.0
+	if _telemetry != null:
+		_telemetry.record("undo", turn, {"player": i + 1})
 
 
 ## Throws the movement recording away and refills stamina. The shot goes with
@@ -2625,6 +2799,8 @@ func _reset_path(i: int) -> void:
 		return
 	players[i].plan.confirmed = false
 	_reset_pilot(i)
+	if _telemetry != null:
+		_telemetry.record("path_reset", turn, {"player": i + 1})
 
 
 func _confirm(i: int) -> void:
@@ -2638,6 +2814,15 @@ func _confirm(i: int) -> void:
 	if charging[i]:
 		_release_charge(i)
 	p.plan.confirmed = true
+	if _telemetry != null:
+		_telemetry.record("plan_locked", turn, {
+			"player": i + 1,
+			"movement_ticks": p.plan.recorded_ticks(),
+			"shot_tick": p.plan.shot_tick,
+			"power": snappedf(p.plan.power, 0.01),
+			"super": p.plan.super_shot,
+			"live_knives": arrows.size(),
+		})
 	if online_mode:
 		_online_plan_sent = _online_client.send_plan(turn, p.plan.to_network_dict())
 		if _online_plan_sent:
@@ -2664,10 +2849,14 @@ func _poll_game_over_pad() -> void:
 			continue
 		var rematch_pressed := _pad_edge(i, pad, JOY_BUTTON_A)
 		var replay_pressed := _pad_edge(i, pad, JOY_BUTTON_Y)
+		var report_pressed := _pad_edge(i, pad, JOY_BUTTON_X)
 		var previous_pressed := _pad_edge(i, pad, JOY_BUTTON_DPAD_LEFT)
 		var next_pressed := _pad_edge(i, pad, JOY_BUTTON_DPAD_RIGHT)
 		if replay_pressed:
 			_start_match_replay()
+			return
+		if report_pressed:
+			copy_match_report()
 			return
 		if rematch_pressed:
 			_request_rematch()
@@ -2698,7 +2887,7 @@ func _prime_game_over_pad_state() -> void:
 		var pad: int = _pads[i]
 		if pad < 0:
 			continue
-		for button in [JOY_BUTTON_A, JOY_BUTTON_Y,
+		for button in [JOY_BUTTON_A, JOY_BUTTON_X, JOY_BUTTON_Y,
 				JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]:
 			_pad_btn_prev[i][button] = Input.is_joy_button_pressed(pad, button)
 
@@ -2947,11 +3136,64 @@ func _release_charge(i: int) -> void:
 		pl.shot_tick = mini(pl.shot_tick, maxi(0, exec_ticks() - 1 - runway))
 
 
+## Undocumented F7 easter egg. Once activated, every ordinary throw in the
+## current local match uses the three-knife pattern for every player.
+func _activate_secret_triple_match() -> void:
+	if online_mode:
+		return
+	_secret_triple_match = true
+	for p: Player in players:
+		p.queue_redraw()
+	_rebuild_ghost_paths()
+
+
+## Restored playtest shortcut: F8 fills P1; Shift+F8 fills P2.
+func _fill_test_super(second_player: bool) -> void:
+	var who := 1 if second_player else 0
+	if who < 0 or who >= players.size():
+		return
+	super_meter[who] = 1.0
+	super_armed[who] = false
+	players[who].queue_redraw()
+	banner_text = "PLAYER %d — SUPER READY (TEST)" % (who + 1)
+	banner_color = PLAYER_COLORS[who].lightened(0.35)
+	banner_time = 1.4
+
+
 func _report_online_match_over() -> void:
 	if not online_mode or _online_match_reported or winner < 0:
 		return
 	_online_match_reported = true
 	_online_client.send_match_over(turn, winner, _online_state_digest())
+
+
+func _begin_match_telemetry(mode: String) -> void:
+	if _telemetry == null:
+		return
+	var input_name := "touch" if _touch_controls.enabled else \
+		("gamepad" if not _pads.is_empty() and _pads[0] >= 0 else "keyboard_mouse")
+	_telemetry.begin_match(mode, level_name,
+		"close" if prototype_mode else "wide", input_name)
+	_telemetry_finished = false
+
+
+func _finish_match_telemetry() -> void:
+	if _telemetry == null or _telemetry_finished:
+		return
+	_telemetry_finished = true
+	_telemetry.finish_match(winner, score, turn, _online_state_digest())
+
+
+func copy_match_report() -> bool:
+	if _telemetry == null or not _telemetry.copy_latest_to_clipboard():
+		banner_text = "NO REPORT YET"
+		banner_color = Color(0.72, 0.66, 0.82)
+		banner_time = 1.2
+		return false
+	banner_text = "MATCH REPORT COPIED"
+	banner_color = Color(0.62, 0.95, 0.72)
+	banner_time = 1.4
+	return true
 
 
 ## Both browsers hash the gameplay state after each execution. The room advances

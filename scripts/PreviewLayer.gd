@@ -5,6 +5,8 @@ extends Node2D
 ## existing knives. Hidden entirely during EXECUTION.
 
 var gm
+var _arrow_prediction_tick: int = -1
+var _arrow_prediction_cache: Dictionary = {}
 
 
 func _draw() -> void:
@@ -316,9 +318,9 @@ func _arrow_between(from: Vector2, to: Vector2, col: Color) -> void:
 # ----------------------------------------------------------------- arrows ----
 
 func _draw_existing_arrows() -> void:
+	_validate_arrow_prediction_cache()
 	for a in gm.arrows:
-		var pred := PredictionSystem.predict_arrow(a.position, a.vel, gm,
-			gm.trajectory_preview_time, gm.world_tick, a.clashed)
+		var pred: Dictionary = _prediction_for_arrow(a)
 		var immediate: bool = _is_immediate_threat(pred["path"])
 		if immediate:
 			_draw_immediate_warning(a.position, pred["path"])
@@ -334,6 +336,30 @@ func _draw_existing_arrows() -> void:
 				Color(1, 1, 1, 0.92 if immediate else 0.62))
 
 		_draw_trajectory(pred["path"], a.color, true, true, gm.exec_ticks())
+
+
+## Existing knives and the world are frozen throughout planning, so their full
+## 4.5-second predictions are identical on every redraw. Cache them until the
+## world tick or live knife set changes; threat checks still use the live ghosts.
+func _validate_arrow_prediction_cache() -> void:
+	var valid: bool = _arrow_prediction_tick == gm.world_tick \
+		and _arrow_prediction_cache.size() == gm.arrows.size()
+	if valid:
+		for a in gm.arrows:
+			if not _arrow_prediction_cache.has(a.get_instance_id()):
+				valid = false
+				break
+	if not valid:
+		_arrow_prediction_cache.clear()
+		_arrow_prediction_tick = gm.world_tick
+
+
+func _prediction_for_arrow(a: Arrow) -> Dictionary:
+	var id := a.get_instance_id()
+	if not _arrow_prediction_cache.has(id):
+		_arrow_prediction_cache[id] = PredictionSystem.predict_arrow(a.position, a.vel, gm,
+			gm.trajectory_preview_time, gm.world_tick, a.clashed)
+	return _arrow_prediction_cache[id]
 
 
 func _is_immediate_threat(arrow_path: PackedVector2Array) -> bool:
