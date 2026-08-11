@@ -361,6 +361,22 @@ func _draw() -> void:
 	# Drawn in local space along +X; node rotation points it along velocity
 	# (or tumbles it, once deflected).
 	var edge: Color = color.lightened(0.55)
+	# A frozen, already-existing knife gets a solid halo and a velocity chevron.
+	# Planned shots remain thin translucent paths, so danger versus intention is
+	# legible without another HUD sentence.
+	if cfg != null and cfg.state in [Phase.PLANNING, Phase.COMMITTING]:
+		var local_velocity := vel.rotated(-rotation).normalized()
+		if not local_velocity.is_zero_approx():
+			var marker_end := local_velocity * 28.0
+			draw_line(local_velocity * 16.0, marker_end,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+			var wing := local_velocity.orthogonal() * 4.0
+			draw_line(marker_end, marker_end - local_velocity * 7.0 + wing,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+			draw_line(marker_end, marker_end - local_velocity * 7.0 - wing,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+		draw_arc(Vector2.ZERO, 10.0, 0.0, TAU, 18,
+			Color(edge.r, edge.g, edge.b, 0.55), 1.5)
 	if boost_count > 0 or (cfg != null and vel.length() > cfg.arrow_speed_max):
 		draw_line(Vector2(-22.0, 0.0), Vector2(-5.0, 0.0),
 			Color(1.0, 0.72, 0.18, 0.78), 4.0, true)

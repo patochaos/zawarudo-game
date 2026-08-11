@@ -344,7 +344,7 @@ premio fortuito.
 | Arena | Pregunta táctica principal |
 |---|---|
 | Shattered Sanctum | ¿Subo o bajo por las galerías de tres alturas para rodear el santuario y alcanzar el portal lateral elevado? |
-| Flight | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
+| Endless Descent | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
 
 ### Portales y continuidad espacial
 

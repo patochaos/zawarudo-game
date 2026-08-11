@@ -14,66 +14,110 @@ func _run() -> void:
 	await process_frame
 
 	_check(menu._row_buttons.size() == menu.ROWS,
-		"every visible menu row must have a mouse hit target")
-	menu._row_buttons[menu.ROW_HOW_TO].pressed.emit()
-	_check(menu._showing_how, "clicking HOW TO PLAY must open the brief instructions")
-	_check(not menu._row_buttons[0].visible,
-		"the main menu hit targets must not intercept the How to Play screen")
+		"every menu row slot must have a mouse hit target")
+	_check(menu._page_names() == ["PLAY", "TUTORIAL", "ONLINE", "OPTIONS", "QUIT"],
+		"the main menu must expose only the five primary choices")
+	_check(not menu._footer.text.is_empty(),
+		"the highlighted main choice must have a footer description")
+	var play_footer: String = menu._footer.text
+	menu._row_buttons[menu.ROW_TUTORIAL].mouse_entered.emit()
+	_check(menu._footer.text != play_footer and "stamina" in menu._footer.text,
+		"hovering a row must replace the contextual footer copy")
 
-	var back: Button = menu._how_items[menu._how_items.size() - 1]
-	back.pressed.emit()
-	_check(not menu._showing_how and menu._row_buttons[0].visible,
-		"the clickable BACK button must restore the main menu")
+	var tutorial_started := [false]
+	menu.tutorial_requested.connect(func(): tutorial_started[0] = true)
+	menu._row_buttons[menu.ROW_TUTORIAL].pressed.emit()
+	_check(tutorial_started[0], "Tutorial must remain directly launchable")
 
-	var main_names: Array[String] = menu._page_names()
-	_check(main_names == [
-		"VS AI (1v1) - VERSION A", "VS AI (1v1) - VERSION B", "4 PLAYERS",
-		"VS HUMAN (LOCAL)", "FREE PLAY", "HOW TO PLAY", "QUIT",
-	], "the main menu must expose the requested seven choices in order")
+	var online_opened := [false]
+	menu.online_requested.connect(func(_level): online_opened[0] = true)
+	menu.open()
+	menu._row_buttons[menu.ROW_ONLINE].pressed.emit()
+	_check(online_opened[0], "Online must remain directly accessible from the main menu")
 
 	var level_before_main_input: int = menu.level
+	menu.open()
 	menu.handle_key(KEY_D)
 	_check(menu.level == level_before_main_input,
 		"left/right must not change levels from the main menu")
+
+	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
+	_check(menu._page == menu.MenuPage.LOCAL_PLAY,
+		"Play must open the local mode submenu")
+	_check(menu._page_names() == [
+		"VS AI — WIDE", "VS AI — CLOSE", "VS HUMAN", "4 PLAYERS", "FREE PLAY", "‹  BACK",
+	], "the local submenu must group every local mode plus Back")
+	for row in menu._page_row_count():
+		menu._select(row)
+		_check(not menu._footer.text.is_empty(),
+			"every local mode must have a footer description")
 
 	var started := [false, -1, 0]
 	menu.start_requested.connect(func(_ai: bool, selected_level: int, _players: int):
 		started[0] = true
 		started[1] = selected_level
 		started[2] += 1)
-	menu._row_buttons[menu.ROW_MODE_AI_A].pressed.emit()
-	_check(menu._page == menu.MenuPage.VERSION_A_LEVELS,
-		"Version A must open its level submenu instead of starting immediately")
-	_check(not started[0], "opening the Version A submenu must not start a match")
+	menu._row_buttons[menu.LOCAL_AI_WIDE].pressed.emit()
+	_check(menu._page == menu.MenuPage.WIDE_LEVELS,
+		"Wide must open its level submenu instead of starting immediately")
+	_check(not started[0], "opening the Wide submenu must not start a match")
 	_check(menu._page_names().size() == Levels.count() + 1,
-		"the Version A submenu must list every level plus Back")
+		"the Wide submenu must list every level plus Back")
+	for row in menu._page_row_count():
+		menu._select(row)
+		_check(not menu._footer.text.is_empty(),
+			"every arena and Back must have a footer description")
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._page == menu.MenuPage.LOCAL_PLAY,
+		"Escape from arenas must return to local modes")
 	menu.handle_key(KEY_ESCAPE)
 	_check(menu._page == menu.MenuPage.MAIN,
-		"Escape must return from the level submenu to the main menu")
-	menu._row_buttons[menu.ROW_MODE_AI_A].pressed.emit()
+		"Escape from local modes must return to the main menu")
+
+	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
+	menu._row_buttons[menu.LOCAL_AI_WIDE].pressed.emit()
 	menu._row_buttons[2].pressed.emit()
 	_check(started[0] and started[1] == 2 and started[2] == 1,
-		"choosing a Version A level must start that level")
+		"choosing a Wide arena must start that level")
 	_check(menu.ruleset == menu.Ruleset.ORIGINAL,
-		"Version A must use the normal ruleset")
+		"Wide must use the normal ruleset")
 
 	menu.open()
-	menu._row_buttons[menu.ROW_MODE_AI_B].mouse_entered.emit()
+	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
+	menu._row_buttons[menu.LOCAL_AI_CLOSE].mouse_entered.emit()
 	_check(menu._level_preview._level_data["name"] == Levels.build_prototype()["name"],
-		"hovering Version B must preview its fixed close-camera arena")
-	menu._row_buttons[menu.ROW_MODE_AI_B].pressed.emit()
+		"hovering Close must preview its fixed close-camera arena")
+	menu._row_buttons[menu.LOCAL_AI_CLOSE].pressed.emit()
 	_check(menu.ruleset == menu.Ruleset.CAMERA_PROTOTYPE,
-		"Version B must select the close-camera ruleset")
+		"Close must select the close-camera ruleset")
 	_check(started[2] == 2,
-		"Version B must start directly without opening a level selector")
+		"Close must start directly without opening a level selector")
+
+	menu.open()
+	var changed := [[]]
+	menu.option_changed.connect(func(key, value): changed[0] = [key, value])
+	menu._row_buttons[menu.ROW_OPTIONS].pressed.emit()
+	_check(menu._page == menu.MenuPage.OPTIONS,
+		"Options must open its own compact page")
+	for row in menu._page_row_count():
+		menu._select(row)
+		_check(not menu._footer.text.is_empty(),
+			"every option must explain its effect in the footer")
+	menu._row_buttons[menu.OPTION_HIT_FREEZE].pressed.emit()
+	_check(changed[0].size() == 2 and changed[0][0] == "hit_freeze",
+		"changing an option must emit its setting")
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._page == menu.MenuPage.MAIN,
+		"Escape must return from Options to the main menu")
 
 	var four_player_request := [false, 0]
 	menu.start_requested.connect(func(_ai: bool, _level: int, players: int):
 		four_player_request[0] = _ai
 		four_player_request[1] = players)
-	menu._row_buttons[menu.ROW_MODE_4P_AI].pressed.emit()
+	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
+	menu._row_buttons[menu.LOCAL_4P_AI].pressed.emit()
 	_check(four_player_request[0] and four_player_request[1] == 4,
-		"clicking 4 PLAYERS must request one human and three AI players")
+		"4 Players must request one human and three AI players")
 	_check(menu.ruleset == menu.Ruleset.ORIGINAL,
 		"other local modes must return to the normal ruleset")
 

@@ -66,10 +66,31 @@ static func build_prototype() -> Dictionary:
 	return _finish(_proving_ground())
 
 
+## A quiet room for learning the three basic verbs. The open horizontal seam
+## lets the player test wrapping in either direction without enemies, hazards,
+## moving pieces, or breakable geometry competing for attention.
+static func build_tutorial() -> Dictionary:
+	return _finish({
+		"name": "TRAINING TUNNEL",
+		"wrap_x": true,
+		"spawns": [
+			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
+			Vector2(400.0, 446.0), Vector2(880.0, 446.0),
+		],
+		"core_spawns": [],
+		"hazards": [],
+		"platforms": [
+			{"rect": Rect2(80, 500, 250, 16), "hp": -1},
+			{"rect": Rect2(510, 420, 260, 16), "hp": -1},
+			{"rect": Rect2(950, 500, 250, 16), "hp": -1},
+		],
+	})
+
+
 static func _layout(index: int) -> Dictionary:
 	match posmod(index, count()):
 		0: return _shattered_sanctum()
-		1: return _flight()
+		1: return _endless_descent()
 		2: return _pendulum()
 		_: return _foundry()
 
@@ -154,14 +175,14 @@ static func _shattered_sanctum() -> Dictionary:
 		],
 	}
 
-## After TowerFall's Flight: a four-corner vertical loop over a hole in the
-## world. P1/P2 start on the split floor and P3/P4 on high permanent perches.
+## A four-corner vertical loop over a hole in the world. P1/P2 start on the
+## split floor and P3/P4 on high permanent perches.
 ## Side islands make the full climb indestructible; inner breakable steps offer
 ## faster diagonals. A hanging centre pillar splits the upper firing lane while
 ## leaving two broad vertical portals around it.
-static func _flight() -> Dictionary:
+static func _endless_descent() -> Dictionary:
 	return {
-		"name": "FLIGHT",
+		"name": "ENDLESS DESCENT",
 		"wrap_x": true,
 		"wrap_y": true,
 		"skip_ground": true,

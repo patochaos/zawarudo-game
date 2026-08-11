@@ -11,6 +11,7 @@ signal super_requested
 signal menu_requested
 signal rematch_requested
 signal replay_requested
+signal report_requested
 signal level_previous_requested
 signal level_next_requested
 
@@ -37,8 +38,9 @@ const SUPER_RECT := Rect2(890.0, 648.0, 76.0, 48.0)
 const LOCK_RECT := Rect2(976.0, 648.0, 104.0, 48.0)
 const LEVEL_PREV_RECT := Rect2(244.0, 590.0, 70.0, 58.0)
 const LEVEL_NEXT_RECT := Rect2(426.0, 590.0, 70.0, 58.0)
-const REPLAY_RECT := Rect2(530.0, 590.0, 220.0, 58.0)
-const REMATCH_RECT := Rect2(780.0, 590.0, 260.0, 58.0)
+const REPORT_RECT := Rect2(510.0, 590.0, 170.0, 58.0)
+const REPLAY_RECT := Rect2(695.0, 590.0, 190.0, 58.0)
+const REMATCH_RECT := Rect2(900.0, 590.0, 240.0, 58.0)
 const REPLAY_EXIT_RECT := Rect2(1030.0, 18.0, 220.0, 50.0)
 
 enum Context { HIDDEN, PLANNING, FREEPLAY, GAME_OVER, REPLAY }
@@ -181,6 +183,8 @@ func _action_at(position: Vector2) -> String:
 	if context == Context.REPLAY:
 		return "replay" if REPLAY_EXIT_RECT.has_point(position) else ""
 	if context == Context.GAME_OVER:
+		if REPORT_RECT.has_point(position):
+			return "report"
 		if REPLAY_RECT.has_point(position):
 			return "replay"
 		if REMATCH_RECT.has_point(position):
@@ -241,6 +245,7 @@ func _action_pressed(action: String) -> void:
 		"menu": menu_requested.emit()
 		"rematch": rematch_requested.emit()
 		"replay": replay_requested.emit()
+		"report": report_requested.emit()
 		"level_previous": level_previous_requested.emit()
 		"level_next": level_next_requested.emit()
 
@@ -301,6 +306,7 @@ func _draw_overlay() -> void:
 	if context == Context.GAME_OVER:
 		_draw_rect_button(MENU_RECT, "MENU", "menu", SPECTRAL)
 		_draw_result_level_selector()
+		_draw_rect_button(REPORT_RECT, "COPY REPORT", "report", SPECTRAL)
 		_draw_rect_button(REPLAY_RECT, "WATCH REPLAY", "replay", VIOLET)
 		_draw_rect_button(REMATCH_RECT, "REMATCH", "rematch", GOLD)
 		return

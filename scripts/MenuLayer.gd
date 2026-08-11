@@ -6,18 +6,33 @@ extends CanvasLayer
 signal start_requested(vs_ai: bool, level: int, player_count: int)
 signal freeplay_requested(level: int)
 signal online_requested(level: int)
+signal tutorial_requested
+signal option_changed(key: String, value: Variant)
 
-const ROW_MODE_AI_A := 0
-const ROW_MODE_AI_B := 1
-const ROW_MODE_4P_AI := 2
-const ROW_MODE_2P := 3
-const ROW_FREEPLAY := 4
-const ROW_HOW_TO := 5
-const ROW_QUIT := 6
-const ROWS := 7
+const ROW_PLAY := 0
+const ROW_TUTORIAL := 1
+const ROW_ONLINE := 2
+const ROW_OPTIONS := 3
+const ROW_QUIT := 4
+
+const LOCAL_AI_WIDE := 0
+const LOCAL_AI_CLOSE := 1
+const LOCAL_HUMAN := 2
+const LOCAL_4P_AI := 3
+const LOCAL_FREEPLAY := 4
+const LOCAL_BACK := 5
+const ROWS := 6
+
+const OPTION_SOUND := 0
+const OPTION_HIT_FREEZE := 1
+const OPTION_FLASHES := 2
+const OPTION_MAXIMIZED := 3
+const OPTION_TELEMETRY := 4
+const OPTION_BACK := 5
+const SOUND_LEVELS := [0, 25, 50, 75, 100]
 
 enum Ruleset { ORIGINAL, CAMERA_PROTOTYPE }
-enum MenuPage { MAIN, VERSION_A_LEVELS }
+enum MenuPage { MAIN, LOCAL_PLAY, WIDE_LEVELS, OPTIONS }
 
 const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
@@ -117,12 +132,19 @@ var _level_preview: LevelMistPreview
 var _rows: Array[Label] = []
 var _title: Label
 var _blurb: Label
+var _footer_plate: Polygon2D
+var _footer_kicker: Label
+var _footer: Label
 var _hint: Label
+var _build_label: Label
 var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
-var _how_items: Array[CanvasItem] = []
-var _showing_how: bool = false
 var _page: int = MenuPage.MAIN
+var _sound_percent: int = 100
+var _hit_freeze_enabled: bool = true
+var _reduced_flashes: bool = false
+var _maximized: bool = true
+var _telemetry_enabled: bool = true
 
 
 func _ready() -> void:
@@ -155,7 +177,7 @@ func _ready() -> void:
 		+ "lock fate · then watch every plan collide"
 
 	for i in ROWS:
-		var row_y := 238.0 + float(i) * 43.0
+		var row_y := 220.0 + float(i) * 38.0
 		var plate := Polygon2D.new()
 		plate.position = Vector2(226.0, row_y)
 		plate.polygon = PackedVector2Array([
@@ -164,7 +186,7 @@ func _ready() -> void:
 		plate.color = Color(0.055, 0.04, 0.09, 0.64)
 		add_child(plate)
 		_row_bgs.append(plate)
-		_rows.append(_label(Vector2(240.0, row_y + 4.0), 800.0, 28, DIM))
+		_rows.append(_label(Vector2(240.0, row_y + 4.0), 800.0, 24, DIM))
 
 		var hit := Button.new()
 		hit.position = Vector2(226.0, row_y)
@@ -177,10 +199,32 @@ func _ready() -> void:
 		add_child(hit)
 		_row_buttons.append(hit)
 
-	_hint = _label(Vector2(240.0, 558.0), 800.0, 15, Color(0.42, 0.47, 0.56))
-	_hint.text = "CLICK / TAP or W / S select      ENTER activate      ESC quit"
+	# Context footer: a quiet manga-caption strip that explains the highlighted
+	# choice without adding another column or making every row verbose.
+	_footer_plate = Polygon2D.new()
+	_footer_plate.position = Vector2(226.0, 482.0)
+	_footer_plate.polygon = PackedVector2Array([
+		Vector2(10.0, 0.0), Vector2(814.0, 0.0), Vector2(798.0, 76.0), Vector2(0.0, 76.0),
+	])
+	_footer_plate.color = Color(0.035, 0.025, 0.065, 0.88)
+	add_child(_footer_plate)
+	var footer_rule := ColorRect.new()
+	footer_rule.position = Vector2(236.0, 482.0)
+	footer_rule.size = Vector2(794.0, 2.0)
+	footer_rule.color = Color(0.91, 0.66, 0.22, 0.72)
+	add_child(footer_rule)
+	_footer_kicker = _label(Vector2(246.0, 489.0), 770.0, 11, GOLD)
+	_footer_kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_footer_kicker.text = "SELECTED // FIELD NOTE"
+	_footer = _label(Vector2(246.0, 510.0), 770.0, 15, Color(0.76, 0.80, 0.88))
+	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	_build_how_to()
+	_hint = _label(Vector2(240.0, 578.0), 800.0, 14, Color(0.42, 0.47, 0.56))
+	_hint.text = "CLICK / TAP or W / S select      ENTER activate      ESC quit"
+	_build_label = _label(Vector2(240.0, 645.0), 800.0, 12, Color(0.38, 0.42, 0.50))
+	_build_label.text = "PLAYTEST %s" % str(ProjectSettings.get_setting(
+		"application/config/version", "DEV"))
 
 	_select(0)
 	_refresh()
@@ -207,8 +251,17 @@ func open() -> void:
 	visible = true
 	_page = MenuPage.MAIN
 	_cursor = 0
-	_set_how_visible(false)
 	_refresh()
+
+
+func configure_options(settings: Dictionary) -> void:
+	_sound_percent = int(round(float(settings.get("sound", 1.0)) * 100.0))
+	_hit_freeze_enabled = bool(settings.get("hit_freeze", true))
+	_reduced_flashes = bool(settings.get("reduced_flashes", false))
+	_maximized = bool(settings.get("maximized", true))
+	_telemetry_enabled = bool(settings.get("telemetry", true))
+	if is_node_ready():
+		_refresh()
 
 
 func close() -> void:
@@ -223,16 +276,23 @@ func _select(i: int) -> void:
 func _refresh() -> void:
 	var names := _page_names()
 	var visible_rows := names.size()
-	if _page == MenuPage.VERSION_A_LEVELS and _cursor < Levels.count():
+	if _page == MenuPage.WIDE_LEVELS and _cursor < Levels.count():
 		level = _cursor
 	var preview_ruleset := Ruleset.CAMERA_PROTOTYPE \
-		if _page == MenuPage.MAIN and _cursor == ROW_MODE_AI_B else Ruleset.ORIGINAL
+		if _page == MenuPage.LOCAL_PLAY and _cursor == LOCAL_AI_CLOSE else Ruleset.ORIGINAL
 	_level_preview.show_level(level, preview_ruleset)
-	_blurb.text = "VERSION A · CHOOSE ARENA" if _page == MenuPage.VERSION_A_LEVELS \
-		else "Suspend the world · compose 0.75 seconds of movement and one knife volley\n" \
-			+ "lock fate · then watch every plan collide"
+	match _page:
+		MenuPage.LOCAL_PLAY:
+			_blurb.text = "LOCAL PLAY · CHOOSE THE SHAPE OF THE FIGHT"
+		MenuPage.WIDE_LEVELS:
+			_blurb.text = "WIDE DUEL · CHOOSE ARENA"
+		MenuPage.OPTIONS:
+			_blurb.text = "OPTIONS · PLAYTEST ACCESSIBILITY"
+		_:
+			_blurb.text = "STOP TIME · WRITE THE MOVE · RELEASE THE CONSEQUENCE"
+	_footer.text = _page_description()
 	_hint.text = "CLICK / TAP or W / S select      ENTER choose      ESC back" \
-		if _page == MenuPage.VERSION_A_LEVELS \
+		if _page != MenuPage.MAIN \
 		else "CLICK / TAP or W / S select      ENTER activate      ESC quit"
 	for i in ROWS:
 		var row_visible := i < visible_rows
@@ -249,135 +309,193 @@ func _refresh() -> void:
 
 func _activate(row: int) -> void:
 	_select(row)
-	if _page == MenuPage.VERSION_A_LEVELS:
+	if _page == MenuPage.WIDE_LEVELS:
 		if row < Levels.count():
 			level = row
 			ruleset = Ruleset.ORIGINAL
 			start_requested.emit(true, level, 2)
 		else:
+			_show_local_menu()
+		return
+	if _page == MenuPage.OPTIONS:
+		if row == OPTION_BACK:
 			_show_main_menu()
+		else:
+			_change_option(row, 1)
+		return
+	if _page == MenuPage.LOCAL_PLAY:
+		match row:
+			LOCAL_AI_WIDE:
+				_page = MenuPage.WIDE_LEVELS
+				_cursor = level
+				_refresh()
+			LOCAL_AI_CLOSE:
+				ruleset = Ruleset.CAMERA_PROTOTYPE
+				start_requested.emit(true, level, 2)
+			LOCAL_HUMAN:
+				ruleset = Ruleset.ORIGINAL
+				start_requested.emit(false, level, 2)
+			LOCAL_4P_AI:
+				ruleset = Ruleset.ORIGINAL
+				start_requested.emit(true, level, 4)
+			LOCAL_FREEPLAY:
+				ruleset = Ruleset.ORIGINAL
+				freeplay_requested.emit(level)
+			LOCAL_BACK:
+				_show_main_menu()
 		return
 	match row:
-		ROW_MODE_AI_A:
-			_page = MenuPage.VERSION_A_LEVELS
-			_cursor = level
+		ROW_PLAY:
+			_show_local_menu()
+		ROW_TUTORIAL:
+			tutorial_requested.emit()
+		ROW_ONLINE:
+			online_requested.emit(level)
+		ROW_OPTIONS:
+			_page = MenuPage.OPTIONS
+			_cursor = 0
 			_refresh()
-		ROW_MODE_AI_B:
-			ruleset = Ruleset.CAMERA_PROTOTYPE
-			start_requested.emit(true, level, 2)
-		ROW_MODE_4P_AI:
-			ruleset = Ruleset.ORIGINAL
-			start_requested.emit(true, level, 4)
-		ROW_MODE_2P:
-			ruleset = Ruleset.ORIGINAL
-			start_requested.emit(false, level, 2)
-		ROW_FREEPLAY:
-			ruleset = Ruleset.ORIGINAL
-			freeplay_requested.emit(level)
-		ROW_HOW_TO:
-			_set_how_visible(true)
 		ROW_QUIT:
 			get_tree().quit()
 
 
 func _page_names() -> Array[String]:
-	if _page == MenuPage.VERSION_A_LEVELS:
+	if _page == MenuPage.LOCAL_PLAY:
+		return [
+			"VS AI — WIDE",
+			"VS AI — CLOSE",
+			"VS HUMAN",
+			"4 PLAYERS",
+			"FREE PLAY",
+			"‹  BACK",
+		]
+	if _page == MenuPage.WIDE_LEVELS:
 		var level_names: Array[String] = []
 		for i in Levels.count():
 			level_names.append(Levels.build(i)["name"])
 		level_names.append("‹  BACK")
 		return level_names
+	if _page == MenuPage.OPTIONS:
+		return [
+			"SOUND  %d%%" % _sound_percent,
+			"HIT FREEZE  %s" % ("ON" if _hit_freeze_enabled else "OFF"),
+			"FLASHES  %s" % ("REDUCED" if _reduced_flashes else "FULL"),
+			"MAXIMIZED  %s" % ("ON" if _maximized else "OFF"),
+			"PLAYTEST LOG  %s" % ("LOCAL" if _telemetry_enabled else "OFF"),
+			"‹  BACK",
+		]
 	return [
-		"VS AI (1v1) - VERSION A",
-		"VS AI (1v1) - VERSION B",
-		"4 PLAYERS",
-		"VS HUMAN (LOCAL)",
-		"FREE PLAY",
-		"HOW TO PLAY",
+		"PLAY",
+		"TUTORIAL",
+		"ONLINE",
+		"OPTIONS",
 		"QUIT",
 	]
 
 
 func _page_row_count() -> int:
-	return Levels.count() + 1 if _page == MenuPage.VERSION_A_LEVELS else ROWS
+	return _page_names().size()
+
+
+func _page_description() -> String:
+	match _page:
+		MenuPage.MAIN:
+			return [
+				"Local duels, AI fights and the free-play sandbox live here.",
+				"Learn movement, stamina, jumping and throwing without an opponent.",
+				"Create or join a private room for a hidden-plan duel.",
+				"Tune sound, impact feedback, flashes, window mode and playtest logs.",
+				"Close ZAWARUDO and return time to the ordinary world.",
+			][_cursor]
+		MenuPage.LOCAL_PLAY:
+			return [
+				"Fight the AI across the full arena. Choose the battleground next.",
+				"Fight the AI in the tighter experimental camera and fixed Knife Court.",
+				"Two players share one machine and compose their plans simultaneously.",
+				"One human faces three independent AI rivals in a local free-for-all.",
+				"No turns and no score: move continuously and test knife behavior.",
+				"Return to the title choices.",
+			][_cursor]
+		MenuPage.WIDE_LEVELS:
+			if _cursor >= Levels.count():
+				return "Return to the local play modes."
+			var level_descriptions := [
+				"A layered horizontal-wrap shrine with breakable stairs and a solid crown.",
+				"A full-wrap vertical loop: fall through the floor and return from above.",
+				"Opposed lifts and drifting pulse orbs reshape the arena while time flows.",
+				"A sweeping shutter alternately seals each half of the direct firing lane.",
+			]
+			return level_descriptions[_cursor]
+		MenuPage.OPTIONS:
+			return [
+				"Set the master sound level for music, throws, impacts and time effects.",
+				"Add a brief freeze on impact so successful hits land with more weight.",
+				"Reduce bright screen flashes while preserving gameplay information.",
+				"Choose whether the desktop build opens as a maximized window.",
+				"Store anonymous match events locally for playtest bug reports.",
+				"Return to the title choices.",
+			][_cursor]
+	return ""
 
 
 func _show_main_menu() -> void:
 	_page = MenuPage.MAIN
-	_cursor = ROW_MODE_AI_A
+	_cursor = ROW_PLAY
 	_refresh()
 
 
-func _build_how_to() -> void:
-	var panel := ColorRect.new()
-	panel.position = Vector2(220.0, 188.0)
-	panel.size = Vector2(840.0, 390.0)
-	panel.color = Color(0.035, 0.022, 0.065, 0.97)
-	add_child(panel)
-	_how_items.append(panel)
-
-	var heading := _label(Vector2(260.0, 212.0), 760.0, 34, HOT)
-	heading.text = "HOW TO PLAY"
-	_how_items.append(heading)
-
-	var copy := _label(Vector2(270.0, 272.0), 740.0, 19, Color(0.78, 0.82, 0.90))
-	copy.text = "PLAN  —  Pilot your ghost, aim and charge one knife volley.\n\n" \
-		+ "LOCK  —  Confirm; all plans execute together for 0.75 seconds.\n\n" \
-		+ "SURVIVE  —  Only knives hurt, and they persist between turns.\n\n" \
-		+ "CORE  —  Claim it for full SUPER. When ready, toggle SUPER, then fire.\n" \
-		+ "WIN  —  First player to land 3 hits."
-	copy.size = Vector2(740.0, 240.0)
-	_how_items.append(copy)
-
-	var back := Button.new()
-	back.position = Vector2(520.0, 526.0)
-	back.size = Vector2(240.0, 42.0)
-	back.text = "‹  BACK"
-	back.focus_mode = Control.FOCUS_NONE
-	back.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	back.add_theme_font_size_override("font_size", 20)
-	back.add_theme_color_override("font_color", HOT)
-	back.add_theme_color_override("font_hover_color", Color.WHITE)
-	back.pressed.connect(func(): _set_how_visible(false))
-	add_child(back)
-	_how_items.append(back)
-
-	_set_how_visible(false)
+func _show_local_menu() -> void:
+	_page = MenuPage.LOCAL_PLAY
+	_cursor = LOCAL_AI_WIDE
+	_refresh()
 
 
-func _set_how_visible(show: bool) -> void:
-	_showing_how = show
-	_blurb.visible = not show
-	_hint.visible = not show
-	for i in ROWS:
-		_rows[i].visible = not show
-		_row_bgs[i].visible = not show
-		_row_buttons[i].visible = not show
-	for item in _how_items:
-		item.visible = show
+func _change_option(row: int, direction: int) -> void:
+	match row:
+		OPTION_SOUND:
+			var current := SOUND_LEVELS.find(_sound_percent)
+			if current < 0:
+				current = SOUND_LEVELS.size() - 1
+			_sound_percent = SOUND_LEVELS[posmod(current + direction, SOUND_LEVELS.size())]
+			option_changed.emit("sound", float(_sound_percent) / 100.0)
+		OPTION_HIT_FREEZE:
+			_hit_freeze_enabled = not _hit_freeze_enabled
+			option_changed.emit("hit_freeze", _hit_freeze_enabled)
+		OPTION_FLASHES:
+			_reduced_flashes = not _reduced_flashes
+			option_changed.emit("reduced_flashes", _reduced_flashes)
+		OPTION_MAXIMIZED:
+			_maximized = not _maximized
+			option_changed.emit("maximized", _maximized)
+		OPTION_TELEMETRY:
+			_telemetry_enabled = not _telemetry_enabled
+			option_changed.emit("telemetry", _telemetry_enabled)
+	_refresh()
 
 
 ## Returns true when the key was consumed.
 func handle_key(code: int) -> bool:
-	if _showing_how:
-		if code in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_BACKSPACE]:
-			_set_how_visible(false)
-		return true
 	match code:
 		KEY_W, KEY_UP:
 			_select(_cursor - 1)
 		KEY_S, KEY_DOWN:
 			_select(_cursor + 1)
 		KEY_A, KEY_LEFT:
-			if _page == MenuPage.VERSION_A_LEVELS:
+			if _page == MenuPage.WIDE_LEVELS:
 				_select(_cursor - 1)
+			elif _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
+				_change_option(_cursor, -1)
 		KEY_D, KEY_RIGHT:
-			if _page == MenuPage.VERSION_A_LEVELS:
+			if _page == MenuPage.WIDE_LEVELS:
 				_select(_cursor + 1)
+			elif _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
+				_change_option(_cursor, 1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_activate(_cursor)
 		KEY_ESCAPE:
-			if _page == MenuPage.VERSION_A_LEVELS:
+			if _page == MenuPage.WIDE_LEVELS:
+				_show_local_menu()
+			elif _page != MenuPage.MAIN:
 				_show_main_menu()
 			else:
 				get_tree().quit()

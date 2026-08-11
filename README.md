@@ -113,24 +113,36 @@ npx wrangler deploy
 
 ## Menu
 
-The title screen picks the mode. Every row is clickable; keyboard navigation
-remains available (`W`/`S` select, `Enter` activate). **VS AI — VERSION A**
-opens its own arena submenu. **VERSION B** starts the fixed close-camera arena
-directly, without a level selector. **HOW TO PLAY** opens a five-line rules
-summary, and `Esc` returns to the menu from a match.
+The title screen keeps only five primary choices: **PLAY**, **TUTORIAL**,
+**ONLINE**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
+navigation remains available (`W`/`S` select, `Enter` activate). Highlighting
+any row updates a compact footer that explains the choice before it is opened.
 
-* **VS AI (1v1) — VERSION A** — Player 2 is driven by `Ai.gd`; choose one of
+**PLAY** groups the local variants in a second page:
+
+* **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose one of
   the authored arenas from its submenu.
-* **VS AI (1v1) — VERSION B** — the close-camera ruleset on its fixed arena.
+* **VS AI — CLOSE** — the close-camera ruleset on its fixed arena.
+* **VS HUMAN** — local, **open information**: both players see each other's
+  plans and compose them simultaneously on the same machine.
 * **4 PLAYERS** — local free-for-all with Player 1 human and Players 2–4 driven
   by independent AIs. Each AI chooses a nearby living rival, so they fight one
   another as well as the human. The first player to reach the hit limit wins.
 * **FREE PLAY** — see below.
-* **VS HUMAN (LOCAL)** — local, **open information**: both players see each other's
-  plans. Nothing on one screen can genuinely hide a plan from the person
-  sitting next to you (mirroring or splitting the view does not help — both
-  halves are still on the same monitor), so rather than pretend, 2P leans into
-  it: you can see the plan, and the game becomes reading and countering it.
+
+**TUTORIAL** is a quiet one-player tunnel with three simple platforms and
+horizontal wrapping. Move, jump, and throw are taught in three action-gated
+steps with no timer; normal timed turns begin after all three are completed.
+**ONLINE** creates or joins a private six-character room; plans remain hidden
+until both players lock. **OPTIONS** has its own page for sound level, hit
+freeze, reduced flashes, maximized window, and the privacy-friendly local
+playtest log.
+
+The playtest log makes no network request. It stores one JSON object per match
+in `user://playtest-telemetry.jsonl` and overwrites
+`user://latest-match-report.json` with the latest result. The result screen's
+**COPY MATCH REPORT** action puts that compact report on the clipboard so a
+tester can paste it into a bug report. Options can disable the log entirely.
 
 ## Free play — judging the feel
 
@@ -222,11 +234,8 @@ touch it on the same physics tick, both earn the reward. A hit during the warnin
 turn cancels the incoming Core; once materialized, it persists for its full
 lifetime unless collected.
 
-For quick playtesting, `F8` fills Player 1's meter immediately; `Shift+F8` fills
-Player 2's. This shortcut does not change the normal clash/Core charge rules.
-
 Score pips sit under the timer. `F10` cycles levels and resets the score. The
-main menu exposes the close-camera prototype as **VS AI — VERSION B**.
+main menu exposes the close-camera prototype as **VS AI — CLOSE**.
 
 ## Movement: pilot the ghost on a stamina budget
 
@@ -287,7 +296,8 @@ Key properties:
 
 Global: `F9` restart · `F10` next level · `M` mute · `H` hide the control bar ·
 `Esc` back to the menu · `Enter`/`R` skip the replay. On the result screen:
-`R` watch replay · `←`/`→` choose the rematch level · `Enter` rematch.
+`R` watch replay · `C` copy the match report · `←`/`→` choose the rematch level
+· `Enter` rematch.
 
 In Vs AI the Player 2 column is inert — the AI ignores it.
 
@@ -350,7 +360,7 @@ names the wrap mode next to the level.
 | # | Name | Wrap | Character |
 |---|---|---|---|
 | 1 | **Shattered Sanctum** | ↔ upper gate | P1/P2 enter below and P3/P4 from permanent upper balconies; three side tiers wrap around a central shrine. |
-| 2 | **Flight** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
+| 2 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
 | 3 | **Pendulum** | walled | Two wide lifts rise and fall in opposite phase either side of a permanent spine. Two pulse orbs drift over the top of each lift's travel. |
 | 4 | **Foundry** | ↔ | One long shutter slides the whole width of the mid-field, sealing one half at a time. Two orbs drift up the flanks as a launch. |
 

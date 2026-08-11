@@ -16,6 +16,7 @@ const CUTOFF_FADE := 0.08
 const TITLE_VOICE := preload("res://assets/audio/za-warudo-title.mp3")
 
 var muted: bool = false
+var master_volume: float = 1.0
 
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
@@ -58,7 +59,8 @@ func play(which: String) -> void:
 	_next = (_next + 1) % VOICES
 	pl.stream = _streams[which]
 	pl.pitch_scale = _pitch.get(which, 1.0)
-	_base_db[slot] = VOLUME_DB + _gain_db.get(which, 0.0)
+	_base_db[slot] = VOLUME_DB + _gain_db.get(which, 0.0) \
+		+ linear_to_db(maxf(master_volume, 0.001))
 	pl.volume_db = _base_db[slot]
 	pl.play()
 	var cutoff: float = _cutoff.get(which, 0.0)
@@ -89,6 +91,20 @@ func toggle_mute() -> bool:
 			pl.stop()
 			_stop_at[i] = 0.0
 	return muted
+
+
+func set_volume(value: float) -> void:
+	master_volume = clampf(value, 0.0, 1.0)
+	muted = master_volume <= 0.001
+	if muted:
+		for i in _players.size():
+			_players[i].stop()
+			_stop_at[i] = 0.0
+
+
+func _exit_tree() -> void:
+	for player in _players:
+		player.stop()
 
 
 # ------------------------------------------------------------- synthesis ----
