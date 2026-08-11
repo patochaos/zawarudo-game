@@ -36,6 +36,8 @@ class DummyCutIn:
 func _init() -> void:
 	_test_synchronised_sweep()
 	_test_velocity_response()
+	_test_drag_collapses_the_arc()
+	_test_deflected_knives_fall_as_debris()
 	_test_volley_filter_and_manager_resolution()
 	_test_super_charge_requires_movement()
 	_test_super_toggle_controls_upgrade()
@@ -70,6 +72,57 @@ func _test_velocity_response() -> void:
 	_check(bounced[0].x < 0.0 and bounced[1].x > 0.0, "head-on knives must bounce apart")
 	_check(bounced[0].length() < 55.0 and bounced[1].length() < 55.0,
 		"clashed knives must lose enough force to become floaty")
+
+
+## Drag has to bleed the throw, not the fall. If it damped both components it
+## would cap the descent and turn a spent knife into a parachute, which is the
+## opposite of the read being bought here.
+func _test_drag_collapses_the_arc() -> void:
+	var gm = GAME_MANAGER.new()
+	var dt: float = gm.tick_dt()
+	var ticks: int = gm.exec_ticks()
+
+	var dragged := _fly(Vector2.ZERO, Vector2(gm.arrow_speed_max, 0.0), ticks, dt, gm, false)
+	gm.arrow_drag = 0.0
+	var free_flight := _fly(Vector2.ZERO, Vector2(gm.arrow_speed_max, 0.0), ticks, dt, gm, false)
+
+	_check(dragged["vel"].x < free_flight["vel"].x * 0.85,
+		"drag must visibly bleed forward speed inside a single execution window")
+	_check(dragged["pos"].x < free_flight["pos"].x,
+		"a dragged knife must fall short of an undragged one over the same window")
+	_check(is_equal_approx(dragged["vel"].y, free_flight["vel"].y),
+		"drag must never touch the fall, or the arc flattens instead of collapsing")
+
+	# The collapse itself: the ratio of fall to forward travel has to grow.
+	var dragged_slope: float = dragged["pos"].y / maxf(dragged["pos"].x, 0.001)
+	var free_slope: float = free_flight["pos"].y / maxf(free_flight["pos"].x, 0.001)
+	_check(dragged_slope > free_slope * 1.05,
+		"drag must steepen the trajectory, not merely shorten it")
+	gm.free()
+
+
+func _test_deflected_knives_fall_as_debris() -> void:
+	var gm = GAME_MANAGER.new()
+	var dt: float = gm.tick_dt()
+	var ticks: int = gm.exec_ticks()
+	_check(gm.arrow_clashed_gravity_scale > 1.0,
+		"a struck knife must fall harder than an aimed one")
+
+	var aimed := _fly(Vector2.ZERO, Vector2(300.0, 0.0), ticks, dt, gm, false)
+	var debris := _fly(Vector2.ZERO, Vector2(300.0, 0.0), ticks, dt, gm, true)
+	_check(debris["pos"].y > aimed["pos"].y * 1.5,
+		"a deflected knife must drop out of the air far sooner than a live shot")
+	_check(is_equal_approx(debris["pos"].x, aimed["pos"].x),
+		"the debris rule must change the fall only, leaving drag to handle the forward speed")
+	gm.free()
+
+
+func _fly(pos: Vector2, vel: Vector2, ticks: int, dt: float, cfg, clashed: bool) -> Dictionary:
+	for i in ticks:
+		var st := Arrow.step_state(pos, vel, dt, cfg, clashed)
+		pos = st[0]
+		vel = st[1]
+	return {"pos": pos, "vel": vel}
 
 
 func _test_volley_filter_and_manager_resolution() -> void:

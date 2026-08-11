@@ -19,7 +19,7 @@ export type ClientMessage =
   | { type: "plan"; turn: number; plan: PlayerPlanPayload }
   | { type: "turn_complete"; turn: number; digest: string }
   | { type: "match_over"; turn: number; winner: PlayerSlot; digest: string }
-  | { type: "rematch" };
+  | { type: "rematch"; level: number | null };
 
 export interface ConnectionAttachment {
   slot: PlayerSlot;
@@ -131,7 +131,10 @@ export function parseClientMessage(text: string): ClientMessage | null {
     };
   }
   if (value.type === "rematch") {
-    return { type: "rematch" };
+    if (value.level !== undefined && !isIntegerInRange(value.level, 0, 63)) {
+      return null;
+    }
+    return { type: "rematch", level: value.level ?? null };
   }
   return null;
 }

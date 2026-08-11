@@ -19,6 +19,7 @@ func _test_plan_roundtrip() -> void:
 	var original := PlayerPlan.new()
 	original.record(-1, false, false)
 	original.record(1, true, true)
+	original.record(0, false, false, true)
 	original.shot_tick = 2
 	original.aim_angle = 133.5
 	original.power = 0.8
@@ -26,7 +27,10 @@ func _test_plan_roundtrip() -> void:
 	var restored := PlayerPlan.new()
 	restored.apply_network_dict(original.to_network_dict())
 	_check(restored.dirs == original.dirs and restored.jumps == original.jumps \
-		and restored.holds == original.holds, "network plan must preserve every recorded input byte")
+		and restored.holds == original.holds and restored.drops == original.drops,
+		"network plan must preserve every recorded input byte")
+	_check(restored.drop_at(2) and not restored.jump_at(2),
+		"a relayed drop must arrive as a drop and never as a jump")
 	_check(restored.shot_tick == 2 and is_equal_approx(restored.aim_angle, 133.5) \
 		and is_equal_approx(restored.power, 0.8) and restored.super_shot,
 		"network plan must preserve shot timing, aim, power and SUPER")
@@ -40,8 +44,14 @@ func _test_remote_slot_uses_local_controls() -> void:
 	var controls: Dictionary = gm._input_map_for(1)
 	_check(KEY_A in controls["left"] and KEY_D in controls["right"],
 		"online Player 2 must use A/D on their own keyboard")
-	_check(KEY_SPACE in controls["charge"],
-		"online Player 2 must use the local P1 charge binding")
+	_check(KEY_SPACE in controls["jump"] and KEY_W not in controls["jump"],
+		"online Player 2 must use SPACE, never an upward direction, to jump")
+	_check(KEY_SPACE not in controls["charge"],
+		"SPACE must be reserved for jumping and never charge or fire")
+	gm.online_mode = false
+	var p2_controls: Dictionary = gm._input_map_for(1)
+	_check(KEY_K in p2_controls["jump"] and KEY_UP not in p2_controls["jump"],
+		"local Player 2 must use K, never the up arrow, to jump")
 	gm.free()
 
 
@@ -56,12 +66,14 @@ func _test_plan_legality() -> void:
 		full_budget["dirs"].append(1)
 		full_budget["jumps"].append(0)
 		full_budget["holds"].append(0)
+		full_budget["drops"].append(0)
 	_check(gm._online_plan_is_legal(0, full_budget),
 		"a plan that consumes the full movement budget must be accepted")
 	var legacy_float_tick: Dictionary = full_budget.duplicate(true)
 	legacy_float_tick["dirs"].append(1)
 	legacy_float_tick["jumps"].append(0)
 	legacy_float_tick["holds"].append(0)
+	legacy_float_tick["drops"].append(0)
 	_check(gm._online_plan_is_legal(0, legacy_float_tick),
 		"one float-residue tick from the previous web build must remain compatible")
 	var impossible: Dictionary = legal.duplicate(true)
@@ -69,6 +81,7 @@ func _test_plan_legality() -> void:
 		impossible["dirs"].append(1)
 		impossible["jumps"].append(0)
 		impossible["holds"].append(0)
+		impossible["drops"].append(0)
 	_check(not gm._online_plan_is_legal(0, impossible),
 		"a remote plan cannot exceed the movement budget")
 	gm.free()

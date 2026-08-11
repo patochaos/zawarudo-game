@@ -3,18 +3,21 @@ extends CanvasLayer
 ## Title screen. Keyboard and mouse share the same selection/activation path so
 ## hovering, clicking and pressing Enter always produce identical results.
 
-signal start_requested(vs_ai: bool, level: int)
+signal start_requested(vs_ai: bool, level: int, player_count: int)
 signal freeplay_requested(level: int)
 signal online_requested(level: int)
 
-const ROW_MODE_AI := 0
-const ROW_MODE_2P := 1
-const ROW_ONLINE := 2
-const ROW_FREEPLAY := 3
-const ROW_HOW_TO := 4
-const ROW_LEVEL := 5
+const ROW_MODE_AI_A := 0
+const ROW_MODE_AI_B := 1
+const ROW_MODE_4P_AI := 2
+const ROW_MODE_2P := 3
+const ROW_FREEPLAY := 4
+const ROW_HOW_TO := 5
 const ROW_QUIT := 6
 const ROWS := 7
+
+enum Ruleset { ORIGINAL, CAMERA_PROTOTYPE }
+enum MenuPage { MAIN, VERSION_A_LEVELS }
 
 const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
@@ -62,8 +65,10 @@ class LevelMistPreview:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	func show_level(index: int) -> void:
-		_level_data = Levels.build(index)
+	func show_level(index: int, ruleset: int = 0) -> void:
+		match ruleset:
+			1: _level_data = Levels.build_prototype()
+			_: _level_data = Levels.build(index)
 		queue_redraw()
 
 	func _draw() -> void:
@@ -87,12 +92,17 @@ class LevelMistPreview:
 
 		# Spawn and Core sockets communicate the level's playable rhythm without
 		# turning the menu background into a second HUD.
-		var spawn_colors := [Color(0.96, 0.69, 0.18, 0.16), Color(0.76, 0.30, 1.0, 0.16)]
+		var spawn_colors := [
+			Color(0.96, 0.69, 0.18, 0.16), Color(0.76, 0.30, 1.0, 0.16),
+			Color(0.18, 0.82, 0.92, 0.16), Color(1.0, 0.32, 0.42, 0.16),
+		]
 		var spawns: Array = _level_data.get("spawns", [])
 		for i in spawns.size():
 			var p: Vector2 = spawns[i]
-			draw_circle(p, 25.0, Color(spawn_colors[i].r, spawn_colors[i].g, spawn_colors[i].b, 0.025))
-			draw_circle(p, 10.0, spawn_colors[i])
+			var spawn_color: Color = spawn_colors[i % spawn_colors.size()]
+			draw_circle(p, 25.0,
+				Color(spawn_color.r, spawn_color.g, spawn_color.b, 0.025))
+			draw_circle(p, 10.0, spawn_color)
 		for p: Vector2 in _level_data.get("core_spawns", []):
 			draw_colored_polygon(PackedVector2Array([
 				p + Vector2(0.0, -8.0), p + Vector2(8.0, 0.0),
@@ -100,6 +110,7 @@ class LevelMistPreview:
 			]), Color(0.92, 0.86, 0.58, 0.10))
 
 var level: int = 0
+var ruleset: int = Ruleset.ORIGINAL
 
 var _bg: ColorRect
 var _level_preview: LevelMistPreview
@@ -111,6 +122,7 @@ var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
 var _how_items: Array[CanvasItem] = []
 var _showing_how: bool = false
+var _page: int = MenuPage.MAIN
 
 
 func _ready() -> void:
@@ -140,7 +152,7 @@ func _ready() -> void:
 
 	_blurb = _label(Vector2(240.0, 184.0), 800.0, 17, Color(0.52, 0.58, 0.68))
 	_blurb.text = "Suspend the world · compose 0.75 seconds of movement and one knife volley\n" \
-		+ "lock fate · then watch both plans collide"
+		+ "lock fate · then watch every plan collide"
 
 	for i in ROWS:
 		var row_y := 238.0 + float(i) * 43.0
@@ -166,7 +178,7 @@ func _ready() -> void:
 		_row_buttons.append(hit)
 
 	_hint = _label(Vector2(240.0, 558.0), 800.0, 15, Color(0.42, 0.47, 0.56))
-	_hint.text = "CLICK or W / S select      A / D change level      ENTER activate      ESC quit"
+	_hint.text = "CLICK / TAP or W / S select      ENTER activate      ESC quit"
 
 	_build_how_to()
 
@@ -193,6 +205,8 @@ func _label(pos: Vector2, w: float, size: int, col: Color) -> Label:
 
 func open() -> void:
 	visible = true
+	_page = MenuPage.MAIN
+	_cursor = 0
 	_set_how_visible(false)
 	_refresh()
 
@@ -202,22 +216,31 @@ func close() -> void:
 
 
 func _select(i: int) -> void:
-	_cursor = posmod(i, ROWS)
+	_cursor = posmod(i, _page_row_count())
 	_refresh()
 
 
 func _refresh() -> void:
-	_level_preview.show_level(level)
-	var names := [
-		"VS AI",
-		"2 PLAYERS  (open information)",
-		"ONLINE  (private room · separate screens)",
-		"FREE PLAY  (no turns · live tuning)",
-		"HOW TO PLAY",
-		"LEVEL   ‹ %s ›" % Levels.build(level)["name"],
-		"QUIT",
-	]
+	var names := _page_names()
+	var visible_rows := names.size()
+	if _page == MenuPage.VERSION_A_LEVELS and _cursor < Levels.count():
+		level = _cursor
+	var preview_ruleset := Ruleset.CAMERA_PROTOTYPE \
+		if _page == MenuPage.MAIN and _cursor == ROW_MODE_AI_B else Ruleset.ORIGINAL
+	_level_preview.show_level(level, preview_ruleset)
+	_blurb.text = "VERSION A · CHOOSE ARENA" if _page == MenuPage.VERSION_A_LEVELS \
+		else "Suspend the world · compose 0.75 seconds of movement and one knife volley\n" \
+			+ "lock fate · then watch every plan collide"
+	_hint.text = "CLICK / TAP or W / S select      ENTER choose      ESC back" \
+		if _page == MenuPage.VERSION_A_LEVELS \
+		else "CLICK / TAP or W / S select      ENTER activate      ESC quit"
 	for i in ROWS:
+		var row_visible := i < visible_rows
+		_rows[i].visible = row_visible
+		_row_bgs[i].visible = row_visible
+		_row_buttons[i].visible = row_visible
+		if not row_visible:
+			continue
 		_rows[i].text = ("▸  " + names[i] + "  ◂") if i == _cursor else names[i]
 		_rows[i].add_theme_color_override("font_color", HOT if i == _cursor else DIM)
 		_row_bgs[i].color = Color(0.45, 0.16, 0.67, 0.78) if i == _cursor \
@@ -226,22 +249,63 @@ func _refresh() -> void:
 
 func _activate(row: int) -> void:
 	_select(row)
+	if _page == MenuPage.VERSION_A_LEVELS:
+		if row < Levels.count():
+			level = row
+			ruleset = Ruleset.ORIGINAL
+			start_requested.emit(true, level, 2)
+		else:
+			_show_main_menu()
+		return
 	match row:
-		ROW_MODE_AI:
-			start_requested.emit(true, level)
+		ROW_MODE_AI_A:
+			_page = MenuPage.VERSION_A_LEVELS
+			_cursor = level
+			_refresh()
+		ROW_MODE_AI_B:
+			ruleset = Ruleset.CAMERA_PROTOTYPE
+			start_requested.emit(true, level, 2)
+		ROW_MODE_4P_AI:
+			ruleset = Ruleset.ORIGINAL
+			start_requested.emit(true, level, 4)
 		ROW_MODE_2P:
-			start_requested.emit(false, level)
-		ROW_ONLINE:
-			online_requested.emit(level)
+			ruleset = Ruleset.ORIGINAL
+			start_requested.emit(false, level, 2)
 		ROW_FREEPLAY:
+			ruleset = Ruleset.ORIGINAL
 			freeplay_requested.emit(level)
 		ROW_HOW_TO:
 			_set_how_visible(true)
-		ROW_LEVEL:
-			level = posmod(level + 1, Levels.count())
-			_refresh()
 		ROW_QUIT:
 			get_tree().quit()
+
+
+func _page_names() -> Array[String]:
+	if _page == MenuPage.VERSION_A_LEVELS:
+		var level_names: Array[String] = []
+		for i in Levels.count():
+			level_names.append(Levels.build(i)["name"])
+		level_names.append("‹  BACK")
+		return level_names
+	return [
+		"VS AI (1v1) - VERSION A",
+		"VS AI (1v1) - VERSION B",
+		"4 PLAYERS",
+		"VS HUMAN (LOCAL)",
+		"FREE PLAY",
+		"HOW TO PLAY",
+		"QUIT",
+	]
+
+
+func _page_row_count() -> int:
+	return Levels.count() + 1 if _page == MenuPage.VERSION_A_LEVELS else ROWS
+
+
+func _show_main_menu() -> void:
+	_page = MenuPage.MAIN
+	_cursor = ROW_MODE_AI_A
+	_refresh()
 
 
 func _build_how_to() -> void:
@@ -258,7 +322,7 @@ func _build_how_to() -> void:
 
 	var copy := _label(Vector2(270.0, 272.0), 740.0, 19, Color(0.78, 0.82, 0.90))
 	copy.text = "PLAN  —  Pilot your ghost, aim and charge one knife volley.\n\n" \
-		+ "LOCK  —  Confirm; both plans execute together for 0.75 seconds.\n\n" \
+		+ "LOCK  —  Confirm; all plans execute together for 0.75 seconds.\n\n" \
 		+ "SURVIVE  —  Only knives hurt, and they persist between turns.\n\n" \
 		+ "CORE  —  Claim it for full SUPER. When ready, toggle SUPER, then fire.\n" \
 		+ "WIN  —  First player to land 3 hits."
@@ -305,15 +369,18 @@ func handle_key(code: int) -> bool:
 		KEY_S, KEY_DOWN:
 			_select(_cursor + 1)
 		KEY_A, KEY_LEFT:
-			level = posmod(level - 1, Levels.count())
-			_refresh()
+			if _page == MenuPage.VERSION_A_LEVELS:
+				_select(_cursor - 1)
 		KEY_D, KEY_RIGHT:
-			level = posmod(level + 1, Levels.count())
-			_refresh()
+			if _page == MenuPage.VERSION_A_LEVELS:
+				_select(_cursor + 1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_activate(_cursor)
 		KEY_ESCAPE:
-			get_tree().quit()
+			if _page == MenuPage.VERSION_A_LEVELS:
+				_show_main_menu()
+			else:
+				get_tree().quit()
 		_:
 			return false
 	return true

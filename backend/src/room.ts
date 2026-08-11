@@ -242,7 +242,7 @@ export class Room extends DurableObject<Env> {
           );
           break;
         case "rematch":
-          await this.receiveRematch(ws, attachment.slot);
+          await this.receiveRematch(ws, attachment.slot, parsed.level);
           break;
       }
     } catch (error) {
@@ -431,17 +431,31 @@ export class Room extends DurableObject<Env> {
     this.broadcast({ type: "match_over", turn, winner });
   }
 
-  private async receiveRematch(ws: WebSocket, slot: PlayerSlot): Promise<void> {
+  private async receiveRematch(
+    ws: WebSocket,
+    slot: PlayerSlot,
+    requestedLevel: number | null,
+  ): Promise<void> {
     const room = this.room();
     if (room === null || room.phase !== "game_over") {
       this.sendError(ws, "wrong_phase", "Rematch is only available after game over");
       return;
     }
+    // Player 1 owns room-level choices, just as they did when creating the room.
+    // Old clients omit `level`; keeping null as "unchanged" preserves compatibility.
+    if (slot === 0 && requestedLevel !== null) {
+      this.ctx.storage.sql.exec("UPDATE room SET level = ? WHERE singleton = 1", requestedLevel);
+    }
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO rematch_ready (slot) VALUES (?)", slot);
     const ready = this.ctx.storage.sql.exec<{ slot: PlayerSlot }>(
       "SELECT slot FROM rematch_ready ORDER BY slot",
     ).toArray();
-    this.broadcast({ type: "rematch_status", ready: ready.map((row) => row.slot) });
+    const selectedLevel = this.room()?.level ?? room.level;
+    this.broadcast({
+      type: "rematch_status",
+      ready: ready.map((row) => row.slot),
+      level: selectedLevel,
+    });
     if (ready.length !== 2) {
       return;
     }
@@ -458,7 +472,7 @@ export class Room extends DurableObject<Env> {
       DELETE FROM rematch_ready;
     `);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
-    this.broadcast({ type: "match_start", level: room.level, seed, turn: 1 });
+    this.broadcast({ type: "match_start", level: selectedLevel, seed, turn: 1 });
   }
 
   private maybeStartMatch(): void {
