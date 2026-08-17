@@ -34,3 +34,7 @@ backend/dist/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Python helper caches
+__pycache__/
+*.pyc
