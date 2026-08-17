@@ -20,3 +20,35 @@ python .\tools\art\prepare_executor_references.py .\docs\concepts\gilded-executo
 ```
 
 The `.gdignore` at `art_source/` prevents Godot from importing DCC source files.
+
+## Local AI reconstruction candidate
+
+The Gate A candidate is generated locally with InstantMesh and imported as a modeling reference. It is not approved game geometry: use it for volume, silhouette and retopology, then rebuild the face, hands, boots, coat edges and gold ornaments before rigging.
+
+The 16 GB GPU profile uses a 96³ extraction grid. Generate the textured OBJ from the InstantMesh checkout:
+
+```bash
+HF_HOME=/mnt/d/AI-tools/hf-cache \
+CUDA_HOME=/usr/local/cuda-12.8 \
+TORCH_CUDA_ARCH_LIST=12.0 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+/home/pato/venvs/instantmesh/bin/python -u run.py \
+  '/mnt/d/Zawarudo game/tools/instantmesh/instant-mesh-large.yaml' \
+  inputs/executor-front-v1.png \
+  --output_path outputs/executor-v1-grid96-textured \
+  --diffusion_steps 50 \
+  --seed 42 \
+  --export_texmap
+```
+
+Import, normalize to 1.86 m, pack the texture and render the four-angle review from the project root:
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background `
+  --python 'D:\Zawarudo game\tools\blender\import_instantmesh_gate_a.py' -- `
+  --template 'D:\Zawarudo game\art_source\blender\gilded-executor-v1.blend' `
+  --mesh 'D:\AI-tools\InstantMesh\outputs\executor-v1-grid96-textured\instant-mesh-large\meshes\executor-front-v1.obj' `
+  --output 'D:\Zawarudo game\art_source\blender\gilded-executor-gate-a-ai-textured-v1.blend' `
+  --previews 'D:\Zawarudo game\previews\gilded-executor-gate-a-ai-textured-v1' `
+  --front-angle 270
+```
