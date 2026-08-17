@@ -51,7 +51,6 @@ const PLAYER_COLORS := [
 ]
 
 enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
-enum FighterVisualStyle { CEL_PROOF, RIGGED_PROTOTYPE }
 
 # ------------------------------------------------------------------ tuning ---
 
@@ -78,9 +77,6 @@ enum FighterVisualStyle { CEL_PROOF, RIGGED_PROTOTYPE }
 ## Technical Gate 1 harness. Keep disabled until an art-approved skin exists;
 ## false preserves the original stick renderer exactly.
 @export var fighter_visuals_enabled: bool = false
-## CEL_PROOF replaces only P1, leaving P2 as an immediate stick-figure A/B.
-## RIGGED_PROTOTYPE preserves the discarded 3D experiment for editor review.
-@export var fighter_visual_style: FighterVisualStyle = FighterVisualStyle.CEL_PROOF
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
@@ -1156,16 +1152,10 @@ func _add_player(i: int) -> void:
 	p.plan.set_aim_from_vector(_default_aim_vector(i), aim_min_angle, aim_max_angle)
 	p.plan.power = 0.55
 	_player_layer.add_child(p)
-	var attach_visual := fighter_visuals_enabled
-	if fighter_visual_style == FighterVisualStyle.CEL_PROOF and i != 0:
-		attach_visual = false
-	if attach_visual:
+	if fighter_visuals_enabled:
 		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
 		fighter_visual.name = "FighterVisual"
-		var skin := FIGHTER_SKIN_SCRIPT.cel_proof(i) \
-			if fighter_visual_style == FighterVisualStyle.CEL_PROOF \
-			else FIGHTER_SKIN_SCRIPT.executor_prototype(i)
-		fighter_visual.configure(p, skin)
+		fighter_visual.configure(p, FIGHTER_SKIN_SCRIPT.executor_prototype(i))
 		p.add_child(fighter_visual)
 		p.draw_legacy_visual = false
 	players.append(p)

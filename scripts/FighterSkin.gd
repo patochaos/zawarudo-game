@@ -13,7 +13,6 @@ class_name FighterSkin
 @export var sprite_cell_size := Vector2i(256, 256)
 @export var sprite_draw_rect := Rect2(-64.0, -97.0, 128.0, 128.0)
 @export var sprite_tint := Color.WHITE
-@export var render_style: StringName = &"greybox"
 @export var portrait: Texture2D
 @export var palette: Dictionary = {}
 @export var visual_bounds := Rect2(-32.0, -68.0, 64.0, 92.0)
@@ -71,62 +70,6 @@ static func executor_prototype(player_index: int) -> FighterSkin:
 	skin.sprite_tint = Color.WHITE if player_index % 2 == 0 else Color(0.82, 0.74, 1.0)
 	skin.visual_bounds = Rect2(-64.0, -97.0, 128.0, 128.0)
 	skin.ticks_per_frame = 5
-	return skin
-
-
-## Small, deliberately low-detail production-direction proof. The figure is
-## assembled from inked geometric pieces in FighterVisual, so no generated
-## texture or frame-by-frame identity consistency is required.
-static func cel_proof(player_index: int) -> FighterSkin:
-	var skin := FighterSkin.new()
-	skin.skin_id = &"gilded_executor_cel_proof_v1"
-	skin.display_name = "The Gilded Executor — modular cel proof"
-	skin.render_style = &"cel_modular"
-	skin.palette = {
-		&"ink": Color("100d18"),
-		&"body": Color("f1ead8"),
-		&"light": Color("fff9e9"),
-		&"shadow": Color("a86f25"),
-		&"gold": Color("e7b83f"),
-		&"skin": Color("d8aa88"),
-		&"hair": Color("17121d"),
-		&"impact": Color("ff355e"),
-		&"defeat": Color("8c5360"),
-	}
-	skin.visual_bounds = Rect2(-31.0, -45.0, 62.0, 69.0)
-	skin.ticks_per_frame = 3
-	skin.frames = {
-		&"IDLE": [
-			{&"bob": 0.0, &"lean": -1.0, &"stride": 0.0, &"coat": -1.0, &"recoil": 0.0},
-			{&"bob": -0.5, &"lean": -0.5, &"stride": 0.0, &"coat": 0.0, &"recoil": 0.0},
-			{&"bob": -1.0, &"lean": 0.0, &"stride": 0.0, &"coat": 1.0, &"recoil": 0.0},
-			{&"bob": -0.5, &"lean": -0.5, &"stride": 0.0, &"coat": 0.0, &"recoil": 0.0},
-		],
-		&"RUN": [
-			{&"bob": 0.0, &"lean": 2.0, &"stride": -8.0, &"coat": -4.0, &"recoil": 0.0},
-			{&"bob": 1.0, &"lean": 3.0, &"stride": 0.0, &"coat": -2.0, &"recoil": 0.0},
-			{&"bob": 0.0, &"lean": 2.0, &"stride": 8.0, &"coat": 4.0, &"recoil": 0.0},
-			{&"bob": 1.0, &"lean": 3.0, &"stride": 0.0, &"coat": 2.0, &"recoil": 0.0},
-		],
-		&"RISE": [
-			{&"bob": -1.0, &"lean": 2.0, &"stride": 5.0, &"coat": -5.0, &"recoil": 0.0},
-		],
-		&"FALL": [
-			{&"bob": 1.0, &"lean": -1.0, &"stride": -5.0, &"coat": 5.0, &"recoil": 0.0},
-		],
-		&"SHOT": [
-			{&"bob": 0.0, &"lean": -2.0, &"stride": 1.0, &"coat": 2.0, &"recoil": 1.0},
-			{&"bob": -1.0, &"lean": -4.0, &"stride": 3.0, &"coat": 6.0, &"recoil": 5.0},
-			{&"bob": 0.0, &"lean": -3.0, &"stride": 2.0, &"coat": 4.0, &"recoil": 3.0},
-			{&"bob": 0.0, &"lean": -1.0, &"stride": 0.0, &"coat": 1.0, &"recoil": 0.0},
-		],
-		&"LOCK": [
-			{&"bob": -1.0, &"lean": -3.0, &"stride": 2.0, &"coat": 3.0, &"recoil": 0.0},
-		],
-		&"DEFEAT": [
-			{&"bob": 0.0, &"lean": -12.0, &"stride": 9.0, &"coat": 8.0, &"recoil": 0.0},
-		],
-	}
 	return skin
 
 

@@ -1,7 +1,6 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
-const GAME_MANAGER := preload("res://scripts/GameManager.gd")
 
 
 func _init() -> void:
@@ -13,7 +12,6 @@ func _capture() -> void:
 	DisplayServer.window_set_size(Vector2i(1280, 720))
 	var game = MAIN_SCENE.instantiate()
 	game.fighter_visuals_enabled = true
-	game.fighter_visual_style = GAME_MANAGER.FighterVisualStyle.RIGGED_PROTOTYPE
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
