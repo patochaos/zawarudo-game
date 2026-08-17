@@ -74,8 +74,9 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export var banner_duration: float = 2.4
 
 @export_group("Visuals")
-## Gate 1 feature flag. False preserves the original stick renderer exactly.
-@export var fighter_visuals_enabled: bool = true
+## Technical Gate 1 harness. Keep disabled until an art-approved skin exists;
+## false preserves the original stick renderer exactly.
+@export var fighter_visuals_enabled: bool = false
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays

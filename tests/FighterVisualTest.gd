@@ -18,11 +18,25 @@ func _run() -> void:
 		"isolated Player.new() must not attach cosmetic children")
 	isolated.free()
 
+	var default_gm = GAME_MANAGER.new()
+	root.add_child(default_gm)
+	await process_frame
+	_check(not default_gm.fighter_visuals_enabled,
+		"unapproved greybox visuals must default off")
+	for p: Player in default_gm.players:
+		_check(p.draw_legacy_visual,
+			"default manager players must retain the legacy renderer")
+		_check(p.get_node_or_null("FighterVisual") == null,
+			"default manager players must not attach unapproved greybox visuals")
+	root.remove_child(default_gm)
+	default_gm.free()
+
 	var gm = GAME_MANAGER.new()
+	gm.fighter_visuals_enabled = true
 	root.add_child(gm)
 	await process_frame
 
-	_check(gm.fighter_visuals_enabled, "the Gate 1 visual feature flag must default on")
+	_check(gm.fighter_visuals_enabled, "the focused fixture must explicitly enable Gate 1")
 	_check(gm.players.size() == 2, "the focused fixture must spawn a duel")
 	for p: Player in gm.players:
 		var child := p.get_node_or_null("FighterVisual")
