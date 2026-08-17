@@ -51,6 +51,9 @@ var alive: bool = true
 ## respawn so nobody is shot the instant they come back.
 var invuln_turns: int = 0
 var plan: PlayerPlan
+## Gate 1 renderer switch. This is cosmetic only: disabling it suppresses this
+## node's legacy `_draw()` while every simulation method and constant stays live.
+var draw_legacy_visual: bool = true
 var _anim_time: float = 0.0
 var _afterimages: Array[Dictionary] = []
 var _afterimage_sample_time: float = 0.0
@@ -457,6 +460,8 @@ func _draw_afterimage(pose: Dictionary, offset: Vector2, strength: float) -> voi
 
 
 func _draw() -> void:
+	if not draw_legacy_visual:
+		return
 	if not alive:
 		var fallen := Color(0.30, 0.30, 0.34, 0.72)
 		_draw_bone(Vector2(-13.0, 18.0), Vector2(6.0, 17.0), 3.0, fallen)
