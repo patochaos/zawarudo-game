@@ -76,7 +76,7 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export_group("Visuals")
 ## Technical Gate 1 harness. Keep disabled until an art-approved skin exists;
 ## false preserves the original stick renderer exactly.
-@export var fighter_visuals_enabled: bool = true
+@export var fighter_visuals_enabled: bool = false
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
