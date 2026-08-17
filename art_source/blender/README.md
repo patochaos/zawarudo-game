@@ -55,6 +55,9 @@ Import, normalize to 1.86 m, pack the texture and render the four-angle review f
 
 ## Rigged sprite prototype
 
+This experiment is disabled by default and excluded from production exports. Set
+`fighter_visuals_enabled` on `GameManager` only when reviewing it in the editor.
+
 Create the non-final armature, automatic skinning and the six deterministic actions (`idle`, `run`, `rise`, `fall`, `shoot`, `lock`):
 
 ```powershell

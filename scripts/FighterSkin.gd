@@ -24,13 +24,13 @@ class_name FighterSkin
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
 
 
-const EXECUTOR_ATLASES := {
-	&"IDLE": preload("res://assets/art/fighters/gilded-executor-prototype-v1/idle.png"),
-	&"RUN": preload("res://assets/art/fighters/gilded-executor-prototype-v1/run.png"),
-	&"RISE": preload("res://assets/art/fighters/gilded-executor-prototype-v1/rise.png"),
-	&"FALL": preload("res://assets/art/fighters/gilded-executor-prototype-v1/fall.png"),
-	&"SHOT": preload("res://assets/art/fighters/gilded-executor-prototype-v1/shoot.png"),
-	&"LOCK": preload("res://assets/art/fighters/gilded-executor-prototype-v1/lock.png"),
+const EXECUTOR_ATLAS_PATHS := {
+	&"IDLE": "res://assets/art/fighters/gilded-executor-prototype-v1/idle.png",
+	&"RUN": "res://assets/art/fighters/gilded-executor-prototype-v1/run.png",
+	&"RISE": "res://assets/art/fighters/gilded-executor-prototype-v1/rise.png",
+	&"FALL": "res://assets/art/fighters/gilded-executor-prototype-v1/fall.png",
+	&"SHOT": "res://assets/art/fighters/gilded-executor-prototype-v1/shoot.png",
+	&"LOCK": "res://assets/art/fighters/gilded-executor-prototype-v1/lock.png",
 }
 
 const EXECUTOR_COUNTS := {
@@ -59,7 +59,11 @@ static func executor_prototype(player_index: int) -> FighterSkin:
 	var skin := greybox(player_index)
 	skin.skin_id = &"gilded_executor_prototype_v1"
 	skin.display_name = "The Gilded Executor — rigged prototype"
-	skin.sprite_atlases = EXECUTOR_ATLASES.duplicate()
+	skin.sprite_atlases = {}
+	for state: StringName in EXECUTOR_ATLAS_PATHS:
+		var texture := load(EXECUTOR_ATLAS_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
 	skin.sprite_counts = EXECUTOR_COUNTS.duplicate()
 	skin.sprite_cell_size = Vector2i(256, 256)
 	skin.sprite_draw_rect = Rect2(-64.0, -97.0, 128.0, 128.0)

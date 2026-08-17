@@ -21,17 +21,13 @@ func _run() -> void:
 	var default_gm = GAME_MANAGER.new()
 	root.add_child(default_gm)
 	await process_frame
-	_check(default_gm.fighter_visuals_enabled,
-		"the rigged Executor prototype must default on for playtesting")
+	_check(not default_gm.fighter_visuals_enabled,
+		"experimental fighter visuals must remain opt-in")
 	for p: Player in default_gm.players:
-		_check(not p.draw_legacy_visual,
-			"default prototype players must suppress the legacy renderer")
-		var default_visual := p.get_node_or_null("FighterVisual") as FighterVisual
-		_check(default_visual != null,
-			"default manager players must attach the rigged prototype")
-		if default_visual != null:
-			_check(default_visual.skin.skin_id == &"gilded_executor_prototype_v1",
-				"default fighters must use the generated Executor atlas")
+		_check(p.draw_legacy_visual,
+			"default manager players must retain the stick renderer")
+		_check(p.get_node_or_null("FighterVisual") == null,
+			"default manager players must not attach experimental visuals")
 	root.remove_child(default_gm)
 	default_gm.free()
 
