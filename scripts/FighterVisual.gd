@@ -150,6 +150,11 @@ func _draw() -> void:
 	_draw_world_markers()
 	if uses_sprite:
 		_draw_sprite_body()
+	elif skin.render_style == &"cel_modular":
+		if body_state == DEFEAT:
+			_draw_cel_hit_pose(pose)
+		else:
+			_draw_cel_body(pose)
 	elif body_state == DEFEAT:
 		_draw_defeat(pose)
 	else:
@@ -286,6 +291,195 @@ func _draw_witness_shapes(shoulders: Vector2, hip: Vector2, head: Vector2, coat:
 	_draw_shape(flare, secondary, ink, 2.0)
 
 
+func _draw_cel_body(pose: Dictionary) -> void:
+	var f := float(_fighter.facing)
+	var bob := float(pose.get(&"bob", 0.0))
+	var lean := float(pose.get(&"lean", 0.0))
+	var stride := float(pose.get(&"stride", 0.0))
+	var coat := float(pose.get(&"coat", 0.0))
+	var recoil := float(pose.get(&"recoil", 0.0))
+	var ink: Color = skin.palette[&"ink"]
+	var ivory: Color = skin.palette[&"body"]
+	var light: Color = skin.palette[&"light"]
+	var shadow: Color = skin.palette[&"shadow"]
+	var gold: Color = skin.palette[&"gold"]
+	var hip := Vector2((1.0 + lean * 0.12) * f, 5.0 + bob)
+	var chest := Vector2((-2.0 + lean * 0.52 - recoil * 0.25) * f, -8.0 + bob)
+	var neck := Vector2((-4.0 + lean * 0.65 - recoil * 0.32) * f, -15.0 + bob)
+	var head := Vector2((-5.0 + lean * 0.72 - recoil * 0.42) * f, -23.0 + bob)
+
+	# Two narrow tails and long tapered legs retain the clarity of the stick
+	# prototype while giving the silhouette a tailored, theatrical identity.
+	_draw_shape(PackedVector2Array([
+		hip + Vector2(-7.0 * f, -1.0),
+		hip + Vector2((-11.0 - coat * 0.45) * f, 18.0),
+		hip + Vector2(-2.0 * f, 13.0),
+		hip + Vector2(1.0 * f, 0.0),
+	]), shadow, ink, 1.7)
+	_draw_shape(PackedVector2Array([
+		hip + Vector2(-1.0 * f, 0.0),
+		hip + Vector2((9.0 - coat * 0.35) * f, 20.0),
+		hip + Vector2(11.0 * f, 12.0),
+		hip + Vector2(7.0 * f, -1.0),
+	]), ivory, ink, 1.7)
+
+	var back_knee := Vector2((-5.0 - stride * 0.34) * f, 14.0 + bob)
+	var back_foot := Vector2((-9.0 - stride * 0.72) * f, 24.0)
+	var front_knee := Vector2((6.0 + stride * 0.34) * f, 13.0 + bob)
+	var front_foot := Vector2((10.0 + stride * 0.72) * f, 24.0)
+	_draw_cel_segment(self, hip, back_knee, 3.9, 3.1, shadow, shadow.darkened(0.18), ink)
+	_draw_cel_segment(self, back_knee, back_foot, 3.2, 2.5, shadow, shadow.darkened(0.18), ink)
+	_draw_cel_segment(self, hip, front_knee, 4.2, 3.2, ivory, shadow, ink)
+	_draw_cel_segment(self, front_knee, front_foot, 3.3, 2.5, light, shadow, ink)
+	_draw_cel_boot(back_foot, f, ink, gold)
+	_draw_cel_boot(front_foot, f, ink, gold)
+
+	var torso := PackedVector2Array([
+		chest + Vector2(-11.0 * f, -3.0),
+		chest + Vector2(10.0 * f, -2.0),
+		hip + Vector2(7.0 * f, 2.0),
+		hip + Vector2(-7.0 * f, 2.0),
+	])
+	_draw_shape(torso, ivory, ink, 2.0)
+	var torso_shadow := PackedVector2Array([
+		chest + Vector2(-11.0 * f, -3.0),
+		chest + Vector2(-5.0 * f, -1.0),
+		hip + Vector2(-1.0 * f, 2.0),
+		hip + Vector2(-7.0 * f, 2.0),
+	])
+	draw_colored_polygon(torso_shadow, shadow)
+
+	# The lapels form one bold gold chevron; tiny costume details were
+	# intentionally removed because they disappear at gameplay scale.
+	_draw_shape(PackedVector2Array([
+		neck + Vector2(-1.0 * f, 2.0),
+		chest + Vector2(-7.0 * f, -1.0),
+		chest + Vector2(-1.0 * f, 7.0),
+		chest + Vector2(1.0 * f, 1.0),
+		chest + Vector2(7.0 * f, 0.0),
+		neck + Vector2(2.0 * f, 2.0),
+	]), gold, ink, 1.5)
+
+	var free_shoulder := chest + Vector2(-8.0 * f, -1.0)
+	var free_elbow := Vector2((-13.0 + lean * 0.25) * f, -10.0 + bob)
+	var free_hand := Vector2((-9.0 + lean * 0.35) * f, -19.0 + bob)
+	if body_state == SHOT:
+		free_elbow += Vector2(-recoil * 0.8 * f, 3.0)
+		free_hand += Vector2(-recoil * 1.3 * f, 6.0)
+	_draw_cel_segment(self, free_shoulder, free_elbow, 3.3, 2.8, shadow, shadow.darkened(0.18), ink)
+	_draw_cel_segment(self, free_elbow, free_hand, 2.9, 2.1, ivory, shadow, ink)
+	draw_circle(free_hand, 2.2, ink)
+	draw_circle(free_hand, 1.3, skin.palette[&"skin"])
+
+	var collar := PackedVector2Array([
+		neck + Vector2(-7.0 * f, 3.0),
+		neck + Vector2(-7.5 * f, -3.0),
+		neck + Vector2(-1.0 * f, 1.0),
+		neck + Vector2(6.0 * f, -4.0),
+		neck + Vector2(7.0 * f, 3.0),
+	])
+	_draw_shape(collar, ink, ink, 1.0)
+	_draw_cel_head(head, f, ink, light, gold)
+
+	if body_state == SHOT and body_frame <= 1:
+		for offset_y in [-10.0, -3.0, 5.0]:
+			draw_line(chest + Vector2((-20.0 - recoil) * f, offset_y),
+				chest + Vector2((-11.0 - recoil * 0.4) * f, offset_y * 0.65),
+				gold, 1.3, true)
+
+
+func _draw_cel_head(center: Vector2, f: float, ink: Color, light: Color, gold: Color) -> void:
+	var skin_tone: Color = skin.palette[&"skin"]
+	var face := PackedVector2Array([
+		center + Vector2(-5.0 * f, -5.0), center + Vector2(3.5 * f, -5.0),
+		center + Vector2(6.0 * f, -1.0), center + Vector2(3.0 * f, 6.0),
+		center + Vector2(-3.5 * f, 5.0), center + Vector2(-6.0 * f, 0.0),
+	])
+	_draw_shape(face, skin_tone, ink, 1.8)
+	draw_colored_polygon(PackedVector2Array([
+		center + Vector2(-5.0 * f, 1.0), center + Vector2(-1.0 * f, 5.0),
+		center + Vector2(-3.5 * f, 5.0), center + Vector2(-6.0 * f, 0.0),
+	]), gold.darkened(0.22))
+
+	# One swept mass plus three large spikes. It is bizarre in silhouette, but
+	# still behaves like a logo rather than noisy individual hair strands.
+	var hair := PackedVector2Array([
+		center + Vector2(4.0 * f, -4.0), center + Vector2(1.0 * f, -13.0),
+		center + Vector2(-2.0 * f, -7.0), center + Vector2(-8.0 * f, -12.0),
+		center + Vector2(-7.0 * f, -5.0), center + Vector2(-15.0 * f, -7.0),
+		center + Vector2(-10.0 * f, 0.0), center + Vector2(-15.0 * f, 5.0),
+		center + Vector2(-5.0 * f, 4.0), center + Vector2(-4.0 * f, -2.0),
+	])
+	_draw_shape(hair, skin.palette[&"hair"], ink, 1.8)
+	draw_line(center + Vector2(-8.0 * f, -5.0), center + Vector2(-2.0 * f, -7.0),
+		gold, 1.5, true)
+	# A single eye/brow wedge reads more cleanly than a miniature face.
+	draw_line(center + Vector2(0.5 * f, -2.0), center + Vector2(4.5 * f, -1.0), ink, 1.5, true)
+	draw_circle(center + Vector2(3.4 * f, -0.4), 0.9, light)
+
+
+func _draw_cel_boot(at: Vector2, f: float, ink: Color, gold: Color) -> void:
+	_draw_shape(PackedVector2Array([
+		at + Vector2(-2.8 * f, -2.0), at + Vector2(2.0 * f, -2.0),
+		at + Vector2(6.0 * f, 1.0), at + Vector2(-3.0 * f, 1.0),
+	]), ink, ink, 1.0)
+	draw_line(at + Vector2(1.0 * f, -1.0), at + Vector2(4.5 * f, 0.0), gold, 1.2, true)
+
+
+func _draw_cel_segment(canvas: Node2D, start: Vector2, finish: Vector2,
+		start_half: float, finish_half: float, fill: Color, shade: Color, ink: Color) -> void:
+	var axis := finish - start
+	if axis.is_zero_approx():
+		return
+	var side := axis.normalized().orthogonal()
+	var shape := PackedVector2Array([
+		start + side * start_half, finish + side * finish_half,
+		finish - side * finish_half, start - side * start_half,
+	])
+	canvas.draw_colored_polygon(shape, fill)
+	var shade_side := -side
+	canvas.draw_line(start + shade_side * (start_half - 0.7),
+		finish + shade_side * (finish_half - 0.7), shade, 1.4, true)
+	var outline := shape.duplicate()
+	outline.append(shape[0])
+	canvas.draw_polyline(outline, ink, 1.7, true)
+
+
+func _draw_cel_hit_pose(_pose: Dictionary) -> void:
+	var f := float(_fighter.facing)
+	var ink: Color = skin.palette[&"ink"]
+	var ivory: Color = skin.palette[&"body"]
+	var shadow: Color = skin.palette[&"shadow"]
+	var gold: Color = skin.palette[&"gold"]
+	var impact: Color = skin.palette[&"impact"]
+	var hip := Vector2(2.0 * f, 8.0)
+	var chest := Vector2(-8.0 * f, -3.0)
+	var head := Vector2(-16.0 * f, -12.0)
+	_draw_shape(PackedVector2Array([
+		hip + Vector2(-5.0 * f, -2.0), hip + Vector2(-18.0 * f, 17.0),
+		hip + Vector2(-2.0 * f, 12.0), hip + Vector2(5.0 * f, 0.0),
+	]), shadow, ink, 1.7)
+	_draw_cel_segment(self, hip, Vector2(-4.0 * f, 16.0), 4.0, 3.0, shadow, shadow.darkened(0.2), ink)
+	_draw_cel_segment(self, Vector2(-4.0 * f, 16.0), Vector2(-13.0 * f, 24.0), 3.0, 2.3, shadow, shadow.darkened(0.2), ink)
+	_draw_cel_segment(self, hip, Vector2(9.0 * f, 14.0), 4.2, 3.0, ivory, shadow, ink)
+	_draw_cel_segment(self, Vector2(9.0 * f, 14.0), Vector2(18.0 * f, 22.0), 3.0, 2.3, ivory, shadow, ink)
+	_draw_cel_segment(self, hip, chest, 7.0, 9.5, ivory, shadow, ink)
+	_draw_cel_segment(self, chest, Vector2(-22.0 * f, 1.0), 3.5, 2.2, shadow, shadow.darkened(0.2), ink)
+	_draw_cel_segment(self, chest, Vector2(3.0 * f, -15.0), 3.5, 2.2, ivory, shadow, ink)
+	_draw_cel_head(head, f, ink, skin.palette[&"light"], gold)
+
+	var burst_center := chest + Vector2(7.0 * f, -1.0)
+	var burst := PackedVector2Array()
+	for i in 12:
+		var radius := 8.0 if i % 2 == 0 else 3.5
+		var angle := TAU * float(i) / 12.0
+		burst.append(burst_center + Vector2(cos(angle), sin(angle)) * radius)
+	_draw_shape(burst, impact, ink, 1.4)
+	for y in [-10.0, 0.0, 10.0]:
+		draw_line(burst_center + Vector2(8.0 * f, y * 0.15),
+			burst_center + Vector2(22.0 * f, y), impact, 1.8, true)
+
+
 func _draw_head(center: Vector2, f: float, body: Color, ink: Color, angular: bool) -> void:
 	var radius := float(skin.silhouette.get(&"head_radius", 8.0))
 	draw_circle(center, radius + 2.0, ink)
@@ -324,6 +518,9 @@ func _draw_defeat(pose: Dictionary) -> void:
 func _draw_aim_arm(canvas: Node2D) -> void:
 	if _fighter == null or skin == null or not _fighter.alive:
 		return
+	if skin.render_style == &"cel_modular":
+		_draw_cel_aim_arm(canvas)
+		return
 	var segment := aim_segment_local()
 	if segment.size() != 2:
 		return
@@ -349,6 +546,51 @@ func _draw_aim_arm(canvas: Node2D) -> void:
 	canvas.draw_colored_polygon(PackedVector2Array([
 		tip, muzzle + side * 2.5, muzzle - direction * 3.0, muzzle - side * 2.5,
 	]), Color(0.90, 0.93, 1.0, 0.96))
+
+
+func _draw_cel_aim_arm(canvas: Node2D) -> void:
+	var segment := aim_segment_local()
+	if segment.size() != 2:
+		return
+	var shoulder := segment[0]
+	var muzzle := segment[1]
+	var direction := (muzzle - shoulder).normalized()
+	var side := direction.orthogonal()
+	var elbow := shoulder.lerp(muzzle, 0.52) + side * (3.0 * float(_fighter.facing))
+	var ink: Color = skin.palette[&"ink"]
+	var ivory: Color = skin.palette[&"body"]
+	var shadow: Color = skin.palette[&"shadow"]
+	var gold: Color = skin.palette[&"gold"]
+	_draw_cel_segment(canvas, shoulder, elbow, 3.8, 3.1, ivory, shadow, ink)
+	_draw_cel_segment(canvas, elbow, muzzle, 3.2, 2.3, ivory, shadow, ink)
+	canvas.draw_circle(shoulder, 3.2, ink)
+	canvas.draw_circle(shoulder, 1.8, gold)
+	canvas.draw_line(muzzle - direction * 3.2 - side * 2.7,
+		muzzle - direction * 3.2 + side * 2.7, ink, 2.8, true)
+	canvas.draw_circle(muzzle, 2.0, ink)
+	canvas.draw_circle(muzzle, 1.1, skin.palette[&"skin"])
+
+	# Knife begins exactly at the authoritative muzzle. A larger diamond flash
+	# appears only on deterministic SHOT frames; planning keeps a clean aim read.
+	var tip := muzzle + direction * 14.0
+	canvas.draw_colored_polygon(PackedVector2Array([
+		tip, muzzle + side * 2.2, muzzle - direction * 2.0,
+		muzzle - side * 2.2,
+	]), skin.palette[&"light"])
+	canvas.draw_polyline(PackedVector2Array([
+		tip, muzzle + side * 2.2, muzzle - direction * 2.0,
+		muzzle - side * 2.2, tip,
+	]), ink, 1.3, true)
+	if body_state == SHOT and body_frame <= 1:
+		var flash := PackedVector2Array()
+		for i in 8:
+			var radius := 7.0 if i % 2 == 0 else 2.8
+			var angle := TAU * float(i) / 8.0
+			flash.append(tip + Vector2(cos(angle), sin(angle)) * radius)
+		canvas.draw_colored_polygon(flash, gold)
+		var flash_outline := flash.duplicate()
+		flash_outline.append(flash[0])
+		canvas.draw_polyline(flash_outline, ink, 1.2, true)
 
 
 func _draw_limb(start: Vector2, joint: Vector2, finish: Vector2, width: float,
