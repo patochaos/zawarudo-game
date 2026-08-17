@@ -3,6 +3,114 @@ extends CanvasLayer
 ## Compact match HUD. Detailed player-plan panels were deliberately removed so
 ## the arena, ghosts and world-space previews remain the focus.
 
+const FIGHTER_PORTRAIT := preload("res://assets/art/super-portrait-v1.png")
+
+
+class FighterSeal:
+	extends Control
+
+	const PANEL_INK := Color(0.025, 0.012, 0.045, 0.82)
+	const EMPTY_PIP := Color(0.14, 0.14, 0.20, 0.94)
+
+	var player_index: int = 0
+	var accent: Color = Color.WHITE
+	var mirrored: bool = false
+	var portrait: Texture2D
+	var points: int = 0
+	var points_to_win: int = 3
+	var super_meter: float = 0.0
+	var super_armed: bool = false
+
+	func configure(index: int, color: Color, flip: bool, texture: Texture2D) -> void:
+		player_index = index
+		accent = color
+		mirrored = flip
+		portrait = texture
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		size = Vector2(250.0, 84.0)
+		queue_redraw()
+
+	func set_state(score_value: int, win_score: int, meter: float, armed: bool) -> void:
+		points = score_value
+		points_to_win = win_score
+		super_meter = clampf(meter, 0.0, 1.0)
+		super_armed = armed
+		queue_redraw()
+
+	func _mirror_points(source: PackedVector2Array) -> PackedVector2Array:
+		if not mirrored:
+			return source
+		var result := PackedVector2Array()
+		for point in source:
+			result.append(Vector2(size.x - point.x, point.y))
+		return result
+
+	func _draw() -> void:
+		var panel_shape := _mirror_points(PackedVector2Array([
+			Vector2(52.0, 8.0), Vector2(174.0, 8.0), Vector2(193.0, 25.0),
+			Vector2(217.0, 25.0), Vector2(248.0, 51.0), Vector2(248.0, 73.0),
+			Vector2(52.0, 73.0),
+		]))
+		draw_colored_polygon(panel_shape, PANEL_INK)
+		draw_polyline(panel_shape + PackedVector2Array([panel_shape[0]]),
+			Color(accent.r, accent.g, accent.b, 0.88), 1.25, true)
+
+		# The same authored portrait becomes a mirrored violet rival. Its high crop
+		# reads at thumbnail scale while preserving the angular manga silhouette.
+		var portrait_target := Rect2(2.0, 0.0, 74.0, 82.0)
+		var portrait_source := Rect2(150.0, 0.0, 950.0, 950.0)
+		var portrait_tint := Color(0.88, 0.58, 1.0, 1.0) if mirrored else Color.WHITE
+		if mirrored:
+			draw_set_transform(Vector2(size.x, 0.0), 0.0, Vector2(-1.0, 1.0))
+		if portrait != null:
+			draw_texture_rect_region(portrait, portrait_target, portrait_source, portrait_tint)
+		if mirrored:
+			draw_set_transform(Vector2.ZERO)
+
+		var portrait_frame := _mirror_points(PackedVector2Array([
+			Vector2(2.0, 0.0), Vector2(56.0, 0.0), Vector2(76.0, 18.0),
+			Vector2(76.0, 64.0), Vector2(58.0, 82.0), Vector2(2.0, 82.0),
+		]))
+		draw_polyline(portrait_frame + PackedVector2Array([portrait_frame[0]]),
+			accent.lightened(0.20), 1.5, true)
+
+		var font := ThemeDB.fallback_font
+		var name_x := 80.0 if not mirrored else 12.0
+		var name_width := 140.0 if not mirrored else 145.0
+		var name_align := HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT
+		draw_string(font, Vector2(name_x, 29.0), "P%d" % (player_index + 1),
+			name_align, name_width, 16, accent.lightened(0.25))
+
+		var first_pip_x := 105.0 if not mirrored else 82.0
+		for i in points_to_win:
+			var centre := Vector2(first_pip_x + float(i) * 30.0, 44.0)
+			var diamond := PackedVector2Array([
+				centre + Vector2(0.0, -7.0), centre + Vector2(7.0, 0.0),
+				centre + Vector2(0.0, 7.0), centre + Vector2(-7.0, 0.0),
+			])
+			if i < points:
+				draw_colored_polygon(diamond, accent.lightened(0.18))
+			else:
+				draw_colored_polygon(diamond, EMPTY_PIP)
+			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.2, true)
+
+		var label_x := 80.0 if not mirrored else 26.0
+		var bar_x := 126.0 if not mirrored else 72.0
+		draw_string(font, Vector2(label_x, 69.0), "SUPER", HORIZONTAL_ALIGNMENT_LEFT,
+			44.0, 9, accent.lightened(0.10))
+		var bar_width := 105.0 if not mirrored else 92.0
+		var bar_rect := Rect2(bar_x, 62.0, bar_width, 5.0)
+		draw_rect(bar_rect, Color(0.10, 0.09, 0.14, 0.92))
+		draw_rect(bar_rect, Color(accent.r, accent.g, accent.b, 0.72), false, 1.0)
+		if super_meter > 0.0:
+			var fill_color := Color(1.0, 0.94, 0.58) if super_meter >= 1.0 else accent
+			draw_rect(Rect2(bar_rect.position, Vector2(bar_rect.size.x * super_meter,
+				bar_rect.size.y)), fill_color)
+		if super_armed:
+			var armed_at := Vector2(bar_rect.end.x + 8.0 if not mirrored else bar_rect.position.x - 8.0,
+				bar_rect.position.y + 2.5)
+			draw_circle(armed_at, 3.5, Color(1.0, 0.96, 0.66))
+
 
 class HudChrome:
 	extends Control
@@ -19,6 +127,38 @@ class HudChrome:
 		draw_line(Vector2(490.0, 188.0), Vector2(790.0, 188.0), gold, 2.0)
 		draw_line(Vector2(0.0, 630.0), Vector2(1280.0, 630.0), gold, 2.0)
 
+
+class ResultChrome:
+	extends Control
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		queue_redraw()
+
+	func _draw() -> void:
+		var gold := Color(0.96, 0.69, 0.18)
+		var violet := Color(0.55, 0.20, 0.82)
+		# Restrained manga rays frame the result without obscuring the frozen
+		# final position, which remains useful context for the winning hit.
+		for i in 9:
+			var y := 132.0 + float(i) * 58.0
+			draw_line(Vector2(0.0, y), Vector2(270.0 + float(i % 3) * 22.0, 360.0),
+				Color(violet.r, violet.g, violet.b, 0.035), 2.0)
+			draw_line(Vector2(1280.0, y), Vector2(1010.0 - float(i % 3) * 22.0, 360.0),
+				Color(gold.r, gold.g, gold.b, 0.035), 2.0)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1004.0, 610.0),
+			Vector2(218.0, 610.0),
+		]), Color(0.018, 0.010, 0.035, 0.90))
+		draw_polyline(PackedVector2Array([
+			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1004.0, 610.0),
+			Vector2(218.0, 610.0), Vector2(250.0, 176.0),
+		]), Color(gold.r, gold.g, gold.b, 0.48), 1.5, true)
+		draw_line(Vector2(380.0, 306.0), Vector2(900.0, 306.0),
+			Color(gold.r, gold.g, gold.b, 0.55), 2.0)
+		draw_line(Vector2(424.0, 388.0), Vector2(856.0, 388.0),
+			Color(violet.r, violet.g, violet.b, 0.42), 1.0)
+
 var gm
 
 var _turn_label: Label
@@ -27,30 +167,39 @@ var _phase_label: Label
 var _level_label: Label
 var _build_label: Label
 var _score_label: Label
+var _phase_track: ColorRect
+var _phase_fill: ColorRect
 var _pips: Array[Array] = []
+var _fighter_seals: Array[FighterSeal] = []
 var _hint_p1: Label
 var _hint_p2: Label
 
-const _HINT_P2 := "P2  ←/→ MOVE · K JUMP · ↓ WAIT · ,/. AIM · ENTER THROW · R-SHIFT LOCK · BACKSPACE UNDO"
+const _HINT_P2_MISSING := "P2  CONNECT A GAMEPAD"
 const _HINT_AI := "P2  AI · PLAN HIDDEN"
 const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
-const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · SHIFT LOCK · R UNDO"
+const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_RIVAL := "P%d  ONLINE · PLAN HIDDEN"
-const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · START LOCK · B UNDO"
+const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
 var _banner_bg: ColorRect
 var _banner_rule: ColorRect
 var _banner: Label
 
 const _PIP_EMPTY := Color(0.20, 0.22, 0.27, 0.9)
 
-var help_visible: bool = true
+var help_visible: bool = false
 var _help: Array[CanvasItem] = []
 var _tuning: Label
 var _over_bg: ColorRect
+var _over_chrome: ResultChrome
 var _over_label: Label
 var _over_score: Label
 var _over_arena: Label
 var _over_controls: Label
+var _arena_previous_button: Button
+var _arena_next_button: Button
+var _replay_button: Button
+var _rematch_button: Button
+var _menu_button: Button
 var _report_button: Button
 var touch_mode: bool = false
 
@@ -64,13 +213,23 @@ func build(manager) -> void:
 
 	_level_label = _mk_label(Vector2(440.0, 8.0), 400.0, 15, HORIZONTAL_ALIGNMENT_CENTER)
 	_level_label.add_theme_color_override("font_color", Color(0.52, 0.58, 0.68))
-	_build_label = _mk_label(Vector2(1060.0, 10.0), 200.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
+	_build_label = _mk_label(Vector2(1060.0, 642.0), 200.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
 	_build_label.text = "PLAYTEST %s" % str(ProjectSettings.get_setting(
 		"application/config/version", "DEV"))
 	_build_label.add_theme_color_override("font_color", Color(0.38, 0.42, 0.50))
 	_turn_label = _mk_label(Vector2(540.0, 26.0), 200.0, 20, HORIZONTAL_ALIGNMENT_CENTER)
 	_timer_label = _mk_label(Vector2(490.0, 46.0), 300.0, 62, HORIZONTAL_ALIGNMENT_CENTER)
 	_phase_label = _mk_label(Vector2(490.0, 116.0), 300.0, 20, HORIZONTAL_ALIGNMENT_CENTER)
+	_phase_track = ColorRect.new()
+	_phase_track.position = Vector2(516.0, 151.0)
+	_phase_track.size = Vector2(248.0, 5.0)
+	_phase_track.color = Color(0.12, 0.11, 0.17, 0.90)
+	add_child(_phase_track)
+	_phase_fill = ColorRect.new()
+	_phase_fill.position = _phase_track.position
+	_phase_fill.size = _phase_track.size
+	_phase_fill.color = Color(0.86, 0.66, 1.0)
+	add_child(_phase_fill)
 	# Build all four score rows up front; unused rows stay hidden in duel modes.
 	for i in gm.MAX_PLAYERS:
 		var row: Array[ColorRect] = []
@@ -86,6 +245,15 @@ func build(manager) -> void:
 	_score_label.add_theme_color_override("font_color", Color(0.45, 0.50, 0.60))
 	_score_label.text = "FIRST TO %d HITS" % gm.hits_to_win
 
+	# Mirrored 1v1 fighter seals. They replace the anonymous centre score pips in
+	# duels, but the existing scalable rows remain available for four-player mode.
+	for i in 2:
+		var seal := FighterSeal.new()
+		seal.position = Vector2(14.0, 24.0) if i == 0 else Vector2(1016.0, 24.0)
+		seal.configure(i, gm.PLAYER_COLORS[i], i == 1, FIGHTER_PORTRAIT)
+		add_child(seal)
+		_fighter_seals.append(seal)
+
 	# --- bottom control bar -------------------------------------------------
 	var bar := ColorRect.new()
 	bar.position = Vector2(0.0, 666.0)
@@ -95,7 +263,7 @@ func build(manager) -> void:
 	_help.append(bar)
 
 	_hint_p1 = _hint(670.0, gm.PLAYER_COLORS[0],
-		"A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · SHIFT LOCK · R UNDO · F RESET · H HIDE")
+		"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET")
 	_hint_p2 = _hint(695.0, gm.PLAYER_COLORS[1], "")
 
 	_tuning = _mk_label(Vector2(16.0, 700.0), 1248.0, 12, HORIZONTAL_ALIGNMENT_CENTER)
@@ -126,31 +294,83 @@ func build(manager) -> void:
 	_over_bg = ColorRect.new()
 	_over_bg.position = Vector2.ZERO
 	_over_bg.size = Vector2(1280.0, 720.0)
-	_over_bg.color = Color(0.02, 0.02, 0.04, 0.72)
+	_over_bg.color = Color(0.012, 0.008, 0.025, 0.84)
 	_over_bg.visible = false
 	add_child(_over_bg)
+	_over_chrome = ResultChrome.new()
+	_over_chrome.size = Vector2(1280.0, 720.0)
+	_over_chrome.visible = false
+	add_child(_over_chrome)
 
-	_over_label = _mk_label(Vector2(140.0, 228.0), 1000.0, 48, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_label = _mk_label(Vector2(140.0, 205.0), 1000.0, 46, HORIZONTAL_ALIGNMENT_CENTER)
 	_over_label.size = Vector2(1000.0, 74.0)
 	_over_label.visible = false
-	_over_score = _mk_label(Vector2(390.0, 318.0), 500.0, 42, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_score = _mk_label(Vector2(390.0, 295.0), 500.0, 42, HORIZONTAL_ALIGNMENT_CENTER)
 	_over_score.size = Vector2(500.0, 64.0)
 	_over_score.visible = false
-	_over_arena = _mk_label(Vector2(240.0, 408.0), 800.0, 25, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_arena = _mk_label(Vector2(300.0, 354.0), 680.0, 21, HORIZONTAL_ALIGNMENT_CENTER)
 	_over_arena.size = Vector2(800.0, 54.0)
 	_over_arena.visible = false
-	_over_controls = _mk_label(Vector2(140.0, 490.0), 1000.0, 17, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_controls.size = Vector2(1000.0, 78.0)
+	_over_controls = _mk_label(Vector2(140.0, 568.0), 1000.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_controls.size = Vector2(1000.0, 34.0)
 	_over_controls.visible = false
-	_report_button = Button.new()
-	_report_button.position = Vector2(520.0, 548.0)
-	_report_button.size = Vector2(240.0, 38.0)
-	_report_button.text = "COPY MATCH REPORT"
-	_report_button.focus_mode = Control.FOCUS_NONE
-	_report_button.add_theme_font_size_override("font_size", 15)
+
+	_arena_previous_button = _result_button(Vector2(282.0, 352.0), Vector2(52.0, 44.0), "‹", false)
+	_arena_previous_button.pressed.connect(func(): gm._cycle_rematch_level(-1))
+	_arena_next_button = _result_button(Vector2(946.0, 352.0), Vector2(52.0, 44.0), "›", false)
+	_arena_next_button.pressed.connect(func(): gm._cycle_rematch_level(1))
+	_replay_button = _result_button(Vector2(342.0, 438.0), Vector2(184.0, 52.0), "R  WATCH REPLAY")
+	_replay_button.pressed.connect(func(): gm._start_match_replay())
+	_rematch_button = _result_button(Vector2(544.0, 438.0), Vector2(208.0, 52.0), "ENTER  REMATCH", true)
+	_rematch_button.pressed.connect(func(): gm._request_rematch())
+	_menu_button = _result_button(Vector2(770.0, 438.0), Vector2(168.0, 52.0), "ESC  MENU")
+	_menu_button.pressed.connect(_leave_result)
+	_report_button = _result_button(Vector2(520.0, 510.0), Vector2(240.0, 42.0), "C  COPY MATCH REPORT")
 	_report_button.pressed.connect(func(): gm.copy_match_report())
-	_report_button.visible = false
-	add_child(_report_button)
+
+
+func _result_button(pos: Vector2, dimensions: Vector2, text: String,
+		primary: bool = false) -> Button:
+	var button := Button.new()
+	button.position = pos
+	button.size = dimensions
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", 14)
+	button.add_theme_color_override("font_color", Color(0.94, 0.95, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.70))
+	button.add_theme_color_override("font_disabled_color", Color(0.38, 0.39, 0.46))
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.17, 0.07, 0.25, 0.94) if primary else Color(0.045, 0.03, 0.075, 0.96)
+	normal.border_color = Color(0.91, 0.66, 0.22, 0.78 if primary else 0.36)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(3)
+	button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.38, 0.12, 0.56, 0.98)
+	hover.border_color = Color(1.0, 0.82, 0.34, 0.96)
+	hover.set_border_width_all(2)
+	button.add_theme_stylebox_override("hover", hover)
+	var pressed := hover.duplicate()
+	pressed.bg_color = Color(0.24, 0.08, 0.34, 1.0)
+	button.add_theme_stylebox_override("pressed", pressed)
+	var disabled := normal.duplicate()
+	disabled.bg_color = Color(0.025, 0.02, 0.04, 0.82)
+	disabled.border_color = Color(0.20, 0.20, 0.26, 0.72)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.mouse_entered.connect(func(): gm._sfx.play("ui_move"))
+	button.pressed.connect(func(): gm._sfx.play("ui_accept"))
+	button.visible = false
+	add_child(button)
+	return button
+
+
+func _leave_result() -> void:
+	if gm.online_mode:
+		gm._leave_online()
+	else:
+		gm._open_menu()
 
 
 func _hint(y: float, col: Color, text: String) -> Label:
@@ -230,18 +450,24 @@ func refresh() -> void:
 		_hint_p1.text = ""
 		_hint_p2.text = ""
 	else:
-		_hint_p1.text = (_HINT_PAD % 1) if gm._pads[0] >= 0 else \
-			"A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · SHIFT LOCK · R UNDO · F RESET · H HIDE"
+		_hint_p1.text = \
+			"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
 		if gm.vs_ai:
 			_hint_p2.text = _HINT_AI_4P if gm.players.size() == 4 else _HINT_AI
 		else:
-			_hint_p2.text = (_HINT_PAD % 2) if gm._pads[1] >= 0 else _HINT_P2
+			_hint_p2.text = (_HINT_PAD % 2) if gm._pads[1] >= 0 else _HINT_P2_MISSING
 
 	var active_players: int = gm.players.size()
+	var duel_hud: bool = not gm.tutorial_mode and active_players == 2
+	for i in _fighter_seals.size():
+		var seal: FighterSeal = _fighter_seals[i]
+		seal.visible = duel_hud
+		if duel_hud:
+			seal.set_state(gm.score[i], gm.hits_to_win, gm.super_meter[i], gm.super_armed[i])
 	for i in gm.MAX_PLAYERS:
 		for h in _pips[i].size():
 			var pip: ColorRect = _pips[i][h]
-			pip.visible = not gm.tutorial_mode and i < active_players
+			pip.visible = not gm.tutorial_mode and not duel_hud and i < active_players
 			if i < active_players:
 				var centre: float = lerpf(490.0, 790.0,
 					float(i) / float(maxi(active_players - 1, 1)))
@@ -265,22 +491,32 @@ func refresh() -> void:
 	else:
 		_banner_rule.visible = false
 
+	var phase_fraction := 0.0
+	var phase_color := Color(0.86, 0.66, 1.0)
+	var phase_meter_visible := true
 	match gm.state:
 		Phase.PLANNING:
 			var tutorial_waiting: bool = gm.tutorial_mode and gm._tutorial != null and not gm._tutorial.timed_turns_started
 			_timer_label.text = "" if tutorial_waiting else "%.1f" % maxf(gm.planning_time_left, 0.0)
 			var frac: float = gm.planning_time_left / maxf(gm.planning_duration, 0.001)
+			phase_fraction = frac
+			phase_meter_visible = not tutorial_waiting
+			phase_color = Color(1.0, 0.30, 0.28) if frac < 0.25 else Color(0.72, 0.38, 0.95)
 			_timer_label.add_theme_color_override("font_color",
 				Color(1.0, 0.35, 0.3) if frac < 0.25 else Color(0.92, 0.95, 1.0))
 			_phase_label.text = "PRACTICE — NO TIMER" if tutorial_waiting else "TIME SUSPENDED — PLAN"
 			_phase_label.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
 		Phase.COMMITTING:
 			_timer_label.text = "%.2f" % maxf(gm.commit_time_left, 0.0)
+			phase_fraction = gm.commit_time_left / maxf(gm.commit_delay, 0.001)
+			phase_color = Color(1.0, 0.78, 0.24)
 			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 			_phase_label.text = "FATE LOCKED"
 			_phase_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 		Phase.EXECUTING:
 			_timer_label.text = "%.2f" % gm.exec_time_left()
+			phase_fraction = gm.exec_time_left() / maxf(gm.execution_duration, 0.001)
+			phase_color = Color(0.35, 0.95, 0.55)
 			_timer_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.55))
 			_phase_label.text = "TIME FLOWS — EXECUTING"
 			_phase_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.55))
@@ -289,15 +525,24 @@ func refresh() -> void:
 			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.32))
 			_phase_label.text = "MATCH REPLAY — %.1f× — NO PAUSES" % gm.replay_speed
 			_phase_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.32))
+			phase_meter_visible = false
 		Phase.GAME_OVER:
 			_timer_label.text = ""
 			_phase_label.text = "GAME OVER"
 			_phase_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			phase_meter_visible = false
 		Phase.ONLINE_WAIT:
 			_timer_label.text = "—"
 			_timer_label.add_theme_color_override("font_color", Color(0.72, 0.62, 0.92))
 			_phase_label.text = "WAITING FOR OPPONENT"
 			_phase_label.add_theme_color_override("font_color", Color(0.72, 0.62, 0.92))
+			phase_meter_visible = false
+		_:
+			phase_meter_visible = false
+	_phase_track.visible = phase_meter_visible
+	_phase_fill.visible = phase_meter_visible
+	_phase_fill.size.x = 248.0 * clampf(phase_fraction, 0.0, 1.0)
+	_phase_fill.color = phase_color
 
 	var pads := ""
 	for i in gm.players.size():
@@ -307,12 +552,25 @@ func refresh() -> void:
 		% [gm.planning_duration, gm.execution_duration, "OFF" if gm._sfx.muted else "on", pads]
 
 	var over: bool = gm.state == Phase.GAME_OVER
+	var ui_result: bool = over and not touch_mode
 	_over_bg.visible = over
-	_over_label.visible = over
-	_over_score.visible = over
-	_over_arena.visible = over
-	_over_controls.visible = over
-	_report_button.visible = over and not gm._touch_controls.enabled
+	_over_chrome.visible = ui_result
+	_over_label.visible = ui_result
+	_over_score.visible = ui_result
+	_over_arena.visible = ui_result
+	_over_controls.visible = ui_result
+	var desktop_result: bool = over and not bool(gm._touch_controls.enabled)
+	_arena_previous_button.visible = desktop_result
+	_arena_next_button.visible = desktop_result
+	_replay_button.visible = desktop_result
+	_rematch_button.visible = desktop_result
+	_menu_button.visible = desktop_result
+	_report_button.visible = desktop_result
+	var level_locked: bool = bool(gm.online_mode) \
+		and (gm.online_player != 0 or bool(gm._online_waiting_rematch))
+	_arena_previous_button.disabled = level_locked
+	_arena_next_button.disabled = level_locked
+	_rematch_button.disabled = gm.online_mode and gm._online_waiting_rematch
 	if over:
 		var controls: String
 		if touch_mode:
@@ -320,12 +578,11 @@ func refresh() -> void:
 				if gm.online_mode and gm.online_player != 0 else \
 				"CHOOSE THE NEXT ARENA · WATCH THE FIGHT · OR RUN IT BACK"
 		elif gm.online_mode:
-			controls = "←/→ HOST LEVEL     R REPLAY     C COPY REPORT     ENTER REMATCH" \
-				if gm.online_player == 0 else \
-				"HOST LEVEL     R REPLAY     C COPY REPORT     ENTER REMATCH"
+			controls = "KEYBOARD AND GAMEPAD SHORTCUTS REMAIN AVAILABLE" \
+				if gm.online_player == 0 else "THE HOST CHOOSES THE NEXT ARENA"
 		else:
-			controls = "←/→ LEVEL     R REPLAY     C COPY REPORT     ENTER REMATCH\nPAD: D-PAD LEVEL · Y REPLAY · X REPORT · A REMATCH"
-		var arena_line := "NEXT ARENA  <  %d/%d — %s  >" % [
+			controls = "KEYBOARD  ←/→ LEVEL · R REPLAY · ENTER REMATCH     GAMEPAD  D-PAD · Y · A"
+		var arena_line := "NEXT ARENA   %02d / %02d   —   %s" % [
 			gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		if gm.online_mode and gm.online_player != 0:
 			arena_line = "HOST ARENA — %d/%d — %s" % [

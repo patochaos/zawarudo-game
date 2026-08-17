@@ -50,8 +50,8 @@ func _test_remote_slot_uses_local_controls() -> void:
 		"SPACE must be reserved for jumping and never charge or fire")
 	gm.online_mode = false
 	var p2_controls: Dictionary = gm._input_map_for(1)
-	_check(KEY_K in p2_controls["jump"] and KEY_UP not in p2_controls["jump"],
-		"local Player 2 must use K, never the up arrow, to jump")
+	_check(p2_controls.values().all(func(bindings): return bindings.is_empty()),
+		"local Player 2 must be gamepad-only with no keyboard bindings")
 	gm.free()
 
 

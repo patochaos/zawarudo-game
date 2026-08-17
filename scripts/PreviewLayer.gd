@@ -5,6 +5,7 @@ extends Node2D
 ## existing knives. Hidden entirely during EXECUTION.
 
 var gm
+var high_contrast: bool = false
 var _arrow_prediction_tick: int = -1
 var _arrow_prediction_cache: Dictionary = {}
 
@@ -45,7 +46,7 @@ func _draw() -> void:
 # ---------------------------------------------------------------- players ----
 
 func _draw_player_preview(p: Player) -> void:
-	var col: Color = p.color
+	var col: Color = _player_preview_color(p)
 	var i: int = p.index
 	var path: PackedVector2Array = gm.ghost_path[i]
 	if path.size() < 2:
@@ -104,7 +105,14 @@ func _draw_ready_badge(p: Player) -> void:
 ## ground target reads more clearly than another box around the ghost body.
 func _draw_destination(at: Vector2, p: Player) -> void:
 	var foot := at + Vector2(0.0, Player.HALF.y + 7.0)
-	var c := Color(p.color.r, p.color.g, p.color.b, 0.95)
+	var base := _player_preview_color(p)
+	var c := Color(base.r, base.g, base.b, 0.95)
+	if high_contrast:
+		var ink := Color(0.015, 0.02, 0.035, 0.96)
+		draw_arc(foot, 10.0, 0.0, TAU, 20, ink, 5.2)
+		draw_circle(foot, 4.5, ink)
+		draw_line(foot - Vector2(17.0, 0.0), foot - Vector2(7.0, 0.0), ink, 4.5)
+		draw_line(foot + Vector2(7.0, 0.0), foot + Vector2(17.0, 0.0), ink, 4.5)
 	draw_arc(foot, 10.0, 0.0, TAU, 20, c, 2.2)
 	draw_circle(foot, 2.5, c)
 	draw_line(foot - Vector2(16.0, 0.0), foot - Vector2(8.0, 0.0), c, 1.5)
@@ -114,8 +122,9 @@ func _draw_destination(at: Vector2, p: Player) -> void:
 
 func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
 	var pose := Player.idle_pose_points(p.facing, p.aim_dir())
-	var c := Color(p.color.r, p.color.g, p.color.b, alpha)
-	var faint := Color(p.color.r, p.color.g, p.color.b, alpha * 0.16)
+	var base := _player_preview_color(p)
+	var c := Color(base.r, base.g, base.b, minf(1.0, alpha + (0.1 if high_contrast else 0.0)))
+	var faint := Color(base.r, base.g, base.b, alpha * (0.24 if high_contrast else 0.16))
 	var segments := [
 		[pose["hip"], pose["chest"]], [pose["chest"], pose["neck"]],
 		[pose["hip"], pose["knee_a"]], [pose["knee_a"], pose["foot_a"]],
@@ -125,7 +134,11 @@ func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
 		[pose["shoulder"], pose["aim_elbow"]], [pose["aim_elbow"], pose["grip"]],
 	]
 	for segment in segments:
+		if high_contrast:
+			draw_line(at + segment[0], at + segment[1], Color(0.015, 0.02, 0.035, alpha), 5.2, true)
 		draw_line(at + segment[0], at + segment[1], c, 2.2, true)
+	if high_contrast:
+		draw_circle(at + pose["head"], 9.0, Color(0.015, 0.02, 0.035, alpha))
 	draw_circle(at + pose["head"], 7.0, faint)
 	draw_arc(at + pose["head"], 6.0, 0.0, TAU, 16, c, 2.0, true)
 	for joint in [pose["hip"], pose["knee_a"], pose["knee_b"], pose["grip"]]:
@@ -151,7 +164,7 @@ const AIM_LEN_MAX := 132.0
 
 
 func _draw_shot_preview(p: Player, origin: Vector2) -> void:
-	var col: Color = p.color
+	var col: Color = _player_preview_color(p)
 	var armed: bool = p.plan.has_shot()
 	var charging: bool = gm.charging[p.index]
 	var live: bool = armed or charging
@@ -248,7 +261,8 @@ func _draw_power_bar(origin: Vector2, p: Player, charging: bool) -> void:
 	var at: Vector2 = origin + Vector2(-w * 0.5, -Player.HALF.y - 22.0)
 	var bg := Color(0.10, 0.11, 0.14, 0.85 if charging else 0.5)
 	draw_rect(Rect2(at, Vector2(w, h)), bg)
-	var fill: Color = Color(1.0, 0.85, 0.3) if charging else Color(p.color.r, p.color.g, p.color.b, 0.7)
+	var base := _player_preview_color(p)
+	var fill: Color = Color(1.0, 0.85, 0.3) if charging else Color(base.r, base.g, base.b, 0.7)
 	draw_rect(Rect2(at, Vector2(w * clampf(p.plan.power, 0.0, 1.0), h)), fill)
 	draw_rect(Rect2(at, Vector2(w, h)), Color(1, 1, 1, 0.35 if charging else 0.18), false, 1.0)
 
@@ -457,6 +471,8 @@ func _runs(path: PackedVector2Array) -> Array:
 func _solid_runs(path: PackedVector2Array, col: Color, width: float) -> void:
 	for run in _runs(path):
 		if run.size() > 1:
+			if high_contrast:
+				draw_polyline(run, Color(0.015, 0.02, 0.035, maxf(col.a, 0.82)), width + 3.5)
 			draw_polyline(run, col, width)
 
 
@@ -481,6 +497,9 @@ func _dotted_polyline(pts: PackedVector2Array, col: Color, width: float, dash: f
 			var span: float = (dash if drawing else gap) - carry
 			var step: float = minf(span, seg - t)
 			if drawing:
+				if high_contrast:
+					draw_line(a + dir * t, a + dir * (t + step),
+						Color(0.015, 0.02, 0.035, maxf(col.a, 0.82)), width + 3.5)
 				draw_line(a + dir * t, a + dir * (t + step), col, width)
 			t += step
 			carry += step
@@ -501,4 +520,13 @@ func _dotted_rect(r: Rect2, col: Color, width: float) -> void:
 
 
 func _label(at: Vector2, text: String, col: Color, size: int) -> void:
+	if high_contrast:
+		draw_string(ThemeDB.fallback_font, at + Vector2(2.0, 2.0), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0.015, 0.02, 0.035, 0.96))
 	draw_string(ThemeDB.fallback_font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
+func _player_preview_color(p: Player) -> Color:
+	if not high_contrast:
+		return p.color
+	return Color(1.0, 0.86, 0.28) if (p.index & 1) == 0 else Color(0.30, 0.90, 1.0)

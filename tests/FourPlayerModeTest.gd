@@ -16,7 +16,11 @@ func _run() -> void:
 
 	game._on_menu_start(true, 0, 4)
 	game._ui.refresh()
+	_check(not game._online_state_digest().is_empty(),
+		"the deterministic state digest must serialize every live player field")
 	_check(game.players.size() == 4, "four-player mode must spawn four fighters")
+	_check(not game._ui._fighter_seals[0].visible and not game._ui._fighter_seals[1].visible,
+		"the portrait fighter seals must remain exclusive to 1v1")
 	_check(game._ui._pips[3][0].visible,
 		"the four-player HUD must expose Player 4's score pips")
 	_check(not game.is_ai(0), "Player 1 must remain human")
@@ -83,8 +87,34 @@ func _run() -> void:
 	game._ui.refresh()
 	_check(game.players.size() == 2 and not game.is_ai(1),
 		"switching back to local duel must restore two human fighters")
+	_check(game._ui._fighter_seals[0].visible and game._ui._fighter_seals[1].visible,
+		"the 1v1 HUD must show one mirrored fighter seal per player")
+	_check(game._ui._fighter_seals[0].player_index == 0 \
+		and game._ui._fighter_seals[1].player_index == 1,
+		"the mirrored fighter seals must retain their P1/P2 identities")
+	_check(not game._ui._pips[0][0].visible and not game._ui._pips[1][0].visible,
+		"the 1v1 fighter seals must replace the anonymous centre score pips")
+	game.score[0] = 2
+	game.super_meter[0] = 0.65
+	game.super_armed[0] = true
+	game._ui.refresh()
+	_check(game._ui._fighter_seals[0].points == 2 \
+		and is_equal_approx(game._ui._fighter_seals[0].super_meter, 0.65) \
+		and game._ui._fighter_seals[0].super_armed,
+		"the 1v1 fighter seal must read live score, SUPER meter and armed state")
 	_check(not game._ui._pips[2][0].visible and not game._ui._pips[3][0].visible,
 		"duel HUD must hide the inactive Player 3 and Player 4 scores")
+	game.state = Phase.GAME_OVER
+	game.winner = 0
+	game.rematch_level_index = 0
+	game.rematch_level_name = str(Levels.build(0)["name"])
+	game._ui.refresh()
+	_check(game._ui._over_chrome.visible and game._ui._replay_button.visible \
+		and game._ui._rematch_button.visible and game._ui._menu_button.visible,
+		"the desktop result screen must expose visible replay, rematch and menu actions")
+	game._ui._arena_next_button.pressed.emit()
+	_check(game.rematch_level_index == 1,
+		"the result screen's next-arena button must change the pending rematch arena")
 
 	if _failures == 0:
 		print("Four-player mode: all tests passed")

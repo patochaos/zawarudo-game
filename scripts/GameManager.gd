@@ -28,6 +28,7 @@ const HAZARD_SCRIPT := preload("res://scripts/Hazard.gd")
 const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
 const TUTORIAL_SCRIPT := preload("res://scripts/TutorialLayer.gd")
 const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
+const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
@@ -224,9 +225,6 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export var knife_ricochet_limit: int = 2
 
 @export_group("Input")
-## Which player the first connected gamepad drives. The second pad, if any,
-## goes to the other player.
-@export_enum("Player 1:0", "Player 2:1") var first_gamepad_to: int = 1
 ## Useful for editor/browser QA on a machine without a touchscreen. Production
 ## enables the overlay automatically when the display reports touch support.
 @export var force_touch_controls: bool = false
@@ -376,6 +374,7 @@ var _effects
 var _sfx
 var _time_stop
 var _super_freeze
+var _transition: TransitionLayer
 var _super_cutins_shown: Array[bool] = [false, false, false, false]
 var _ui
 var _online_client: OnlineClient
@@ -394,6 +393,7 @@ var _settings: Dictionary = {
 	"sound": 1.0,
 	"hit_freeze": true,
 	"reduced_flashes": false,
+	"high_contrast_previews": false,
 	"maximized": true,
 	"telemetry": true,
 }
@@ -460,6 +460,8 @@ func _ready() -> void:
 	# simulation clock is paused for a SUPER introduction.
 	_super_freeze = SUPER_FREEZE_SCRIPT.new()
 	add_child(_super_freeze)
+	_transition = TRANSITION_SCRIPT.new()
+	add_child(_transition)
 
 	_tutorial = TUTORIAL_SCRIPT.new()
 	add_child(_tutorial)
@@ -474,6 +476,8 @@ func _ready() -> void:
 	_menu.online_requested.connect(_on_menu_online)
 	_menu.tutorial_requested.connect(_on_menu_tutorial)
 	_menu.option_changed.connect(_on_option_changed)
+	_menu.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_menu.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_online_client = ONLINE_CLIENT_SCRIPT.new()
 	add_child(_online_client)
@@ -486,6 +490,8 @@ func _ready() -> void:
 	_online_lobby.create_requested.connect(_on_online_create)
 	_online_lobby.join_requested.connect(_on_online_join)
 	_online_lobby.cancel_requested.connect(_leave_online)
+	_online_lobby.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_online_lobby.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_tuning = TUNING_SCRIPT.new()
 	add_child(_tuning)
@@ -538,6 +544,8 @@ func _open_menu() -> void:
 	if _online_lobby != null:
 		_online_lobby.close()
 	_menu.open()
+	if _transition != null:
+		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
 
 
 func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
@@ -555,6 +563,8 @@ func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
 	_sfx.play("title")
 	_begin_match_telemetry("ai_%s" % ("close" if prototype_mode else "wide") \
 		if ai else "local_%dp" % requested_players)
+	_transition.play("%s // %s" % ["VS AI" if ai else "LOCAL DUEL", level_name],
+		"WRITE THE MOVE", PLAYER_COLORS[0], reduced_flashes)
 
 
 func _on_menu_tutorial() -> void:
@@ -573,6 +583,7 @@ func _on_menu_tutorial() -> void:
 	_tutorial.start(self)
 	_sfx.play("title")
 	_begin_match_telemetry("tutorial")
+	_transition.play("TRAINING // NO TIMER", "LEARN TO STOP TIME", PLAYER_COLORS[0], reduced_flashes)
 
 
 func _on_menu_online(lvl: int) -> void:
@@ -583,6 +594,7 @@ func _on_menu_online(lvl: int) -> void:
 	_tuning.visible = false
 	state = Phase.ONLINE_LOBBY
 	_online_lobby.open(lvl)
+	_transition.play("ONLINE DUEL", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
 
 
 func _on_online_create(lvl: int) -> void:
@@ -706,6 +718,8 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int) -> void:
 	restart()
 	_sfx.play("title")
 	_begin_match_telemetry("online")
+	_transition.play("ONLINE // ROOM %s" % online_room, "OPPONENT FOUND",
+		PLAYER_COLORS[online_player], reduced_flashes)
 
 
 func _apply_online_turn_plans(message: Dictionary) -> void:
@@ -769,6 +783,7 @@ func _on_menu_freeplay(lvl: int) -> void:
 	_load_level(lvl)
 	_reset_freeplay()
 	state = Phase.FREEPLAY
+	_transition.play("FREE PLAY // %s" % level_name, "TIME FLOWS", PLAYER_COLORS[0], reduced_flashes)
 
 
 func _load_settings() -> void:
@@ -804,6 +819,9 @@ func _apply_settings() -> void:
 		_sfx.set_volume(float(_settings["sound"]))
 	if _time_stop != null:
 		_time_stop.reduced_flashes = reduced_flashes
+	if _preview != null:
+		_preview.high_contrast = bool(_settings["high_contrast_previews"])
+		_preview.queue_redraw()
 	if _telemetry != null:
 		_telemetry.enabled = bool(_settings["telemetry"])
 	if DisplayServer.get_name() != "headless":
@@ -821,6 +839,7 @@ func _reset_freeplay() -> void:
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
+		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
 		p.on_ground = true
@@ -984,6 +1003,7 @@ func _load_level(index: int) -> void:
 	var lv := Levels.build_tutorial() if tutorial_mode else \
 		(Levels.build_prototype() if prototype_mode else Levels.build(level_index))
 	level_name = lv["name"]
+	_backdrop.show_level(level_index)
 	level_wrap = Levels.wrap_label(lv)
 	rematch_level_index = level_index
 	rematch_level_name = level_name
@@ -1148,10 +1168,16 @@ func _default_aim_vector(i: int) -> Vector2:
 
 func _assign_pads() -> void:
 	var list := Input.get_connected_joypads()
-	var a: int = first_gamepad_to
-	var b: int = 1 - a
-	_pads[a] = list[0] if list.size() > 0 else -1
-	_pads[b] = list[1] if list.size() > 1 else -1
+	_pads.fill(-1)
+	if list.is_empty():
+		return
+	# A local duel has one intentional device split: P1 owns keyboard + mouse;
+	# the first connected pad owns P2. Online still maps the first pad to the
+	# server-assigned local fighter because there is only one person per machine.
+	if online_mode and online_player >= 0:
+		_pads[online_player] = list[0]
+	elif players.size() > 1:
+		_pads[1] = list[0]
 
 
 func arrow_speed_for(power: float) -> float:
@@ -2241,6 +2267,7 @@ func _end_execution() -> void:
 
 func _respawn(i: int) -> void:
 	var p: Player = players[i]
+	p.clear_afterimages()
 	p.position = spawns[i]
 	p.vel = Vector2.ZERO
 	p.on_ground = true
@@ -2340,6 +2367,7 @@ func restart() -> void:
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
+		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
 		p.on_ground = true
@@ -2483,7 +2511,7 @@ func ghost_end(i: int) -> Vector2:
 #
 #   Move  : held, drives the ghost in real time (stamina drains)
 #   Jump  : press, inserts a jump impulse at the ghost's current tick
-#   Aim   : mouse (P1) / , . keys (P2) / right stick
+#   Aim   : mouse (P1) / right stick (P2)
 #   Power : hold to charge — the ghost FREEZES while charging — release to fire
 #           from wherever the ghost is standing
 #   Super : toggles whether a full meter upgrades the next placed shot
@@ -2496,11 +2524,10 @@ const K_P1 := {
 	"super": [KEY_T],
 	"aim_up": [KEY_Q], "aim_down": [KEY_E],
 }
-const K_P2 := {
-	"left": [KEY_LEFT], "right": [KEY_RIGHT], "jump": [KEY_K], "wait": [KEY_DOWN],
-	"charge": [KEY_ENTER, KEY_KP_ENTER], "rollback": [KEY_BACKSPACE], "reset": [KEY_SLASH],
-	"super": [KEY_P],
-	"aim_up": [KEY_PERIOD, KEY_KP_6], "aim_down": [KEY_COMMA, KEY_KP_4],
+const K_GAMEPAD_ONLY := {
+	"left": [], "right": [], "jump": [], "wait": [],
+	"charge": [], "rollback": [], "reset": [], "super": [],
+	"aim_up": [], "aim_down": [],
 }
 
 
@@ -2511,7 +2538,9 @@ func _is_locally_controlled(i: int) -> bool:
 func _input_map_for(i: int) -> Dictionary:
 	# In an online room both people get the natural P1 bindings on their own
 	# machine, regardless of whether the server assigned them slot 0 or slot 1.
-	return K_P1 if online_mode else (K_P1 if i == 0 else K_P2)
+	# In a local duel P2 is gamepad-only so the two players never fight over one
+	# keyboard or accidentally drive each other's plan.
+	return K_P1 if online_mode else (K_P1 if i == 0 else K_GAMEPAD_ONLY)
 
 
 func _touch_player() -> int:
@@ -2736,11 +2765,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_ui.toggle_help()
 			return
 
-	# Confirm uses left/right SHIFT, distinguished by key location.
+	# Local P1 owns keyboard + mouse. Right Shift used to confirm P2, but local P2
+	# is now deliberately gamepad-only and confirms with Start.
 	if k.keycode == KEY_SHIFT:
-		var who: int = 0 if k.location == KEY_LOCATION_LEFT else 1
-		if not is_ai(who):
-			_confirm(who)
+		if k.location != KEY_LOCATION_RIGHT and not is_ai(0):
+			_confirm(0)
 		return
 
 	if state != Phase.PLANNING:
@@ -2749,7 +2778,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	for i in players.size():
 		if is_ai(i):
 			continue
-		var map: Dictionary = K_P1 if i == 0 else K_P2
+		var map: Dictionary = _input_map_for(i)
 		if k.keycode in map["super"]:
 			_toggle_super(i)
 		elif k.keycode in map["rollback"]:
@@ -3207,7 +3236,7 @@ func _online_state_digest() -> String:
 	parts.append("rng:%d" % rng.state)
 	for i in players.size():
 		var p: Player = players[i]
-		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			i,
 			int(round(p.position.x * 10000.0)), int(round(p.position.y * 10000.0)),
 			int(round(p.vel.x * 10000.0)), int(round(p.vel.y * 10000.0)),

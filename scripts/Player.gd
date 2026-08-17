@@ -9,6 +9,16 @@ const HALF := Vector2(16.0, 24.0)
 ## A ground jump plus this one mid-air charge makes the movement a double jump.
 const MAX_AIR_JUMPS := 1
 
+## Cosmetic movement echoes. They are sampled only while time is running, so
+## the last few poses remain pinned to the arena when planning freezes again.
+## Keeping the count and opacity low gives the motion an anime accent without
+## turning the fighter into a bright continuous smear.
+const AFTERIMAGE_MAX := 5
+const AFTERIMAGE_SAMPLE_INTERVAL := 0.055
+const AFTERIMAGE_LIFETIME := 0.32
+const AFTERIMAGE_MIN_SPEED := 105.0
+const AFTERIMAGE_MIN_DISTANCE := 10.0
+
 ## Down + jump drops the body through the ledge it is standing on, so descending
 ## a level is a deliberate move rather than a walk to the nearest edge.
 ##
@@ -42,6 +52,10 @@ var alive: bool = true
 var invuln_turns: int = 0
 var plan: PlayerPlan
 var _anim_time: float = 0.0
+var _afterimages: Array[Dictionary] = []
+var _afterimage_sample_time: float = 0.0
+var _afterimage_last_position: Vector2 = Vector2.ZERO
+var _afterimage_has_origin: bool = false
 
 
 func _init() -> void:
@@ -51,10 +65,67 @@ func _init() -> void:
 ## The simulation remains deterministic; this clock only bends the drawn stick
 ## figure. During planning the pose freezes with the rest of the world.
 func _process(delta: float) -> void:
-	if alive and (cfg == null or cfg.state == Phase.EXECUTING or cfg.state == Phase.FREEPLAY):
+	var time_running: bool = cfg == null or cfg.state == Phase.EXECUTING \
+		or cfg.state == Phase.FREEPLAY
+	if alive and time_running:
 		_anim_time += delta
+	_update_afterimages(delta, time_running)
 	# Aim can change while the body is frozen, so refresh even when the animation
 	# clock is stopped. There are only two fighters, making this effectively free.
+	queue_redraw()
+
+
+## The entries age only in live time. During planning/commit they keep their
+## exact position and opacity, becoming a quiet record of the preceding burst.
+func _update_afterimages(delta: float, time_running: bool) -> void:
+	if not time_running:
+		return
+
+	for i in range(_afterimages.size() - 1, -1, -1):
+		_afterimages[i]["age"] = float(_afterimages[i]["age"]) + delta
+		if float(_afterimages[i]["age"]) >= AFTERIMAGE_LIFETIME:
+			_afterimages.remove_at(i)
+
+	if not alive:
+		_afterimage_has_origin = false
+		return
+
+	var speed := vel.length()
+	if speed < AFTERIMAGE_MIN_SPEED:
+		_afterimage_sample_time = 0.0
+		_afterimage_last_position = position
+		_afterimage_has_origin = true
+		return
+
+	_afterimage_sample_time += delta
+	if not _afterimage_has_origin:
+		_afterimage_last_position = position
+		_afterimage_has_origin = true
+		return
+
+	var travelled: Vector2 = cfg.wrap_delta(_afterimage_last_position, position) \
+		if cfg != null and cfg.has_method("wrap_delta") \
+		else position - _afterimage_last_position
+	if _afterimage_sample_time < AFTERIMAGE_SAMPLE_INTERVAL \
+		or travelled.length() < AFTERIMAGE_MIN_DISTANCE:
+		return
+
+	_afterimage_sample_time = 0.0
+	_afterimage_last_position = position
+	_afterimages.append({
+		"position": position,
+		"pose": _pose_points().duplicate(true),
+		"age": 0.0,
+	})
+	while _afterimages.size() > AFTERIMAGE_MAX:
+		_afterimages.pop_front()
+
+
+func clear_afterimages() -> void:
+	_afterimages.clear()
+	_afterimage_sample_time = 0.0
+	_afterimage_last_position = position
+	_afterimage_has_origin = false
 	queue_redraw()
 
 
@@ -363,6 +434,28 @@ func _draw_pose_shadow(pose: Dictionary) -> void:
 		draw_circle(joint + off, 3.8, shade)
 
 
+## A reduced version of the fighter silhouette: no label, weapon, shield or
+## facial detail. That restraint is what keeps three echoes from reading as
+## three additional players in a busy freeze-frame.
+func _draw_afterimage(pose: Dictionary, offset: Vector2, strength: float) -> void:
+	var echo := color.lightened(0.30)
+	echo.a = strength
+	var segments := [
+		[pose["hip"], pose["chest"], 5.3], [pose["chest"], pose["neck"], 4.8],
+		[pose["hip"], pose["knee_a"], 4.0], [pose["knee_a"], pose["foot_a"], 4.0],
+		[pose["hip"], pose["knee_b"], 3.8], [pose["knee_b"], pose["foot_b"], 3.8],
+		[pose["free_shoulder"], pose["free_elbow"], 3.7],
+		[pose["free_elbow"], pose["free_hand"], 3.7],
+		[pose["shoulder"], pose["aim_elbow"], 3.9],
+		[pose["aim_elbow"], pose["grip"], 3.9],
+	]
+	for segment in segments:
+		draw_line(segment[0] + offset, segment[1] + offset, echo, segment[2], true)
+	for joint in [pose["hip"], pose["knee_a"], pose["knee_b"], pose["free_elbow"], pose["grip"]]:
+		draw_circle(joint + offset, 2.6, echo)
+	draw_circle(pose["head"] + offset, 7.0, echo)
+
+
 func _draw() -> void:
 	if not alive:
 		var fallen := Color(0.30, 0.30, 0.34, 0.72)
@@ -373,6 +466,15 @@ func _draw() -> void:
 		draw_circle(Vector2(-17.0, 17.0), 4.2, fallen)
 		draw_line(Vector2(-22.0, 8.0), Vector2(18.0, 25.0), Color(1, 0.25, 0.25, 0.9), 2.5, true)
 		return
+
+	# Oldest first, all behind the live body. `wrap_delta` keeps an echo beside
+	# its owner even when the movement crosses an arena seam.
+	for snapshot in _afterimages:
+		var offset: Vector2 = cfg.wrap_delta(position, snapshot["position"]) \
+			if cfg != null and cfg.has_method("wrap_delta") \
+			else snapshot["position"] - position
+		var life: float = 1.0 - float(snapshot["age"]) / AFTERIMAGE_LIFETIME
+		_draw_afterimage(snapshot["pose"], offset, 0.14 * life * life)
 
 	var f := float(facing)
 	var pose := _pose_points()

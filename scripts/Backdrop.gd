@@ -12,8 +12,16 @@ const SKY_BOT := Color(0.12, 0.055, 0.17)
 const HILL_FAR := Color(0.065, 0.045, 0.105)
 const HILL_NEAR := Color(0.095, 0.065, 0.14)
 
+const SKY_BOTTOMS := [
+	Color(0.12, 0.055, 0.17),  # Shattered Sanctum — royal violet
+	Color(0.045, 0.085, 0.16), # Endless Descent — cold vertical void
+	Color(0.085, 0.055, 0.18), # Pendulum — observatory violet
+	Color(0.17, 0.050, 0.075), # Foundry — banked furnace heat
+]
+
 var horizon: float = 620.0
 var _stars: PackedVector2Array = PackedVector2Array()
+var level_theme: int = 0
 
 
 func _ready() -> void:
@@ -24,13 +32,19 @@ func _ready() -> void:
 		_stars.append(Vector2(seeded.randf() * W, seeded.randf() * 420.0))
 
 
+func show_level(index: int) -> void:
+	level_theme = posmod(index, SKY_BOTTOMS.size())
+	queue_redraw()
+
+
 func _draw() -> void:
 	# sky gradient, banded (cheap and looks intentional at this fidelity)
 	var bands := 24
 	for i in bands:
 		var t: float = float(i) / float(bands - 1)
 		var y: float = t * horizon
-		draw_rect(Rect2(0.0, y, W, horizon / float(bands) + 1.0), SKY_TOP.lerp(SKY_BOT, t * t))
+		draw_rect(Rect2(0.0, y, W, horizon / float(bands) + 1.0),
+			SKY_TOP.lerp(SKY_BOTTOMS[level_theme], t * t))
 
 	# Oversized eclipsed moon: one readable aristocratic landmark shared by all
 	# arenas, held low enough in contrast not to compete with trajectories.
@@ -56,7 +70,15 @@ func _draw() -> void:
 	# two silhouette ridges for depth
 	_ridge(horizon, 150.0, 210.0, HILL_FAR)
 	_ridge(horizon, 95.0, 330.0, HILL_NEAR)
-	_draw_ruins()
+	match level_theme:
+		0:
+			_draw_ruins()
+		1:
+			_draw_descent_towers()
+		2:
+			_draw_observatory()
+		3:
+			_draw_foundry()
 
 	# glow along the horizon so the play area reads as the lit zone
 	for i in 10:
@@ -91,3 +113,57 @@ func _draw_ruins() -> void:
 	]), Color(0.045, 0.03, 0.075, 0.50))
 	draw_line(Vector2(480.0, 604.0), Vector2(640.0, 482.0), edge, 2.0)
 	draw_line(Vector2(640.0, 482.0), Vector2(800.0, 604.0), edge, 2.0)
+
+
+func _draw_descent_towers() -> void:
+	var stone := Color(0.025, 0.035, 0.075, 0.84)
+	var edge := Color(0.34, 0.62, 0.90, 0.10)
+	# Tall rails continue beyond the frame and make vertical wrapping feel like
+	# one impossible shaft rather than an arbitrary teleport.
+	for x in [118.0, 214.0, 1066.0, 1162.0]:
+		draw_rect(Rect2(x - 24.0, 190.0, 48.0, 430.0), stone)
+		draw_line(Vector2(x - 16.0, 205.0), Vector2(x - 16.0, 610.0), edge, 2.0)
+		draw_line(Vector2(x + 16.0, 205.0), Vector2(x + 16.0, 610.0), edge, 2.0)
+		for rung in 8:
+			var y := 226.0 + float(rung) * 48.0
+			draw_line(Vector2(x - 13.0, y), Vector2(x + 13.0, y), edge, 1.0)
+	for y in [270.0, 370.0, 470.0]:
+		draw_arc(Vector2(640.0, y), 54.0, 0.15, PI - 0.15, 26,
+			Color(0.62, 0.82, 1.0, 0.045), 2.0)
+
+
+func _draw_observatory() -> void:
+	var ink := Color(0.030, 0.020, 0.072, 0.76)
+	var brass := Color(0.82, 0.61, 0.22, 0.10)
+	var centre := Vector2(640.0, 500.0)
+	# A quiet astronomical mechanism echoes the level's moving platforms while
+	# remaining clearly behind every trajectory and fighter silhouette.
+	draw_circle(centre, 154.0, ink)
+	for radius in [94.0, 126.0, 154.0]:
+		draw_arc(centre, radius, 0.0, TAU, 64, brass, 1.5)
+	for tick in 16:
+		var d := Vector2.from_angle(TAU * float(tick) / 16.0)
+		draw_line(centre + d * 137.0, centre + d * 154.0, brass, 2.0)
+	draw_line(Vector2(640.0, 180.0), centre - Vector2(55.0, 6.0), brass, 3.0)
+	draw_circle(centre - Vector2(55.0, 6.0), 24.0, Color(0.11, 0.065, 0.16, 0.72))
+	draw_arc(centre - Vector2(55.0, 6.0), 24.0, 0.0, TAU, 32, brass, 2.0)
+
+
+func _draw_foundry() -> void:
+	var iron := Color(0.055, 0.025, 0.055, 0.88)
+	var ember := Color(1.0, 0.30, 0.12, 0.075)
+	# Furnace stacks and restrained heat bands distinguish the foundry without
+	# turning the background into false hazards.
+	for x in [104.0, 224.0, 1056.0, 1176.0]:
+		var top := 265.0 if int(x) % 200 < 100 else 330.0
+		draw_rect(Rect2(x - 30.0, top, 60.0, 620.0 - top), iron)
+		draw_rect(Rect2(x - 37.0, top - 10.0, 74.0, 12.0), iron)
+		draw_line(Vector2(x - 22.0, top + 18.0), Vector2(x - 22.0, 608.0),
+			Color(0.70, 0.25, 0.15, 0.12), 2.0)
+	for band in 6:
+		var y := 500.0 + float(band) * 18.0
+		draw_rect(Rect2(300.0, y, 680.0, 5.0),
+			Color(ember.r, ember.g, ember.b, ember.a * (1.0 - float(band) / 7.0)))
+	for x in range(420, 900, 80):
+		draw_rect(Rect2(float(x), 560.0, 34.0, 24.0), Color(0.22, 0.055, 0.05, 0.25))
+		draw_rect(Rect2(float(x) + 5.0, 565.0, 24.0, 14.0), ember)

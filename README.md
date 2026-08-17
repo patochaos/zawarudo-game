@@ -113,10 +113,12 @@ npx wrangler deploy
 
 ## Menu
 
-The title screen keeps only five primary choices: **PLAY**, **TUTORIAL**,
-**ONLINE**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
+The title screen keeps six primary choices: **PLAY**, **TUTORIAL**, **ONLINE**,
+**CONTROLS**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
 navigation remains available (`W`/`S` select, `Enter` activate). Highlighting
 any row updates a compact footer that explains the choice before it is opened.
+**CONTROLS** opens a full reference sheet for the local device split, SUPER
+activation, and playtest shortcuts.
 
 **PLAY** groups the local variants in a second page:
 
@@ -135,8 +137,10 @@ horizontal wrapping. Move, jump, and throw are taught in three action-gated
 steps with no timer; normal timed turns begin after all three are completed.
 **ONLINE** creates or joins a private six-character room; plans remain hidden
 until both players lock. **OPTIONS** has its own page for sound level, hit
-freeze, reduced flashes, maximized window, and the privacy-friendly local
-playtest log.
+freeze, reduced flashes, high-contrast planning previews, and the
+privacy-friendly local playtest log. High contrast gives preview paths and
+labels dark keylines while separating players with yellow/cyan planning colors;
+it does not alter collision, aim, timing, or fighter identity.
 
 The playtest log makes no network request. It stores one JSON object per match
 in `user://playtest-telemetry.jsonl` and overwrites
@@ -217,7 +221,7 @@ Online, Player 1 is the room host and chooses the shared rematch arena.
 To keep a cautious match from lasting forever, each player also has a late-match
 **SUPER** meter. It takes fourteen qualifying knife clashes to fill from empty.
 A gold ring around the fighter marks a full meter. Once full, press the player's
-SUPER toggle (`T`, `P`, or gamepad `Y`) to arm or disarm the upgrade, then draw
+SUPER toggle (`T` for P1 or gamepad `Y` for P2) to arm or disarm the upgrade, then draw
 the shot normally. The meter is only spent when the first super wave actually
 leaves the player. Immediately before that first wave, combat hard-freezes for
 a short illustrated manga portrait cut-in with **IT'S ALL USELESS** and a rapid
@@ -281,18 +285,21 @@ Key properties:
 
 ## Controls
 
-| | Player 1 — keyboard + mouse | Player 2 — keyboard | Either — gamepad |
-|---|---|---|---|
-| Walk the ghost | hold `A` / `D` | hold `←` / `→` | Left stick / D-pad |
-| Jump / double jump (hold = higher) | `Space` | `K` | `A` |
-| Let time run | `S` | `↓` | Left stick down |
-| Aim | **Mouse** — free 360° | `.` / `,` (or `Num 6` / `Num 4`) | **Right stick** |
-| Power | **Hold LMB** | Hold `Enter` | **Hold R2** |
-| Fire | release the button | release the key | release the trigger |
-| Toggle SUPER | `T` | `P` | `Y` |
-| Confirm | `Left Shift` | `Right Shift` | `Start` |
-| Rollback shot | `R` or `RMB` | `Backspace` | `B` or `Select` |
-| Reset path | `F` | `/` | `X` |
+| | Player 1 — keyboard + mouse | Player 2 — gamepad |
+|---|---|---|
+| Walk the ghost | hold `A` / `D` | Left stick / D-pad |
+| Jump / double jump (hold = higher) | `Space` | `A` |
+| Let time run | `S` | Left stick down |
+| Aim | **Mouse** — free 360° | **Right stick** |
+| Power | **Hold LMB** | **Hold R2** |
+| Fire | release the button | release the trigger |
+| Toggle SUPER | `T` | `Y` |
+| Confirm | `Left Shift` | `Start` |
+| Rollback shot | `R` or `RMB` | `B` or `Select` |
+| Reset path | `F` | `X` |
+
+Playtest: `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
+three-knife throws for the current local match.
 
 Global: `F9` restart · `F10` next level · `M` mute · `H` hide the control bar ·
 `Esc` back to the menu · `Enter`/`R` skip the replay. On the result screen:
@@ -313,8 +320,9 @@ joystick walks horizontally and lets time run when pushed down. The separate
 **JUMP** button handles both jumps; pushing the joystick upward never jumps.
 Drag in the right half of the arena to aim; hold
 **DRAW** to charge and release it to fire. **UNDO**, **RESET**, **SUPER**, and
-**LOCK** mirror the desktop actions. The top-left menu button and the match-over
-**REMATCH** button replace keyboard-only navigation.
+**LOCK** mirror the desktop actions. The top-left menu button and the touch
+result card expose replay, rematch, menu, report-copy, and arena navigation
+without requiring a keyboard.
 
 Touch controls drive Player 1 in Vs AI and local modes, and the server-assigned
 local fighter Online. Local two-player touch is intentionally not part of this
@@ -326,14 +334,14 @@ movement you piloted, so you can re-aim without rebuilding the run.
 **Reset path** throws the recording away and refills stamina (the shot goes with
 it, since its tick indexes into the path that just vanished).
 
-Rebind by editing the `K_P1` / `K_P2` dictionaries in `scripts/GameManager.gd`.
+Rebind P1 by editing `K_P1` in `scripts/GameManager.gd`; local P2 is deliberately
+gamepad-only.
 
 ### Gamepads
 
-The first connected pad goes to **Player 2** by default, so the out-of-the-box
-setup is keyboard+mouse vs. gamepad. Flip it with `first_gamepad_to` on the
-`Main` node. Aim source follows whatever a player touched last — mouse, stick,
-or aim keys.
+In a local duel the first connected pad always goes to **Player 2**, giving the
+intended keyboard+mouse vs. gamepad setup. Online, the first pad controls the
+server-assigned local fighter. Aim source follows the local device in use.
 
 ### Descending: down + jump
 
@@ -585,9 +593,8 @@ ai_core_approach_value   150     capped value for closing 200px toward the Core
 
 aim_min_angle            -90     full 360°: straight down to straight up,
 aim_max_angle            90        either facing covers the rest
-aim_rate                 70      deg/sec, keyboard aiming only
+aim_rate                 70      deg/sec, reserved keyboard aiming rate
 trajectory_preview_time  4.5
-first_gamepad_to         Player 2
 ```
 
 `pilot_time_scale` is the main feel knob: 1.0 pilots in real time (0.75s of
@@ -602,7 +609,7 @@ the remaining 0.25s of the execution window.
 Hotkeys change them live, mid-match; current values show along the bottom:
 
 * Planning: `F1` = 5s, `F2` = 8s, `F3` = 10s
-* Execution: `F5` = 0.40s, `F6` = 0.75s, `F7` = 1.20s
+* Execution: `F5` = 0.40s, `F6` = 0.75s
 
 ### Shot windows
 
@@ -621,11 +628,11 @@ the thing this prototype exists to test.
 | `scripts/Player.gd` | Player state, rendering, and `sim_step(dt, tick, from_tick)` which replays one tick of the recording. Motion lives in a static, side-effect-free `step_state()` that resolves against the geometry as it will stand at the end of the tick. |
 | `scripts/Arrow.gd` | Knife integration, terrain/player hits, synchronised swept clash math, deflection and tumbling. The legacy class name remains internal. |
 | `scripts/PredictionSystem.gd` | Knife trajectories and the uncontrolled `coast()` tail. Uses the *same* static step functions as the real simulation. |
-| `scripts/PreviewLayer.gd` | Ghost path, stamina, two-ray knife fan, existing-knife trajectories, phase markers. |
+| `scripts/PreviewLayer.gd` | Ghost path, stamina, two-ray knife fan, existing-knife trajectories, phase markers, and optional high-contrast planning treatment. |
 | `scripts/TemporalCore.gd` | Visual telegraph and active-world rendering for the full-SUPER movement objective. |
-| `scripts/UI.gd` | Compact central match HUD, optional control reference, banners and game over. |
+| `scripts/UI.gd` | Compact central match HUD, phase progress, portrait seals, banners, and the desktop result action panel. |
 | `scripts/Ai.gd` | The AI opponent. Ranks movements by safety, then searches shots coarse-to-fine against three hypotheses of what you might do. Sliced across frames. |
-| `scripts/MenuLayer.gd` | Title screen: mode and starting level. |
+| `scripts/MenuLayer.gd` | Title screen, local-mode/arena routing, controls reference, accessibility options, and contextual descriptions. |
 | `scripts/OnlineLobby.gd` | Private-room create/join screen and room-code status. |
 | `scripts/OnlineClient.gd` | Cloudflare HTTP/WebSocket client, heartbeat, reconnect and lockstep messages. |
 | `backend/src/room.ts` | Hibernating Durable Object room: player slots, plan relay, state-hash barrier, rematches and expiry. |
@@ -634,10 +641,11 @@ the thing this prototype exists to test.
 | `scripts/Hazard.gd` | The pulse orb — drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
 | `scripts/DuelCamera.gd` | PROTOTYPE. Pushes in during planning and pulls out for execution. Disposable with the rest of `prototype_mode`. |
 | `scripts/Arena.gd` | Platform rendering: gold caps for permanent, warm and cracked for breakable, violet caps and travel chevrons for moving. |
-| `scripts/Backdrop.gd` | Sky, stars and silhouette ridges. Deliberately low-contrast — the preview lines drawn on top are the information that matters. |
+| `scripts/Backdrop.gd` | Per-arena procedural scenery: sanctum ruins, descent shafts, pendulum observatory, and foundry heat stacks. Deliberately low-contrast beneath gameplay information. |
 | `scripts/Effects.gd` | Impact sparks, platform shatters, hit bursts. Cosmetic only; runs on real time so it never consumes execution ticks. |
 | `scripts/Sfx.gd` | Procedurally synthesised 8-bit sound effects and the voice pool. |
 | `scripts/TimeStopLayer.gd` | Violet/gold frozen-world grade, clock motif, suspended motes, and freeze/release pulses. |
+| `scripts/TransitionLayer.gd` | Reduced-flash-aware angular ink shutter used when entering modes and arenas. |
 | `scripts/SuperFreezeFrame.gd` | Full-screen SUPER portrait composition, manga panel animation and real-time duration while combat ticks are paused. |
 | `scripts/Phase.gd` | The phase enum, shared without a cyclic preload. |
 

@@ -23,7 +23,12 @@ class MockManager:
 	var online_player: int = -1
 	var rematch_level_index: int = 0
 	var rematch_level_name: String = "SACRED DUEL"
+	var winner: int = 0
+	var PLAYER_COLORS := [Color(1.0, 0.70, 0.20), Color(0.75, 0.30, 1.0)]
 	var players: Array = [MockPlayer.new(), MockPlayer.new()]
+
+	func _score_text() -> String:
+		return "P1 3  ·  P2 0"
 
 
 func _init() -> void:

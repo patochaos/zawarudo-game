@@ -8,12 +8,15 @@ signal freeplay_requested(level: int)
 signal online_requested(level: int)
 signal tutorial_requested
 signal option_changed(key: String, value: Variant)
+signal ui_navigated
+signal ui_accepted
 
 const ROW_PLAY := 0
 const ROW_TUTORIAL := 1
 const ROW_ONLINE := 2
-const ROW_OPTIONS := 3
-const ROW_QUIT := 4
+const ROW_CONTROLS := 3
+const ROW_OPTIONS := 4
+const ROW_QUIT := 5
 
 const LOCAL_AI_WIDE := 0
 const LOCAL_AI_CLOSE := 1
@@ -26,13 +29,13 @@ const ROWS := 6
 const OPTION_SOUND := 0
 const OPTION_HIT_FREEZE := 1
 const OPTION_FLASHES := 2
-const OPTION_MAXIMIZED := 3
+const OPTION_PREVIEW_CONTRAST := 3
 const OPTION_TELEMETRY := 4
 const OPTION_BACK := 5
 const SOUND_LEVELS := [0, 25, 50, 75, 100]
 
 enum Ruleset { ORIGINAL, CAMERA_PROTOTYPE }
-enum MenuPage { MAIN, LOCAL_PLAY, WIDE_LEVELS, OPTIONS }
+enum MenuPage { MAIN, LOCAL_PLAY, WIDE_LEVELS, CONTROLS, OPTIONS }
 
 const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
@@ -124,6 +127,106 @@ class LevelMistPreview:
 				p + Vector2(0.0, 8.0), p + Vector2(-8.0, 0.0),
 			]), Color(0.92, 0.86, 0.58, 0.10))
 
+
+class ControlsSheet:
+	extends Control
+
+	signal back_requested
+
+	var p1_body: Label
+	var p2_body: Label
+	var super_body: Label
+	var shortcut_body: Label
+
+	func _ready() -> void:
+		size = Vector2(814.0, 354.0)
+		mouse_filter = Control.MOUSE_FILTER_PASS
+
+		_add_text(Vector2(18.0, 10.0), Vector2(360.0, 24.0), 16,
+			"PLAYER 1", GOLD)
+		_add_text(Vector2(104.0, 13.0), Vector2(270.0, 20.0), 11,
+			"KEYBOARD + MOUSE", Color(0.65, 0.69, 0.78))
+		p1_body = _add_text(Vector2(18.0, 40.0), Vector2(360.0, 88.0), 13,
+			"MOVE  A / D\nJUMP  SPACE\nWAIT  S\nCONFIRM  LEFT SHIFT",
+			Color(0.84, 0.87, 0.94))
+		_add_text(Vector2(202.0, 40.0), Vector2(180.0, 88.0), 12,
+			"AIM  MOUSE\nDRAW / FIRE  LMB\nSUPER  T\nUNDO R/RMB  ·  RESET F",
+			Color(0.84, 0.87, 0.94))
+
+		_add_text(Vector2(438.0, 10.0), Vector2(360.0, 24.0), 16,
+			"PLAYER 2", GOLD)
+		_add_text(Vector2(524.0, 13.0), Vector2(270.0, 20.0), 11,
+			"GAMEPAD REQUIRED", Color(0.65, 0.69, 0.78))
+		p2_body = _add_text(Vector2(438.0, 40.0), Vector2(360.0, 88.0), 13,
+			"MOVE  LEFT STICK / D-PAD\nJUMP  A\nWAIT  STICK DOWN\nCONFIRM  START",
+			Color(0.84, 0.87, 0.94))
+		_add_text(Vector2(642.0, 40.0), Vector2(154.0, 88.0), 12,
+			"AIM  RIGHT STICK\nDRAW / FIRE  R2\nSUPER  Y\nUNDO B/SELECT · RESET X",
+			Color(0.84, 0.87, 0.94))
+
+		_add_text(Vector2(18.0, 149.0), Vector2(240.0, 22.0), 14,
+			"HOW TO ACTIVATE SUPER", GOLD)
+		_add_text(Vector2(20.0, 178.0), Vector2(220.0, 18.0), 12,
+			"01  EARN", HOT)
+		_add_text(Vector2(20.0, 197.0), Vector2(220.0, 36.0), 11,
+			"Clash knives while moving,\nor collect the Temporal Core.", DIM)
+		_add_text(Vector2(290.0, 178.0), Vector2(210.0, 18.0), 12,
+			"02  ARM", HOT)
+		_add_text(Vector2(290.0, 197.0), Vector2(210.0, 36.0), 11,
+			"When the meter is full:\nP1 press T  ·  P2 press Y.", DIM)
+		_add_text(Vector2(558.0, 178.0), Vector2(236.0, 18.0), 12,
+			"03  DRAW + RELEASE", HOT)
+		super_body = _add_text(Vector2(558.0, 197.0), Vector2(236.0, 36.0), 11,
+			"Aim and fire normally. The meter\nis spent when the first wave launches.", DIM)
+
+		shortcut_body = _add_text(Vector2(18.0, 257.0), Vector2(778.0, 48.0), 12,
+			"PLAYTEST  //  F8 fill P1 SUPER  ·  SHIFT + F8 fill P2 SUPER  ·  F7 activate 3-dagger volleys\n" \
+			+ "GLOBAL    //  F9 restart  ·  F10 next arena  ·  M mute  ·  H control bar  ·  ESC menu",
+			Color(0.72, 0.76, 0.84))
+
+		var back := Button.new()
+		back.position = Vector2(0.0, 318.0)
+		back.size = Vector2(814.0, 36.0)
+		back.flat = true
+		back.focus_mode = Control.FOCUS_NONE
+		back.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		back.pressed.connect(func(): back_requested.emit())
+		add_child(back)
+		var back_label := _add_text(Vector2(0.0, 323.0), Vector2(814.0, 26.0), 16,
+			"‹  BACK", HOT)
+		back_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		back_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		queue_redraw()
+
+	func _add_text(pos: Vector2, dimensions: Vector2, font_size: int,
+			text: String, color: Color) -> Label:
+		var label := Label.new()
+		label.position = pos
+		label.size = dimensions
+		label.text = text
+		label.add_theme_font_size_override("font_size", font_size)
+		label.add_theme_color_override("font_color", color)
+		label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.88))
+		label.add_theme_constant_override("shadow_offset_x", 2)
+		label.add_theme_constant_override("shadow_offset_y", 2)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(label)
+		return label
+
+	func _draw() -> void:
+		var panel := Color(0.035, 0.025, 0.065, 0.88)
+		var border := Color(0.91, 0.66, 0.22, 0.30)
+		draw_rect(Rect2(0.0, 0.0, 394.0, 132.0), panel)
+		draw_rect(Rect2(420.0, 0.0, 394.0, 132.0), panel)
+		draw_rect(Rect2(0.0, 0.0, 394.0, 132.0), border, false, 1.0)
+		draw_rect(Rect2(420.0, 0.0, 394.0, 132.0), border, false, 1.0)
+		draw_rect(Rect2(0.0, 144.0, 814.0, 98.0), Color(0.055, 0.04, 0.09, 0.90))
+		draw_line(Vector2(0.0, 144.0), Vector2(814.0, 144.0), GOLD, 2.0)
+		draw_line(Vector2(258.0, 174.0), Vector2(270.0, 207.0), border, 2.0)
+		draw_line(Vector2(526.0, 174.0), Vector2(538.0, 207.0), border, 2.0)
+		draw_rect(Rect2(0.0, 250.0, 814.0, 58.0), panel)
+		draw_rect(Rect2(0.0, 318.0, 814.0, 36.0), Color(0.45, 0.16, 0.67, 0.78))
+
 var level: int = 0
 var ruleset: int = Ruleset.ORIGINAL
 
@@ -133,17 +236,19 @@ var _rows: Array[Label] = []
 var _title: Label
 var _blurb: Label
 var _footer_plate: Polygon2D
+var _footer_rule: ColorRect
 var _footer_kicker: Label
 var _footer: Label
 var _hint: Label
 var _build_label: Label
+var _controls_sheet: ControlsSheet
 var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
 var _page: int = MenuPage.MAIN
 var _sound_percent: int = 100
 var _hit_freeze_enabled: bool = true
 var _reduced_flashes: bool = false
-var _maximized: bool = true
+var _high_contrast_previews: bool = false
 var _telemetry_enabled: bool = true
 
 
@@ -208,17 +313,23 @@ func _ready() -> void:
 	])
 	_footer_plate.color = Color(0.035, 0.025, 0.065, 0.88)
 	add_child(_footer_plate)
-	var footer_rule := ColorRect.new()
-	footer_rule.position = Vector2(236.0, 482.0)
-	footer_rule.size = Vector2(794.0, 2.0)
-	footer_rule.color = Color(0.91, 0.66, 0.22, 0.72)
-	add_child(footer_rule)
+	_footer_rule = ColorRect.new()
+	_footer_rule.position = Vector2(236.0, 482.0)
+	_footer_rule.size = Vector2(794.0, 2.0)
+	_footer_rule.color = Color(0.91, 0.66, 0.22, 0.72)
+	add_child(_footer_rule)
 	_footer_kicker = _label(Vector2(246.0, 489.0), 770.0, 11, GOLD)
 	_footer_kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_footer_kicker.text = "SELECTED // FIELD NOTE"
 	_footer = _label(Vector2(246.0, 510.0), 770.0, 15, Color(0.76, 0.80, 0.88))
 	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_controls_sheet = ControlsSheet.new()
+	_controls_sheet.position = Vector2(226.0, 218.0)
+	_controls_sheet.visible = false
+	_controls_sheet.back_requested.connect(_close_controls)
+	add_child(_controls_sheet)
 
 	_hint = _label(Vector2(240.0, 578.0), 800.0, 14, Color(0.42, 0.47, 0.56))
 	_hint.text = "CLICK / TAP or W / S select      ENTER activate      ESC quit"
@@ -258,7 +369,7 @@ func configure_options(settings: Dictionary) -> void:
 	_sound_percent = int(round(float(settings.get("sound", 1.0)) * 100.0))
 	_hit_freeze_enabled = bool(settings.get("hit_freeze", true))
 	_reduced_flashes = bool(settings.get("reduced_flashes", false))
-	_maximized = bool(settings.get("maximized", true))
+	_high_contrast_previews = bool(settings.get("high_contrast_previews", false))
 	_telemetry_enabled = bool(settings.get("telemetry", true))
 	if is_node_ready():
 		_refresh()
@@ -269,13 +380,17 @@ func close() -> void:
 
 
 func _select(i: int) -> void:
-	_cursor = posmod(i, _page_row_count())
+	var next_cursor := posmod(i, _page_row_count())
+	if next_cursor != _cursor:
+		ui_navigated.emit()
+	_cursor = next_cursor
 	_refresh()
 
 
 func _refresh() -> void:
 	var names := _page_names()
-	var visible_rows := names.size()
+	var controls_open := _page == MenuPage.CONTROLS
+	var visible_rows := 0 if controls_open else names.size()
 	if _page == MenuPage.WIDE_LEVELS and _cursor < Levels.count():
 		level = _cursor
 	var preview_ruleset := Ruleset.CAMERA_PROTOTYPE \
@@ -286,14 +401,22 @@ func _refresh() -> void:
 			_blurb.text = "LOCAL PLAY · CHOOSE THE SHAPE OF THE FIGHT"
 		MenuPage.WIDE_LEVELS:
 			_blurb.text = "WIDE DUEL · CHOOSE ARENA"
+		MenuPage.CONTROLS:
+			_blurb.text = "CONTROLS · COMPOSE THE MOVE, THEN RELEASE IT"
 		MenuPage.OPTIONS:
 			_blurb.text = "OPTIONS · PLAYTEST ACCESSIBILITY"
 		_:
 			_blurb.text = "STOP TIME · WRITE THE MOVE · RELEASE THE CONSEQUENCE"
 	_footer.text = _page_description()
-	_hint.text = "CLICK / TAP or W / S select      ENTER choose      ESC back" \
+	_controls_sheet.visible = controls_open
+	_footer_plate.visible = not controls_open
+	_footer_rule.visible = not controls_open
+	_footer_kicker.visible = not controls_open
+	_footer.visible = not controls_open
+	_hint.text = "ENTER / ESC return" if controls_open else ( \
+		"CLICK / TAP or W / S select      ENTER choose      ESC back" \
 		if _page != MenuPage.MAIN \
-		else "CLICK / TAP or W / S select      ENTER activate      ESC quit"
+		else "CLICK / TAP or W / S select      ENTER activate      ESC quit")
 	for i in ROWS:
 		var row_visible := i < visible_rows
 		_rows[i].visible = row_visible
@@ -301,13 +424,18 @@ func _refresh() -> void:
 		_row_buttons[i].visible = row_visible
 		if not row_visible:
 			continue
-		_rows[i].text = ("▸  " + names[i] + "  ◂") if i == _cursor else names[i]
+		# ASCII markers remain crisp in the Web export's reduced fallback font.
+		_rows[i].text = (">  " + names[i] + "  <") if i == _cursor else names[i]
 		_rows[i].add_theme_color_override("font_color", HOT if i == _cursor else DIM)
 		_row_bgs[i].color = Color(0.45, 0.16, 0.67, 0.78) if i == _cursor \
 			else Color(0.055, 0.04, 0.09, 0.64)
 
 
 func _activate(row: int) -> void:
+	ui_accepted.emit()
+	if _page == MenuPage.CONTROLS:
+		_close_controls()
+		return
 	_select(row)
 	if _page == MenuPage.WIDE_LEVELS:
 		if row < Levels.count():
@@ -351,6 +479,10 @@ func _activate(row: int) -> void:
 			tutorial_requested.emit()
 		ROW_ONLINE:
 			online_requested.emit(level)
+		ROW_CONTROLS:
+			_page = MenuPage.CONTROLS
+			_cursor = 0
+			_refresh()
 		ROW_OPTIONS:
 			_page = MenuPage.OPTIONS
 			_cursor = 0
@@ -380,14 +512,17 @@ func _page_names() -> Array[String]:
 			"SOUND  %d%%" % _sound_percent,
 			"HIT FREEZE  %s" % ("ON" if _hit_freeze_enabled else "OFF"),
 			"FLASHES  %s" % ("REDUCED" if _reduced_flashes else "FULL"),
-			"MAXIMIZED  %s" % ("ON" if _maximized else "OFF"),
+			"PREVIEW CONTRAST  %s" % ("HIGH" if _high_contrast_previews else "NORMAL"),
 			"PLAYTEST LOG  %s" % ("LOCAL" if _telemetry_enabled else "OFF"),
 			"‹  BACK",
 		]
+	if _page == MenuPage.CONTROLS:
+		return ["‹  BACK"]
 	return [
 		"PLAY",
 		"TUTORIAL",
 		"ONLINE",
+		"CONTROLS",
 		"OPTIONS",
 		"QUIT",
 	]
@@ -404,7 +539,8 @@ func _page_description() -> String:
 				"Local duels, AI fights and the free-play sandbox live here.",
 				"Learn movement, stamina, jumping and throwing without an opponent.",
 				"Create or join a private room for a hidden-plan duel.",
-				"Tune sound, impact feedback, flashes, window mode and playtest logs.",
+				"See P1 keyboard + mouse, P2 gamepad, SUPER activation and playtest shortcuts.",
+				"Tune sound, impact feedback, flashes, preview contrast and playtest logs.",
 				"Close ZAWARUDO and return time to the ordinary world.",
 			][_cursor]
 		MenuPage.LOCAL_PLAY:
@@ -431,7 +567,7 @@ func _page_description() -> String:
 				"Set the master sound level for music, throws, impacts and time effects.",
 				"Add a brief freeze on impact so successful hits land with more weight.",
 				"Reduce bright screen flashes while preserving gameplay information.",
-				"Choose whether the desktop build opens as a maximized window.",
+				"Strengthen planning lines, labels and player-color separation.",
 				"Store anonymous match events locally for playtest bug reports.",
 				"Return to the title choices.",
 			][_cursor]
@@ -441,6 +577,12 @@ func _page_description() -> String:
 func _show_main_menu() -> void:
 	_page = MenuPage.MAIN
 	_cursor = ROW_PLAY
+	_refresh()
+
+
+func _close_controls() -> void:
+	_page = MenuPage.MAIN
+	_cursor = ROW_CONTROLS
 	_refresh()
 
 
@@ -464,9 +606,9 @@ func _change_option(row: int, direction: int) -> void:
 		OPTION_FLASHES:
 			_reduced_flashes = not _reduced_flashes
 			option_changed.emit("reduced_flashes", _reduced_flashes)
-		OPTION_MAXIMIZED:
-			_maximized = not _maximized
-			option_changed.emit("maximized", _maximized)
+		OPTION_PREVIEW_CONTRAST:
+			_high_contrast_previews = not _high_contrast_previews
+			option_changed.emit("high_contrast_previews", _high_contrast_previews)
 		OPTION_TELEMETRY:
 			_telemetry_enabled = not _telemetry_enabled
 			option_changed.emit("telemetry", _telemetry_enabled)
@@ -475,6 +617,11 @@ func _change_option(row: int, direction: int) -> void:
 
 ## Returns true when the key was consumed.
 func handle_key(code: int) -> bool:
+	if _page == MenuPage.CONTROLS:
+		if code in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]:
+			_close_controls()
+			return true
+		return false
 	match code:
 		KEY_W, KEY_UP:
 			_select(_cursor - 1)
