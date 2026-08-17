@@ -15,8 +15,9 @@ func _run() -> void:
 
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
-	_check(menu._page_names() == ["PLAY", "TUTORIAL", "ONLINE", "OPTIONS", "QUIT"],
-		"the main menu must expose only the five primary choices")
+	_check(menu._page_names() == [
+		"PLAY", "TUTORIAL", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
+	], "the main menu must expose Controls alongside the five primary choices")
 	_check(not menu._footer.text.is_empty(),
 		"the highlighted main choice must have a footer description")
 	var play_footer: String = menu._footer.text
@@ -40,6 +41,25 @@ func _run() -> void:
 	menu.handle_key(KEY_D)
 	_check(menu.level == level_before_main_input,
 		"left/right must not change levels from the main menu")
+
+	menu._row_buttons[menu.ROW_CONTROLS].pressed.emit()
+	_check(menu._page == menu.MenuPage.CONTROLS and menu._controls_sheet.visible,
+		"Controls must open its dedicated reference sheet")
+	_check(not menu._rows[0].visible and not menu._footer.visible,
+		"the reference sheet must replace menu rows instead of competing with them")
+	_check(_tree_has_text(menu._controls_sheet, "KEYBOARD + MOUSE") \
+		and _tree_has_text(menu._controls_sheet, "GAMEPAD REQUIRED"),
+		"Controls must identify P1 keyboard + mouse and P2 gamepad")
+	_check(_tree_has_text(menu._controls_sheet, "Temporal Core") \
+		and _tree_has_text(menu._controls_sheet, "first wave"),
+		"Controls must explain how SUPER is earned, armed and spent")
+	_check("F8 fill P1 SUPER" in menu._controls_sheet.shortcut_body.text \
+		and "SHIFT + F8 fill P2 SUPER" in menu._controls_sheet.shortcut_body.text \
+		and "F7 activate 3-dagger" in menu._controls_sheet.shortcut_body.text,
+		"Controls must expose the SUPER and three-dagger playtest shortcuts")
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._page == menu.MenuPage.MAIN and menu._cursor == menu.ROW_CONTROLS,
+		"Escape from Controls must return to the same main-menu row")
 
 	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
 	_check(menu._page == menu.MenuPage.LOCAL_PLAY,
@@ -106,6 +126,10 @@ func _run() -> void:
 	menu._row_buttons[menu.OPTION_HIT_FREEZE].pressed.emit()
 	_check(changed[0].size() == 2 and changed[0][0] == "hit_freeze",
 		"changing an option must emit its setting")
+	menu._row_buttons[menu.OPTION_PREVIEW_CONTRAST].pressed.emit()
+	_check(changed[0].size() == 2 and changed[0][0] == "high_contrast_previews" \
+		and changed[0][1] == true,
+		"preview contrast must be directly toggleable from Options")
 	menu.handle_key(KEY_ESCAPE)
 	_check(menu._page == menu.MenuPage.MAIN,
 		"Escape must return from Options to the main menu")
@@ -133,3 +157,12 @@ func _check(condition: bool, message: String) -> void:
 		return
 	_failures += 1
 	push_error(message)
+
+
+func _tree_has_text(node: Node, fragment: String) -> bool:
+	if node is Label and fragment in (node as Label).text:
+		return true
+	for child in node.get_children():
+		if _tree_has_text(child, fragment):
+			return true
+	return false

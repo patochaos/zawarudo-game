@@ -304,6 +304,7 @@ func _draw_overlay() -> void:
 		_draw_rect_button(REPLAY_EXIT_RECT, "BACK TO RESULTS", "replay", VIOLET)
 		return
 	if context == Context.GAME_OVER:
+		_draw_touch_result_card()
 		_draw_rect_button(MENU_RECT, "MENU", "menu", SPECTRAL)
 		_draw_result_level_selector()
 		_draw_rect_button(REPORT_RECT, "COPY REPORT", "report", SPECTRAL)
@@ -339,6 +340,33 @@ func _draw_overlay() -> void:
 		var power: float = _gm.players[who].plan.power if who >= 0 and who < _gm.players.size() else 0.0
 		_surface.draw_arc(FIRE_CENTER, FIRE_RADIUS + 6.0, -PI * 0.5,
 			-PI * 0.5 + TAU * power, 48, Color(1.0, 0.90, 0.42, 0.95), 4.0)
+
+
+func _draw_touch_result_card() -> void:
+	if _gm == null:
+		return
+	var panel := Rect2(270.0, 168.0, 740.0, 338.0)
+	_surface.draw_rect(panel, Color(INK.r, INK.g, INK.b, 0.94))
+	_surface.draw_rect(panel, Color(GOLD.r, GOLD.g, GOLD.b, 0.56), false, 2.0)
+	_surface.draw_line(Vector2(352.0, 280.0), Vector2(928.0, 280.0),
+		Color(GOLD.r, GOLD.g, GOLD.b, 0.54), 2.0)
+	var winner_text := "DRAW"
+	var winner_color := SPECTRAL
+	if _gm.winner >= 0:
+		winner_text = "PLAYER %d TAKES THE MATCH" % (_gm.winner + 1)
+		winner_color = _gm.PLAYER_COLORS[_gm.winner].lightened(0.20)
+	_surface.draw_string(ThemeDB.fallback_font, Vector2(310.0, 244.0), winner_text,
+		HORIZONTAL_ALIGNMENT_CENTER, 660.0, 31, winner_color)
+	_surface.draw_string(ThemeDB.fallback_font, Vector2(390.0, 344.0), _gm._score_text(),
+		HORIZONTAL_ALIGNMENT_CENTER, 500.0, 34, Color(0.94, 0.95, 1.0))
+	var prompt := "CHOOSE THE NEXT ARENA, WATCH THE FIGHT, OR RUN IT BACK"
+	if _gm.online_mode and _gm.online_player != 0:
+		prompt = "THE HOST CHOOSES THE ARENA — WATCH THE FIGHT OR RUN IT BACK"
+	_surface.draw_string(ThemeDB.fallback_font, Vector2(330.0, 417.0), prompt,
+		HORIZONTAL_ALIGNMENT_CENTER, 620.0, 13, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.74))
+	_surface.draw_string(ThemeDB.fallback_font, Vector2(330.0, 465.0),
+		"RESULTS // FINAL FRAME PRESERVED", HORIZONTAL_ALIGNMENT_CENTER, 620.0, 11,
+		Color(GOLD.r, GOLD.g, GOLD.b, 0.58))
 
 
 func _draw_virtual_stick() -> void:

@@ -26,7 +26,8 @@ var _stop_at: Array[float] = []
 var _base_db: Array[float] = []
 var _pitch := {"title": 1.0}
 var _cutoff := {"title": 3.50, "muda": 1.38}
-var _gain_db := {"title": -4.0, "muda": -1.5, "freeze": -18.0, "resume": -20.0}
+var _gain_db := {"title": -4.0, "muda": -1.5, "freeze": -18.0, "resume": -20.0,
+	"ui_move": -15.0, "ui_accept": -12.0}
 
 
 func _ready() -> void:
@@ -38,6 +39,8 @@ func _ready() -> void:
 	_streams["clash"] = _clash()
 	_streams["freeze"] = _freeze()
 	_streams["resume"] = _resume()
+	_streams["ui_move"] = _ui_move()
+	_streams["ui_accept"] = _ui_accept()
 	_streams["muda"] = _muda_chant()
 	_streams["title"] = TITLE_VOICE
 	_stop_at.resize(VOICES)
@@ -246,6 +249,35 @@ func _resume() -> AudioStreamWAV:
 		var f: float = lerpf(420.0, 940.0, u)
 		var envelope: float = sin(PI * clampf(u * 2.2, 0.0, 1.0)) * pow(1.0 - u, 2.4)
 		s[i] = sin(TAU * f * t) * envelope * 0.32
+	return _wav(s)
+
+
+## Quiet menu ticks confirm focus and activation without competing with the
+## match-opening voice or the much brighter knife-on-knife transients.
+func _ui_move() -> AudioStreamWAV:
+	var n := int(RATE * 0.035)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var u: float = float(i) / float(n)
+		var t: float = float(i) / float(RATE)
+		s[i] = sin(TAU * lerpf(560.0, 720.0, u) * t) * pow(1.0 - u, 3.6) * 0.26
+	return _wav(s)
+
+
+func _ui_accept() -> AudioStreamWAV:
+	var n := int(RATE * 0.085)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var u: float = float(i) / float(n)
+		var t: float = float(i) / float(RATE)
+		var first := sin(TAU * 520.0 * t) * pow(1.0 - u, 3.0)
+		var second := 0.0
+		if t > 0.032:
+			var v := clampf((t - 0.032) / 0.053, 0.0, 1.0)
+			second = sin(TAU * 780.0 * (t - 0.032)) * pow(1.0 - v, 3.0)
+		s[i] = (first * 0.20 + second * 0.30)
 	return _wav(s)
 
 

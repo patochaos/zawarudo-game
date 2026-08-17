@@ -119,6 +119,15 @@ func _test_tutorial_launch() -> void:
 	game._menu._activate(game._menu.ROW_ONLINE)
 	_check(game.state == Phase.ONLINE_LOBBY and game._online_lobby.visible,
 		"the restored Online row must open the existing private-room lobby")
+	_check(game._transition.visible and game._transition._title == "PRIVATE PLANS",
+		"opening Online must receive the same authored transition as local modes")
+	game._online_lobby._sanitize_code("abci12z9")
+	_check(game._online_lobby._code_input.text == "ABC2Z9",
+		"the lobby must normalize room codes and remove ambiguous characters")
+	game._online_lobby._code_input.text = "ABC2Z"
+	game._online_lobby._request_join()
+	_check("6 CHARACTERS" in game._online_lobby._status.text,
+		"an incomplete room code must fail locally with an actionable message")
 	game.queue_free()
 
 

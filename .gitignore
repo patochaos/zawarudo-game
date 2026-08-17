@@ -17,6 +17,10 @@ backend/dist/
 .playwright-mcp/
 .tmp-render/
 /host-debug.png.import
+/capture/
+/captures/
+/previews/*.png
+/previews/*.png.import
 
 # Local assistant settings
 .claude/settings.local.json
