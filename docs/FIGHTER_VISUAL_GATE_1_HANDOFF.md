@@ -56,10 +56,16 @@ state selection and exact visual aim without changing simulation behavior.
 ## Acceptance commands
 
 ```powershell
-& 'D:\Godot\godot.cmd' --headless --path . --script res://tests/FighterVisualTest.gd
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-Godot.ps1
 ```
 
-Expected and observed: `Fighter visual: all tests passed`.
+The runner first refreshes Godot's ignored global class cache. This matters
+after switching branches or worktrees containing new `class_name` scripts;
+otherwise direct script execution can read a stale cache even though an editor
+launch or export would scan the new classes correctly.
+
+Expected and observed: `Fighter visual: all tests passed` followed by the
+complete suite result.
 
 The established gameplay/journey set was run with the same command shape for:
 
