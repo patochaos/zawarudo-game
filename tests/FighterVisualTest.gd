@@ -31,25 +31,8 @@ func _run() -> void:
 	root.remove_child(default_gm)
 	default_gm.free()
 
-	var cel_gm = GAME_MANAGER.new()
-	cel_gm.fighter_visuals_enabled = true
-	cel_gm.fighter_visual_style = GAME_MANAGER.FighterVisualStyle.CEL_PROOF
-	root.add_child(cel_gm)
-	await process_frame
-	var cel_visual := cel_gm.players[0].get_node_or_null("FighterVisual") as FighterVisual
-	_check(cel_visual != null and cel_visual.skin.render_style == &"cel_modular",
-		"cel proof mode must attach the modular skin to P1")
-	_check(not cel_gm.players[0].draw_legacy_visual,
-		"cel proof P1 must suppress its stick renderer")
-	_check(cel_gm.players[1].draw_legacy_visual
-			and cel_gm.players[1].get_node_or_null("FighterVisual") == null,
-		"cel proof mode must retain P2 as the stick-figure A/B control")
-	root.remove_child(cel_gm)
-	cel_gm.free()
-
 	var gm = GAME_MANAGER.new()
 	gm.fighter_visuals_enabled = true
-	gm.fighter_visual_style = GAME_MANAGER.FighterVisualStyle.RIGGED_PROTOTYPE
 	root.add_child(gm)
 	await process_frame
 
