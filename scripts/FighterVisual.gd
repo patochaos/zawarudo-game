@@ -9,6 +9,7 @@ const IDLE: StringName = &"IDLE"
 const RUN: StringName = &"RUN"
 const RISE: StringName = &"RISE"
 const FALL: StringName = &"FALL"
+const SHOT: StringName = &"SHOT"
 const LOCK: StringName = &"LOCK"
 const DEFEAT: StringName = &"DEFEAT"
 
@@ -58,21 +59,28 @@ func sync_from_player() -> void:
 	if _fighter == null or skin == null:
 		return
 	body_state = _derive_state()
-	var state_frames: Array = skin.frames.get(body_state, [])
-	if state_frames.is_empty():
+	var frame_count := skin.frame_count(body_state)
+	if frame_count <= 0:
 		body_frame = 0
 		return
 	var tick := 0
 	if _fighter.cfg != null:
 		tick = int(_fighter.cfg.world_tick)
 	var frame_step: int = tick / maxi(1, skin.ticks_per_frame)
-	body_frame = posmod(frame_step, state_frames.size())
+	if body_state == SHOT:
+		frame_step = maxi(0, _presentation_exec_tick() - _fighter.plan.shot_tick) \
+			/ maxi(1, skin.ticks_per_frame)
+		body_frame = mini(frame_count - 1, frame_step)
+	else:
+		body_frame = posmod(frame_step, frame_count)
 
 
 func _derive_state() -> StringName:
 	if not _fighter.alive:
 		return DEFEAT
 	var phase := Phase.FREEPLAY if _fighter.cfg == null else int(_fighter.cfg.state)
+	if _shot_is_visible(phase):
+		return SHOT
 	if _fighter.plan.confirmed and phase in [Phase.PLANNING, Phase.COMMITTING, Phase.ONLINE_WAIT]:
 		return LOCK
 	if not _fighter.on_ground:
@@ -80,6 +88,22 @@ func _derive_state() -> StringName:
 	if absf(_fighter.vel.x) > 24.0:
 		return RUN
 	return IDLE
+
+
+func _presentation_exec_tick() -> int:
+	if _fighter == null or _fighter.cfg == null:
+		return 0
+	if int(_fighter.cfg.state) == Phase.REPLAY:
+		return int(_fighter.cfg._replay_frame_index)
+	return int(_fighter.cfg.exec_tick)
+
+
+func _shot_is_visible(phase: int) -> bool:
+	if _fighter == null or not _fighter.plan.has_shot() \
+			or phase not in [Phase.EXECUTING, Phase.REPLAY]:
+		return false
+	var elapsed := _presentation_exec_tick() - _fighter.plan.shot_tick
+	return elapsed >= 0 and elapsed < skin.frame_count(SHOT) * maxi(1, skin.ticks_per_frame)
 
 
 func body_signature() -> String:
@@ -119,15 +143,29 @@ func _current_pose() -> Dictionary:
 func _draw() -> void:
 	if _fighter == null or skin == null:
 		return
-	var pose := _current_pose()
-	if pose.is_empty():
+	var uses_sprite := skin.has_sprite(body_state)
+	var pose := {} if uses_sprite else _current_pose()
+	if not uses_sprite and pose.is_empty():
 		return
 	_draw_world_markers()
-	if body_state == DEFEAT:
+	if uses_sprite:
+		_draw_sprite_body()
+	elif body_state == DEFEAT:
 		_draw_defeat(pose)
 	else:
 		_draw_body(pose)
 	_draw_player_label()
+
+
+func _draw_sprite_body() -> void:
+	var atlas: Texture2D = skin.sprite_atlases.get(body_state)
+	if atlas == null:
+		return
+	var cell := Vector2(skin.sprite_cell_size)
+	var source := Rect2(Vector2(float(body_frame) * cell.x, 0.0), cell)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(_fighter.facing), 1.0))
+	draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, skin.sprite_tint)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_world_markers() -> void:
@@ -333,6 +371,7 @@ func _draw_shape(points: PackedVector2Array, fill: Color, ink: Color, width: flo
 
 func _draw_player_label() -> void:
 	var body: Color = skin.palette.get(&"body", _fighter.color)
-	draw_string(ThemeDB.fallback_font, Vector2(-12.0, -Player.HALF.y - 48.0),
+	var label_y := minf(-Player.HALF.y - 48.0, skin.visual_bounds.position.y - 6.0)
+	draw_string(ThemeDB.fallback_font, Vector2(-12.0, label_y),
 		"P%d" % (_fighter.index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14,
 		body.lightened(0.45))
