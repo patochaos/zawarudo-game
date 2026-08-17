@@ -8,6 +8,11 @@ class_name FighterSkin
 @export var display_name: String = "Greybox"
 @export var frames: Dictionary = {}
 @export var pivots: Dictionary = {}
+@export var sprite_atlases: Dictionary = {}
+@export var sprite_counts: Dictionary = {}
+@export var sprite_cell_size := Vector2i(256, 256)
+@export var sprite_draw_rect := Rect2(-64.0, -97.0, 128.0, 128.0)
+@export var sprite_tint := Color.WHITE
 @export var portrait: Texture2D
 @export var palette: Dictionary = {}
 @export var visual_bounds := Rect2(-32.0, -68.0, 64.0, 92.0)
@@ -17,6 +22,51 @@ class_name FighterSkin
 }
 @export var silhouette: Dictionary = {}
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
+
+
+const EXECUTOR_ATLASES := {
+	&"IDLE": preload("res://assets/art/fighters/gilded-executor-prototype-v1/idle.png"),
+	&"RUN": preload("res://assets/art/fighters/gilded-executor-prototype-v1/run.png"),
+	&"RISE": preload("res://assets/art/fighters/gilded-executor-prototype-v1/rise.png"),
+	&"FALL": preload("res://assets/art/fighters/gilded-executor-prototype-v1/fall.png"),
+	&"SHOT": preload("res://assets/art/fighters/gilded-executor-prototype-v1/shoot.png"),
+	&"LOCK": preload("res://assets/art/fighters/gilded-executor-prototype-v1/lock.png"),
+}
+
+const EXECUTOR_COUNTS := {
+	&"IDLE": 6,
+	&"RUN": 8,
+	&"RISE": 4,
+	&"FALL": 4,
+	&"SHOT": 6,
+	&"LOCK": 2,
+}
+
+
+func frame_count(state: StringName) -> int:
+	if sprite_counts.has(state):
+		return int(sprite_counts[state])
+	var authored: Array = frames.get(state, [])
+	return authored.size()
+
+
+func has_sprite(state: StringName) -> bool:
+	return sprite_atlases.has(state) and sprite_atlases[state] is Texture2D \
+		and frame_count(state) > 0
+
+
+static func executor_prototype(player_index: int) -> FighterSkin:
+	var skin := greybox(player_index)
+	skin.skin_id = &"gilded_executor_prototype_v1"
+	skin.display_name = "The Gilded Executor — rigged prototype"
+	skin.sprite_atlases = EXECUTOR_ATLASES.duplicate()
+	skin.sprite_counts = EXECUTOR_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(256, 256)
+	skin.sprite_draw_rect = Rect2(-64.0, -97.0, 128.0, 128.0)
+	skin.sprite_tint = Color.WHITE if player_index % 2 == 0 else Color(0.82, 0.74, 1.0)
+	skin.visual_bounds = Rect2(-64.0, -97.0, 128.0, 128.0)
+	skin.ticks_per_frame = 5
+	return skin
 
 
 ## Gate 1 keeps the proof self-contained and cheap. These dictionaries are the

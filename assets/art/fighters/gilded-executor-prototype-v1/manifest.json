@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "cell_size": [
+    256,
+    256
+  ],
+  "fps": 12,
+  "render_rect": [
+    -64.0,
+    -97.0,
+    128.0,
+    128.0
+  ],
+  "states": {
+    "idle": 6,
+    "run": 8,
+    "rise": 4,
+    "fall": 4,
+    "shoot": 6,
+    "lock": 2
+  }
+}

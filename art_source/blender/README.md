@@ -52,3 +52,26 @@ Import, normalize to 1.86 m, pack the texture and render the four-angle review f
   --previews 'D:\Zawarudo game\previews\gilded-executor-gate-a-ai-textured-v1' `
   --front-angle 270
 ```
+
+## Rigged sprite prototype
+
+Create the non-final armature, automatic skinning and the six deterministic actions (`idle`, `run`, `rise`, `fall`, `shoot`, `lock`):
+
+```powershell
+& 'C:\Program Files\Blender Foundation\Blender 5.2\blender.exe' --background `
+  --python 'D:\Zawarudo game\tools\blender\rig_and_render_executor.py' -- `
+  --input 'D:\Zawarudo game\art_source\blender\gilded-executor-gate-a-ai-textured-v1.blend' `
+  --output 'D:\Zawarudo game\art_source\blender\gilded-executor-rigged-prototype-v1.blend' `
+  --frames 'D:\Zawarudo game\art_source\renders\gilded-executor-prototype-v1'
+```
+
+Pack the rendered frames into Godot atlases and create the animation review sheet:
+
+```powershell
+python .\tools\art\build_executor_sprite_atlases.py `
+  --frames '.\art_source\renders\gilded-executor-prototype-v1' `
+  --output '.\assets\art\fighters\gilded-executor-prototype-v1' `
+  --preview '.\previews\gilded-executor-prototype-v1\animation-contact-sheet.png'
+```
+
+`FighterVisual` samples these atlases from simulation ticks. It never drives movement, collision, knife origin or root motion. `SHOT` is reconstructed from `exec_tick` during execution and the replay frame index during replay.

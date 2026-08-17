@@ -21,13 +21,17 @@ func _run() -> void:
 	var default_gm = GAME_MANAGER.new()
 	root.add_child(default_gm)
 	await process_frame
-	_check(not default_gm.fighter_visuals_enabled,
-		"unapproved greybox visuals must default off")
+	_check(default_gm.fighter_visuals_enabled,
+		"the rigged Executor prototype must default on for playtesting")
 	for p: Player in default_gm.players:
-		_check(p.draw_legacy_visual,
-			"default manager players must retain the legacy renderer")
-		_check(p.get_node_or_null("FighterVisual") == null,
-			"default manager players must not attach unapproved greybox visuals")
+		_check(not p.draw_legacy_visual,
+			"default prototype players must suppress the legacy renderer")
+		var default_visual := p.get_node_or_null("FighterVisual") as FighterVisual
+		_check(default_visual != null,
+			"default manager players must attach the rigged prototype")
+		if default_visual != null:
+			_check(default_visual.skin.skin_id == &"gilded_executor_prototype_v1",
+				"default fighters must use the generated Executor atlas")
 	root.remove_child(default_gm)
 	default_gm.free()
 
@@ -36,7 +40,7 @@ func _run() -> void:
 	root.add_child(gm)
 	await process_frame
 
-	_check(gm.fighter_visuals_enabled, "the focused fixture must explicitly enable Gate 1")
+	_check(gm.fighter_visuals_enabled, "the focused fixture must enable fighter visuals")
 	_check(gm.players.size() == 2, "the focused fixture must spawn a duel")
 	for p: Player in gm.players:
 		var child := p.get_node_or_null("FighterVisual")
@@ -47,15 +51,15 @@ func _run() -> void:
 		if child is FighterVisual:
 			_check(child.get_node_or_null("AimArm") != null,
 				"FighterVisual must keep aim on a separate child layer")
-			_check(child.skin.visual_bounds.size.x >= 56.0 \
-					and child.skin.visual_bounds.size.x <= 64.0 \
-					and child.skin.visual_bounds.size.y >= 82.0 \
-					and child.skin.visual_bounds.size.y <= 92.0,
-				"greybox art bounds must prove the approved 56x82–64x92 scale")
+			_check(child.skin.visual_bounds.size.is_equal_approx(Vector2(128.0, 128.0)),
+				"sprite art must use the authored 128x128 gameplay draw bounds")
+			_check(child.skin.has_sprite(FIGHTER_VISUAL.IDLE),
+				"the rigged prototype must expose an imported idle atlas")
 
 	var player: Player = gm.players[0]
 	var visual: FighterVisual = player.get_node("FighterVisual")
 	_test_state_contract(gm, player, visual)
+	_test_shot_state(gm, player, visual)
 	_test_planning_freeze_and_aim(gm, player, visual)
 	_test_cosmetics_are_digest_inert(gm, player, visual)
 	_test_replay_restoration(gm, player, visual)
@@ -72,9 +76,15 @@ func _run() -> void:
 
 func _test_state_contract(gm, player: Player, visual: FighterVisual) -> void:
 	for state_name in [FIGHTER_VISUAL.IDLE, FIGHTER_VISUAL.RUN, FIGHTER_VISUAL.RISE,
-			FIGHTER_VISUAL.FALL, FIGHTER_VISUAL.LOCK, FIGHTER_VISUAL.DEFEAT]:
-		_check(visual.skin.frames.has(state_name) and not visual.skin.frames[state_name].is_empty(),
-			"FighterSkin must provide %s greybox frames" % state_name)
+			FIGHTER_VISUAL.FALL, FIGHTER_VISUAL.SHOT, FIGHTER_VISUAL.LOCK]:
+		_check(visual.skin.has_sprite(state_name) and visual.skin.frame_count(state_name) > 0,
+			"FighterSkin must provide an imported %s atlas" % state_name)
+		var atlas: Texture2D = visual.skin.sprite_atlases[state_name]
+		_check(atlas.get_width() == visual.skin.sprite_cell_size.x * visual.skin.frame_count(state_name)
+				and atlas.get_height() == visual.skin.sprite_cell_size.y,
+			"%s atlas dimensions must match its authored frame count" % state_name)
+	_check(visual.skin.frame_count(FIGHTER_VISUAL.DEFEAT) > 0,
+		"FighterSkin must retain a defeat fallback")
 
 	gm.state = Phase.PLANNING
 	player.alive = true
@@ -100,6 +110,35 @@ func _test_state_contract(gm, player: Player, visual: FighterVisual) -> void:
 	player.alive = false
 	visual.sync_from_player()
 	_check(visual.body_state == FIGHTER_VISUAL.DEFEAT, "dead body must select DEFEAT")
+
+
+func _test_shot_state(gm, player: Player, visual: FighterVisual) -> void:
+	gm.state = Phase.EXECUTING
+	gm.exec_tick = 12
+	player.alive = true
+	player.on_ground = true
+	player.vel = Vector2.ZERO
+	player.plan.confirmed = true
+	player.plan.shot_tick = 12
+	visual.sync_from_player()
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 0,
+		"the authoritative launch tick must start SHOT on frame zero")
+	gm.exec_tick += visual.skin.ticks_per_frame
+	visual.sync_from_player()
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 1,
+		"SHOT must advance from the authoritative execution tick")
+	gm.state = Phase.REPLAY
+	gm._replay_frame_index = player.plan.shot_tick + visual.skin.ticks_per_frame
+	visual.sync_from_player()
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 1,
+		"replay must reconstruct SHOT from its captured frame index")
+	gm.state = Phase.EXECUTING
+	gm.exec_tick = player.plan.shot_tick \
+		+ visual.skin.frame_count(FIGHTER_VISUAL.SHOT) * visual.skin.ticks_per_frame
+	visual.sync_from_player()
+	_check(visual.body_state == FIGHTER_VISUAL.IDLE,
+		"SHOT must return to locomotion after its deterministic window")
+	player.plan.shot_tick = -1
 
 
 func _test_planning_freeze_and_aim(gm, player: Player, visual: FighterVisual) -> void:
@@ -134,7 +173,7 @@ func _test_cosmetics_are_digest_inert(gm, player: Player, visual: FighterVisual)
 	_check(player.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 		"extreme cosmetic bounds must not alter the 32x48 player rect")
 	# Restore representative data for the remaining visual checks.
-	visual.skin = FIGHTER_SKIN.greybox(player.index)
+	visual.skin = FIGHTER_SKIN.executor_prototype(player.index)
 	visual.sync_from_player()
 
 

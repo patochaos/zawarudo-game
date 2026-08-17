@@ -76,7 +76,7 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export_group("Visuals")
 ## Technical Gate 1 harness. Keep disabled until an art-approved skin exists;
 ## false preserves the original stick renderer exactly.
-@export var fighter_visuals_enabled: bool = false
+@export var fighter_visuals_enabled: bool = true
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
@@ -1155,7 +1155,7 @@ func _add_player(i: int) -> void:
 	if fighter_visuals_enabled:
 		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
 		fighter_visual.name = "FighterVisual"
-		fighter_visual.configure(p, FIGHTER_SKIN_SCRIPT.greybox(i))
+		fighter_visual.configure(p, FIGHTER_SKIN_SCRIPT.executor_prototype(i))
 		p.add_child(fighter_visual)
 		p.draw_legacy_visual = false
 	players.append(p)
