@@ -196,3 +196,17 @@ the recoverable baseline is established.
 - Windows release export and three-second headless startup smoke passed.
 - No source commit was created; the pre-existing worktree still needs scope
   review and a recoverable checkpoint.
+
+## Gate 1 verification log
+
+2026-08-17:
+
+- Added the feature-flagged `FighterVisual`/`FighterSkin` cosmetic seam and two
+  procedural greybox profiles at `64x92` visual bounds.
+- Focused attachment, fallback, collision, digest, planning-freeze, replay and
+  eight-direction aim-origin coverage passed.
+- All 13 established Godot gameplay/journey suites passed.
+- Backend 3 files / 7 tests and TypeScript typecheck passed.
+- Web release export passed at 39.2 MiB total (37.7 MiB WASM); Windows release
+  export and 180-frame headless startup passed.
+- See `docs/FIGHTER_VISUAL_GATE_1_HANDOFF.md` for scope and director decisions.

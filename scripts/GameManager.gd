@@ -29,6 +29,8 @@ const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
 const TUTORIAL_SCRIPT := preload("res://scripts/TutorialLayer.gd")
 const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
+const FIGHTER_VISUAL_SCRIPT := preload("res://scripts/FighterVisual.gd")
+const FIGHTER_SKIN_SCRIPT := preload("res://scripts/FighterSkin.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
@@ -70,6 +72,10 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export var hits_to_win: int = 3
 @export var respawn_invuln_turns: int = 1
 @export var banner_duration: float = 2.4
+
+@export_group("Visuals")
+## Gate 1 feature flag. False preserves the original stick renderer exactly.
+@export var fighter_visuals_enabled: bool = true
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
@@ -1145,6 +1151,12 @@ func _add_player(i: int) -> void:
 	p.plan.set_aim_from_vector(_default_aim_vector(i), aim_min_angle, aim_max_angle)
 	p.plan.power = 0.55
 	_player_layer.add_child(p)
+	if fighter_visuals_enabled:
+		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
+		fighter_visual.name = "FighterVisual"
+		fighter_visual.configure(p, FIGHTER_SKIN_SCRIPT.greybox(i))
+		p.add_child(fighter_visual)
+		p.draw_legacy_visual = false
 	players.append(p)
 
 
