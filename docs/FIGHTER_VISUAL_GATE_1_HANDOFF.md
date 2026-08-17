@@ -96,8 +96,10 @@ release export passed and the 180-frame headless startup exited cleanly.
 
 ## Decisions made
 
-- The feature flag defaults on so Gate 1 is exercised in normal matches; false
-  is the immediate stick-renderer fallback.
+- The feature flag now defaults off because the procedural greybox passed its
+  technical contract but failed the production art bar. Tests enable it
+  explicitly; normal matches retain the stick-renderer fallback until an
+  art-approved skin exists.
 - Isolated `Player.new()` instances remain legacy. Only
   `GameManager._add_player()` may attach the observer.
 - The temporary poses are dictionaries in `FighterSkin`, preserving a data seam
@@ -128,6 +130,6 @@ uses only geometric primitives and existing runtime colors.
   there is no retained automated screenshot artifact.
 - Next recommended action: director silhouette review at normal match scale,
   then approve or revise the two profiles before Gate 2 art production.
-- Items requiring director approval: accept the broad split-coat Executor and
-  scarf/S-curve Witness as the Gate 1 identity anchors; confirm whether the
-  feature flag should remain default-on for the next playtest build.
+- Director decision: the procedural greybox is rejected as player-facing art.
+  Preserve it only as a technical harness. The next approval target is one
+  polished static Executor idle pose at real match scale.
