@@ -1,0 +1,92 @@
+name: Test, build and publish
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify game and room service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.1
+          use-dotnet: false
+          include-templates: false
+      - name: Import project resources
+        run: godot --headless --path . --import
+      - name: Run deterministic game tests
+        shell: bash
+        run: |
+          for test in tests/KnifeMechanicsTest.gd tests/LevelLayoutTest.gd tests/MenuInteractionTest.gd tests/OnlineLockstepTest.gd; do
+            godot --headless --path . --script "$test"
+          done
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Verify room service
+        working-directory: backend
+        run: |
+          npm ci
+          npm test
+          npm run typecheck
+
+  publish:
+    name: Build and publish ${{ matrix.name }}
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: HTML5
+            preset: Web
+            output: build/itch/web/index.html
+            directory: build/itch/web
+            channel: html5
+          - name: Windows
+            preset: Windows
+            output: build/itch/windows/ZAWARUDO.exe
+            directory: build/itch/windows
+            channel: windows
+    steps:
+      - uses: actions/checkout@v7
+      - uses: chickensoft-games/setup-godot@v2.4.1
+        with:
+          version: 4.7.1
+          use-dotnet: false
+          include-templates: true
+      - name: Export release build
+        shell: bash
+        run: |
+          mkdir -p "${{ matrix.directory }}"
+          godot --headless --path . --import
+          godot --headless --path . --export-release "${{ matrix.preset }}" "${{ matrix.output }}"
+          if [ "${{ matrix.channel }}" = "windows" ]; then
+            cp itch/WINDOWS-README.txt "${{ matrix.directory }}/README.txt"
+          fi
+      - uses: remarkablegames/setup-butler@v3
+      - name: Publish to itch.io
+        run: >-
+          butler push "${{ matrix.directory }}"
+          "patochaos/za-warudo:${{ matrix.channel }}"
+          --userversion "${{ github.sha }}"
+          --if-changed
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
