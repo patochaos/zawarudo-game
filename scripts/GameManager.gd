@@ -11,17 +11,16 @@ extends Node2D
 ## entity explicitly, so "frozen" is the default and execution is an exact,
 ## deterministic number of physics ticks.
 
-const PREVIEW_SCRIPT := preload("res://scripts/StainedGlassPreview.gd")
-const UI_SCRIPT := preload("res://scripts/StainedGlassUI.gd")
-const BACKDROP_SCRIPT := preload("res://scripts/StainedGlassBackdrop.gd")
-const EFFECTS_SCRIPT := preload("res://scripts/StainedGlassEffects.gd")
+const PREVIEW_SCRIPT := preload("res://scripts/PreviewLayer.gd")
+const UI_SCRIPT := preload("res://scripts/UI.gd")
+const BACKDROP_SCRIPT := preload("res://scripts/Backdrop.gd")
+const EFFECTS_SCRIPT := preload("res://scripts/Effects.gd")
 const SFX_SCRIPT := preload("res://scripts/Sfx.gd")
-const TIME_STOP_SCRIPT := preload("res://scripts/StainedGlassTimeStopLayer.gd")
+const TIME_STOP_SCRIPT := preload("res://scripts/TimeStopLayer.gd")
 const SUPER_FREEZE_SCRIPT := preload("res://scripts/SuperFreezeFrame.gd")
 const MENU_SCRIPT := preload("res://scripts/MenuLayer.gd")
 const TUNING_SCRIPT := preload("res://scripts/TuningLayer.gd")
-const TEMPORAL_CORE_SCRIPT := preload("res://scripts/StainedGlassTemporalCore.gd")
-const STAINED_GLASS_ARENA_SCRIPT := preload("res://scripts/StainedGlassArena.gd")
+const TEMPORAL_CORE_SCRIPT := preload("res://scripts/TemporalCore.gd")
 const ONLINE_CLIENT_SCRIPT := preload("res://scripts/OnlineClient.gd")
 const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
 const TOUCH_CONTROLS_SCRIPT := preload("res://scripts/TouchControls.gd")
@@ -411,7 +410,7 @@ func _ready() -> void:
 	_backdrop = BACKDROP_SCRIPT.new()
 	add_child(_backdrop)
 
-	_arena = STAINED_GLASS_ARENA_SCRIPT.new()
+	_arena = Arena.new()
 	add_child(_arena)
 
 	# Previews sit behind the live entities so frozen arrows stay readable.
