@@ -6,12 +6,35 @@ class_name Player
 
 const SIZE := Vector2(32.0, 48.0)
 const HALF := Vector2(16.0, 24.0)
+## A ground jump plus this one mid-air charge makes the movement a double jump.
+const MAX_AIR_JUMPS := 1
+
+## Down + jump drops the body through the ledge it is standing on, so descending
+## a level is a deliberate move rather than a walk to the nearest edge.
+##
+## Only ledges thinner than this are doors. The floor, the walls and the roof of
+## a tower are all far thicker, so they stay solid without needing to be marked:
+## thickness IS the rule, and it is one a player can read off the silhouette.
+const DROP_THROUGH_MAX_THICKNESS := 30.0
+## Safety cap only. What actually ends a drop is geometry: the immunity applies
+## to the ledge being left and to nothing below it, so a generous cap cannot
+## carry the body through a second ledge on the way down.
+const DROP_THROUGH_TICKS := 18
+## A push-off, so the drop reads as a decision instead of a slow sag.
+const DROP_THROUGH_NUDGE := 220.0
 
 var cfg                      # GameManager, holds tuning values + solid_rects
 var index: int = 0           # 0 = P1, 1 = P2
 var color: Color = Color.WHITE
 var vel: Vector2 = Vector2.ZERO
 var on_ground: bool = false
+var air_jumps_left: int = MAX_AIR_JUMPS
+## Ticks of collision immunity to thin ledges left in the current drop-through.
+var drop_ticks: int = 0
+## Surface height the current drop started from. Only ledges at or above this
+## line are transparent, so a drop passes through the ledge you left and lands
+## on the next one down rather than tunnelling past both.
+var drop_from_y: float = 0.0
 var facing: int = 1
 var alive: bool = true
 ## Execution windows this player still shrugs off arrows for, granted on
@@ -67,36 +90,104 @@ func muzzle() -> Vector2:
 
 ## Direct real-time control, for the free-play tuning sandbox. Same integration
 ## as everything else, just driven by live input instead of a recording.
-func sim_free(dt: float, dir: int, jump: bool, jump_held: bool) -> void:
+func sim_free(dt: float, dir: int, jump: bool, jump_held: bool, drop: bool = false) -> void:
 	if not alive:
 		return
-	if jump and on_ground:
-		vel.y = -cfg.jump_impulse
-		on_ground = false
-	var st := Player.step_state(position, vel, on_ground, dir, jump_held, dt, cfg)
+	var drop_result := Player.apply_drop(position.y, vel, on_ground, drop_ticks, drop_from_y, drop)
+	vel = drop_result[0]
+	on_ground = drop_result[1]
+	drop_ticks = drop_result[2]
+	drop_from_y = drop_result[3]
+	var jump_result := Player.apply_jump(vel, on_ground, air_jumps_left, jump, cfg.jump_impulse)
+	vel = jump_result[0]
+	on_ground = jump_result[1]
+	air_jumps_left = jump_result[2]
+	var st := Player.step_state(position, vel, on_ground, dir, jump_held, dt, cfg, -1,
+		drop_ticks, drop_from_y)
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
+	if on_ground:
+		air_jumps_left = MAX_AIR_JUMPS
 
 
 ## Replays tick `t` of the recorded plan. Past the end of the recording the
 ## player simply coasts — momentum and gravity, no input.
-func sim_step(dt: float, t: int) -> void:
+##
+## `from_tick` is the absolute world tick this step departs from; it is what the
+## moving geometry is projected against. -1 means "resolve against the world
+## exactly as it stands", which is what free play and the static arenas want.
+func sim_step(dt: float, t: int, from_tick: int = -1) -> void:
 	if not alive:
 		return
-	if plan.jump_at(t) and on_ground:
-		vel.y = -cfg.jump_impulse
-		on_ground = false
-	var st := Player.step_state(position, vel, on_ground, plan.dir_at(t), plan.hold_at(t), dt, cfg)
+	var drop_result := Player.apply_drop(position.y, vel, on_ground, drop_ticks, drop_from_y,
+		plan.drop_at(t))
+	vel = drop_result[0]
+	on_ground = drop_result[1]
+	drop_ticks = drop_result[2]
+	drop_from_y = drop_result[3]
+	var jump_result := Player.apply_jump(vel, on_ground, air_jumps_left,
+		plan.jump_at(t), cfg.jump_impulse)
+	vel = jump_result[0]
+	on_ground = jump_result[1]
+	air_jumps_left = jump_result[2]
+	var st := Player.step_state(position, vel, on_ground, plan.dir_at(t), plan.hold_at(t), dt,
+		cfg, from_tick, drop_ticks, drop_from_y)
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
+	if on_ground:
+		air_jumps_left = MAX_AIR_JUMPS
+
+
+## Returns [velocity, on_ground, drop_ticks, drop_from_y]. Opening a drop costs
+## the ground contact immediately, so the same tick cannot also be spent on a
+## jump — down and up are one button, and asking for both is asking for down.
+##
+## A drop can only be opened from a surface. Whether there is actually anything
+## to fall through is settled by `step_state`: if the body is standing on
+## something too thick to pass, the immunity never matches a rect and the body
+## lands straight back where it was.
+static func apply_drop(pos_y: float, vel: Vector2, on_ground: bool, drop_ticks: int,
+		drop_from_y: float, requested: bool) -> Array:
+	if requested and on_ground:
+		return [Vector2(vel.x, maxf(vel.y, DROP_THROUGH_NUDGE)), false,
+			DROP_THROUGH_TICKS, pos_y + HALF.y]
+	return [vel, on_ground, maxi(0, drop_ticks - 1), drop_from_y]
+
+
+## Returns [velocity, on_ground, air_jumps_left, jumped]. Keeping the rule here
+## lets live play, ghost planning, AI previews and execution share one decision.
+static func apply_jump(vel: Vector2, on_ground: bool, air_jumps_left: int,
+		requested: bool, impulse: float) -> Array:
+	var jumped := false
+	if requested and (on_ground or air_jumps_left > 0):
+		vel.y = -impulse
+		if on_ground:
+			air_jumps_left = MAX_AIR_JUMPS
+		else:
+			air_jumps_left -= 1
+		on_ground = false
+		jumped = true
+	return [vel, on_ground, air_jumps_left, jumped]
 
 
 ## Returns [pos, vel, on_ground]. Static + side-effect free so the prediction
 ## system can run it on a copy of the state.
 static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, jump_held: bool,
-		dt: float, cfg) -> Array:
+		dt: float, cfg, from_tick: int = -1, drop_ticks: int = 0,
+		drop_from_y: float = 0.0) -> Array:
+	# Ride whatever moving piece this body is standing on, then resolve against
+	# the geometry as it stands at the END of the tick. Doing both from the same
+	# pure tick function is what lets a planning ghost and the live execution
+	# agree about a lift that is going to move underneath them.
+	var rects: Array[Rect2]
+	if from_tick >= 0:
+		pos += cfg.mover_carry(pos, from_tick)
+		rects = cfg.solids_at(from_tick + 1)
+	else:
+		rects = cfg.solid_rects
+
 	# Variable jump height: let go while still climbing and the rise is capped,
 	# so a tap is a hop that fits inside one execution window and a held jump is
 	# the full floaty arc that deliberately overruns it.
@@ -108,11 +199,16 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	vel.x = move_toward(vel.x, target, accel * dt)
 	vel.y = minf(vel.y + cfg.gravity * dt, cfg.max_fall_speed)
 
-	var rects: Array[Rect2] = cfg.solid_rects
+	# A drop-through makes thin ledges transparent on BOTH axes for its duration.
+	# Skipping only the vertical pass would let the horizontal one snap the body
+	# sideways out of the ledge it is falling through.
+	var passing: bool = drop_ticks > 0
 
 	# --- horizontal ---
 	pos.x += vel.x * dt
 	for r in rects:
+		if passing and _is_open_ledge(r, drop_from_y):
+			continue
 		if _overlaps(pos, r):
 			if vel.x > 0.0:
 				pos.x = r.position.x - HALF.x
@@ -124,6 +220,8 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	pos.y += vel.y * dt
 	on_ground = false
 	for r in rects:
+		if passing and _is_open_ledge(r, drop_from_y):
+			continue
 		if _overlaps(pos, r):
 			if vel.y > 0.0:
 				pos.y = r.position.y - HALF.y
@@ -137,6 +235,14 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	# from either side before it is folded back into the arena.
 	pos = cfg.wrap_point(pos)
 	return [pos, vel, on_ground]
+
+
+## Transparent to a drop in progress: thin enough to be a ledge rather than a
+## floor, and sitting at or above the surface the drop started from. The height
+## test is what keeps the immunity from carrying past a second ledge — anything
+## below the one you left is still solid, so a drop always lands somewhere.
+static func _is_open_ledge(r: Rect2, drop_from_y: float) -> bool:
+	return r.size.y <= DROP_THROUGH_MAX_THICKNESS and r.position.y <= drop_from_y + 1.0
 
 
 static func _overlaps(center: Vector2, r: Rect2) -> bool:
@@ -225,8 +331,8 @@ func _draw_joint(at: Vector2, radius: float, body: Color) -> void:
 
 
 func _draw_knife_pair(grip: Vector2, d: Vector2) -> void:
-	for off in cfg.knife_offsets(plan.power):
-		var kd: Vector2 = d.rotated(deg_to_rad(off))
+	for launch in cfg.knife_launch_velocities(d, plan.power):
+		var kd: Vector2 = launch.normalized()
 		var side: Vector2 = kd.orthogonal()
 		var base: Vector2 = grip + kd * 2.0
 		var point: Vector2 = grip + kd * 18.0

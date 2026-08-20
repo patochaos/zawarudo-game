@@ -5,6 +5,8 @@ extends Node2D
 ## existing knives. Hidden entirely during EXECUTION.
 
 var gm
+var _arrow_prediction_tick: int = -1
+var _arrow_prediction_cache: Dictionary = {}
 
 
 func _draw() -> void:
@@ -18,15 +20,26 @@ func _draw() -> void:
 			_draw_shot_preview(me, me.position)
 		return
 
-	if gm.state == Phase.EXECUTING or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU:
+	if gm.state == Phase.EXECUTING or gm.state == Phase.REPLAY \
+			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU:
 		return
 
+	# Where the moving world will be when this window closes is public and
+	# knowable, so it is drawn rather than left as a memory test.
+	_draw_kinetics()
 	# Knives already in the air are public information — they were fired in the
 	# open. Only the pending plan is secret.
 	_draw_existing_arrows()
 	for p in gm.players:
 		if p.alive and not gm.hides_plan(p.index):
 			_draw_player_preview(p)
+	# Readiness is public even when the plan behind it is not — knowing the
+	# opponent is done is what lets a short turn feel like a race rather than a
+	# wait. Drawn in world space, over the fighter, so it survives a camera that
+	# has pushed in past the HUD.
+	for p in gm.players:
+		if p.alive and p.plan.confirmed:
+			_draw_ready_badge(p)
 
 
 # ---------------------------------------------------------------- players ----
@@ -59,16 +72,32 @@ func _draw_player_preview(p: Player) -> void:
 	# Ghosts use the same stick-figure pose as the live body. This keeps the
 	# planning view expressive without hiding the exact collision-sized path.
 	var end_pos: Vector2 = path[path.size() - 1]
+	var here: Vector2 = gm.shot_origin(i)
+	var same_marker: bool = here.distance_to(end_pos) <= 2.0
 	_draw_destination(end_pos, p)
 	_draw_ghost_figure(end_pos, p, 0.85)
 
 	# live ghost head, i.e. the point the player is currently piloting
-	var here: Vector2 = gm.shot_origin(i)
-	if here.distance_to(end_pos) > 2.0:
+	if not same_marker:
 		_draw_ghost_figure(here, p, 0.45)
 
 	_draw_stamina(p, here)
 	_draw_shot_preview(p, here)
+
+
+func _draw_ready_badge(p: Player) -> void:
+	# Clears the stack already above a fighter: the "P1" tag, then the stamina bar.
+	var at: Vector2 = p.position + Vector2(0.0, -Player.HALF.y - 54.0)
+	var col := Color(0.42, 1.0, 0.62)
+	var half := Vector2(31.0, 10.0)
+	draw_rect(Rect2(at - half, half * 2.0), Color(0.04, 0.10, 0.07, 0.86))
+	draw_rect(Rect2(at - half, half * 2.0), col, false, 1.6)
+	_label(at + Vector2(-24.0, 5.0), "READY", col, 13)
+	# A tick mark either side keeps it legible at a glance without reading a word.
+	for side in [-1.0, 1.0]:
+		var tip: Vector2 = at + Vector2(side * (half.x + 7.0), 0.0)
+		draw_line(tip - Vector2(side * 5.0, 4.0), tip, col, 1.8)
+		draw_line(tip - Vector2(side * 5.0, -4.0), tip, col, 1.8)
 
 
 ## The final position is the most important promise made by the plan. A small
@@ -127,24 +156,26 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var charging: bool = gm.charging[p.index]
 	var live: bool = armed or charging
 	var shoulder: Vector2 = Player.shoulder_at(origin)
-	var dir: Vector2 = p.aim_dir()
 	var power: float = clampf(p.plan.power, 0.0, 1.0)
+	var launches: Array[Vector2] = gm.knife_launch_velocities(p.aim_dir(), power)
+	var dir: Vector2 = launches[0].normalized()
 
 	var length: float = lerpf(AIM_LEN_MIN, AIM_LEN_MAX, power)
 	var tip: Vector2 = shoulder + dir * length
 	var body: Color = col.lightened(0.35) if live else Color(col.r, col.g, col.b, 0.5)
-	var offsets: PackedFloat32Array = gm.knife_offsets(power)
+	var knife_dirs: Array[Vector2] = []
+	for launch in launches:
+		knife_dirs.append(launch.normalized())
 
 	# The two rays expose the actual fan without solving the ballistic arc. A
 	# weak wedge makes the low-power coverage readable at a glance.
-	if offsets.size() >= 2:
-		var left := dir.rotated(deg_to_rad(offsets[0]))
-		var right := dir.rotated(deg_to_rad(offsets[offsets.size() - 1]))
+	if knife_dirs.size() >= 2:
+		var left: Vector2 = knife_dirs[0]
+		var right: Vector2 = knife_dirs[knife_dirs.size() - 1]
 		draw_colored_polygon(PackedVector2Array([
 			shoulder, shoulder + left * length, shoulder + right * length,
 		]), Color(col.r, col.g, col.b, 0.045 if live else 0.025))
-	for off in offsets:
-		var knife_dir: Vector2 = dir.rotated(deg_to_rad(off))
+	for knife_dir in knife_dirs:
 		var knife_tip: Vector2 = shoulder + knife_dir * length
 		draw_line(shoulder, shoulder + knife_dir * AIM_LEN_MAX,
 			Color(col.r, col.g, col.b, 0.12), 1.5)
@@ -167,7 +198,8 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	_launch_marker(shoulder, col, 1.0 if live else 0.55,
 		"FIRE %.2fs" % shot_time if live else "")
 
-	var tag := "%d° · %d%%" % [int(round(p.plan.elevation())), int(round(power * 100.0))]
+	var actual_elevation: float = rad_to_deg(atan2(-dir.y, absf(dir.x)))
+	var tag := "%d° · %d%%" % [int(round(actual_elevation)), int(round(power * 100.0))]
 	if armed:
 		tag = ("SUPER · " if p.plan.super_shot else "FIRED · ") + tag
 	elif charging:
@@ -175,7 +207,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 			tag = ("SUPER ARMED · " if gm.super_armed[p.index] else "SUPER STANDBY · ") + tag
 		else:
 			tag = "DRAWING · " + tag
-	_shot_tag(p, tip, tag, col.lightened(0.4) if live else Color(col.r, col.g, col.b, 0.65),
+	_shot_tag(p, tip, dir, tag, col.lightened(0.4) if live else Color(col.r, col.g, col.b, 0.65),
 		14 if live else 12)
 	_draw_power_bar(origin, p, charging)
 
@@ -199,9 +231,11 @@ func _launch_marker(at: Vector2, col: Color, alpha: float, caption: String) -> v
 
 
 ## Places the readout so it never runs back across the player's body.
-func _shot_tag(p: Player, muzzle: Vector2, text: String, col: Color, size: int) -> void:
-	var at: Vector2 = muzzle + p.aim_dir() * 16.0 + Vector2(0.0, -10.0)
-	if p.plan.aim_side() > 0:
+func _shot_tag(p: Player, muzzle: Vector2, launch_dir: Vector2, text: String,
+		col: Color, size: int) -> void:
+	var at: Vector2 = muzzle + launch_dir * 16.0 + Vector2(0.0, -10.0)
+	at.y += -16.0 if (p.index & 1) == 0 else 12.0
+	if launch_dir.x > 0.0:
 		at.x += 8.0
 	else:
 		at.x -= ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + 8.0
@@ -234,11 +268,59 @@ func _draw_stamina(p: Player, at_pos: Vector2) -> void:
 		_label(at + Vector2(w + 5.0, h), "SPENT", Color(1.0, 0.45, 0.4), 11)
 
 
+# ---------------------------------------------------------------- kinetics ---
+
+## Moving geometry and orbs, projected to the end of the coming window.
+##
+## The rail is the honest part of the promise: it shows the whole sweep, so a
+## player can see that a lift passes a height without being told when. The ghost
+## outline is the specific part: this is exactly where the piece will be when
+## time stops again. Together they answer "what will this do to my plan?"
+## without answering "what will happen?".
+func _draw_kinetics() -> void:
+	var end_tick: int = gm.world_tick + gm.exec_ticks()
+
+	for pf in gm.platforms:
+		if not pf.has("motion"):
+			continue
+		var here: Rect2 = pf["rect"]
+		var there: Rect2 = gm.platform_rect_at(pf, end_tick)
+		var rail_col := Color(0.62, 0.52, 0.86, 0.30)
+		var ends: Array = Mover.travel_ends(pf["motion"])
+		var home: Vector2 = pf["home"] + here.size * 0.5
+		_dotted_polyline(PackedVector2Array([home + ends[0], home + ends[1]]), rail_col, 2.0, 7.0, 6.0)
+		for e in ends:
+			draw_circle(home + e, 3.0, rail_col)
+		if there.position.distance_to(here.position) > 1.0:
+			var ghost := Color(0.72, 0.62, 0.98, 0.55)
+			draw_rect(there, ghost, false, 2.0)
+			_arrow_between(here.get_center(), there.get_center(), ghost)
+
+	for h in gm.hazards:
+		var to: Vector2 = h.centre_at(end_tick)
+		if to.distance_to(h.position) > 1.0:
+			var col := Color(0.55, 0.92, 1.0, 0.5)
+			_dotted_polyline(PackedVector2Array([h.position, to]), col, 1.8, 6.0, 5.0)
+			draw_arc(to, Hazard.RADIUS, 0.0, TAU, 20, col, 1.6)
+
+
+func _arrow_between(from: Vector2, to: Vector2, col: Color) -> void:
+	var d: Vector2 = to - from
+	if d.length() < 12.0:
+		return
+	var n: Vector2 = d.normalized()
+	var tip: Vector2 = to - n * 4.0
+	var back: Vector2 = tip - n * 11.0
+	var perp: Vector2 = n.orthogonal() * 5.5
+	draw_colored_polygon(PackedVector2Array([tip, back + perp, back - perp]), col)
+
+
 # ----------------------------------------------------------------- arrows ----
 
 func _draw_existing_arrows() -> void:
+	_validate_arrow_prediction_cache()
 	for a in gm.arrows:
-		var pred := PredictionSystem.predict_arrow(a.position, a.vel, gm, gm.trajectory_preview_time)
+		var pred: Dictionary = _prediction_for_arrow(a)
 		var immediate: bool = _is_immediate_threat(pred["path"])
 		if immediate:
 			_draw_immediate_warning(a.position, pred["path"])
@@ -254,6 +336,30 @@ func _draw_existing_arrows() -> void:
 				Color(1, 1, 1, 0.92 if immediate else 0.62))
 
 		_draw_trajectory(pred["path"], a.color, true, true, gm.exec_ticks())
+
+
+## Existing knives and the world are frozen throughout planning, so their full
+## 4.5-second predictions are identical on every redraw. Cache them until the
+## world tick or live knife set changes; threat checks still use the live ghosts.
+func _validate_arrow_prediction_cache() -> void:
+	var valid: bool = _arrow_prediction_tick == gm.world_tick \
+		and _arrow_prediction_cache.size() == gm.arrows.size()
+	if valid:
+		for a in gm.arrows:
+			if not _arrow_prediction_cache.has(a.get_instance_id()):
+				valid = false
+				break
+	if not valid:
+		_arrow_prediction_cache.clear()
+		_arrow_prediction_tick = gm.world_tick
+
+
+func _prediction_for_arrow(a: Arrow) -> Dictionary:
+	var id := a.get_instance_id()
+	if not _arrow_prediction_cache.has(id):
+		_arrow_prediction_cache[id] = PredictionSystem.predict_arrow(a.position, a.vel, gm,
+			gm.trajectory_preview_time, gm.world_tick, a.clashed)
+	return _arrow_prediction_cache[id]
 
 
 func _is_immediate_threat(arrow_path: PackedVector2Array) -> bool:

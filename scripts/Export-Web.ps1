@@ -6,6 +6,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $outputDirectory = Join-Path $projectRoot "build\web"
 $indexPath = Join-Path $outputDirectory "index.html"
 $vercelConfig = Join-Path $projectRoot "deploy\vercel\vercel.json"
+$orientationHeadPath = Join-Path $projectRoot "deploy\vercel\mobile-orientation-head.html"
 
 $godotCommand = Get-Command godot -ErrorAction SilentlyContinue
 if ($godotCommand) {
@@ -23,6 +24,14 @@ Write-Host "Exportando ZAWARUDO para Web..."
 if ($LASTEXITCODE -ne 0) {
     throw "Godot no pudo generar el export Web (codigo $LASTEXITCODE)."
 }
+
+$indexHtml = [IO.File]::ReadAllText($indexPath)
+$orientationHead = [IO.File]::ReadAllText($orientationHeadPath)
+if (-not $indexHtml.Contains("</head>")) {
+    throw "El export Web no contiene una etiqueta </head> donde instalar la orientacion mobile."
+}
+$indexHtml = $indexHtml.Replace("</head>", "$orientationHead`r`n</head>")
+[IO.File]::WriteAllText($indexPath, $indexHtml, [Text.UTF8Encoding]::new($false))
 
 Copy-Item -LiteralPath $vercelConfig -Destination (Join-Path $outputDirectory "vercel.json") -Force
 

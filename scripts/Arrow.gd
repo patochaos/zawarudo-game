@@ -32,6 +32,10 @@ var spin: float = 0.0          # rad/sec, only while tumbling
 ## Every later strike raises this count. GameManager uses it to retain more
 ## energy and introduce a deterministic glancing angle on re-clashes.
 var clash_count: int = 0
+## A boost is a trailing knife transferring momentum; ricochets are limited so
+## a fast knife cannot pinball forever.
+var boost_count: int = 0
+var ricochet_count: int = 0
 ## Ticks before this knife may clash again, so a pair does not stick together
 ## and grind through the impulse every tick.
 var clash_cooldown: int = 0
@@ -49,13 +53,14 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 	var from := position
 	prev_pos = from
 	_tick_clash_cooldowns()
-	var st := Arrow.step_state(from, vel, dt, cfg)
+	var st := Arrow.step_state(from, vel, dt, cfg, clashed)
 	var to: Vector2 = st[0]
 	vel = st[1]
 	var raw: Vector2 = st[2]
 	age_ticks += 1
 
-	var result := {"alive": true, "hit_player": -1, "hit_platform": -1}
+	var result := {"alive": true, "hit_player": -1, "hit_platform": -1,
+		"ricochet": false, "ricochet_position": Vector2.ZERO}
 
 	for p in players:
 		if not p.alive or p.is_invulnerable():
@@ -70,12 +75,31 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 				result["hit_player"] = p.index
 				return result
 
+	var first_hit: Array = []
+	var first_platform := -1
 	for idx in cfg.platforms.size():
 		for r in cfg.platforms[idx]["rects"]:
-			if seg_hits_rect(from, raw, r):
-				result["alive"] = false
-				result["hit_platform"] = idx
-				return result
+			var impact := segment_rect_impact(from, raw, r)
+			if not impact.is_empty() and (first_hit.is_empty() or impact[0] < first_hit[0]):
+				first_hit = impact
+				first_platform = idx
+	if not first_hit.is_empty():
+		var normal: Vector2 = first_hit[1]
+		var impact_at: Vector2 = from.lerp(raw, first_hit[0])
+		if _can_ricochet(normal):
+			vel = vel.bounce(normal) * cfg.knife_ricochet_retention
+			ricochet_count += 1
+			position = impact_at + normal * 2.0
+			prev_pos = position
+			trail.clear()
+			rotation = vel.angle()
+			result["ricochet"] = true
+			result["ricochet_position"] = position
+			queue_redraw()
+			return result
+		result["alive"] = false
+		result["hit_platform"] = first_platform
+		return result
 
 	# On a wrapping axis there is no edge to leave through, so a knife could
 	# orbit forever; age it out instead.
@@ -123,6 +147,34 @@ func deflect(new_vel: Vector2, new_spin: float, cooldown: int, other_id: int = -
 	trail.clear()
 
 
+## A clean rear impact restores an aimed flight instead of turning the leading
+## knife into heavy debris. Direction comes from the transferred momentum.
+func boost(new_vel: Vector2, cooldown: int, other_id: int = -1) -> void:
+	vel = new_vel
+	boost_count += 1
+	clashed = false
+	spin = 0.0
+	clash_cooldown = cooldown
+	if other_id >= 0:
+		_clash_cooldowns[other_id] = cooldown
+	trail.clear()
+	rotation = vel.angle()
+	queue_redraw()
+
+
+func _can_ricochet(normal: Vector2) -> bool:
+	if not cfg.prototype_mode or ricochet_count >= cfg.knife_ricochet_limit:
+		return false
+	if normal.is_zero_approx():
+		return false
+	var speed: float = vel.length()
+	if speed < cfg.knife_ricochet_min_speed or speed <= 0.001:
+		return false
+	# Only a grazing impact skips. A square hit still embeds or damages cover.
+	return absf(vel.normalized().dot(normal.normalized())) \
+		<= cfg.knife_ricochet_max_normal_ratio
+
+
 func can_clash_with(other: Arrow) -> bool:
 	return not _clash_cooldowns.has(other.stable_id())
 
@@ -151,11 +203,12 @@ func lockstep_digest_fragment() -> String:
 	var cooldown_parts := PackedStringArray()
 	for other_id in cooldown_ids:
 		cooldown_parts.append("%d:%d" % [int(other_id), int(_clash_cooldowns[other_id])])
-	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
+	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s" % [
 		network_id, shooter, volley, age_ticks,
 		int(round(position.x * 10000.0)), int(round(position.y * 10000.0)),
 		int(round(vel.x * 10000.0)), int(round(vel.y * 10000.0)),
 		1 if clashed else 0, int(round(spin * 10000.0)), clash_count,
+		boost_count, ricochet_count,
 		clash_cooldown, ";".join(cooldown_parts),
 	]
 
@@ -167,36 +220,63 @@ func lockstep_digest_fragment() -> String:
 ## solid set carries seam copies of anything near an edge, so the overhanging
 ## segment meets the same geometry it would on the far side. Only after that is
 ## the position folded back into the arena.
-static func step_state(pos: Vector2, vel: Vector2, dt: float, cfg) -> Array:
-	vel.y += cfg.arrow_gravity * dt
+##
+## DRAG is applied to the FORWARD component only, and that asymmetry is the whole
+## design. Gravity keeps pulling at full strength while the throw runs out of
+## steam, so the arc does not merely widen — it collapses: the knife stops
+## advancing and drops. Bleeding the vertical component too would cap the fall
+## speed and produce the opposite read, a knife parachuting gently down.
+##
+## A knife that has been struck falls under heavier gravity. Nobody aimed it any
+## more, so it should behave like debris and leave the board, rather than drift
+## for the fifteen seconds its age cap allows.
+static func step_state(pos: Vector2, vel: Vector2, dt: float, cfg, clashed: bool = false) -> Array:
+	var drag: float = cfg.arrow_drag
+	if drag > 0.0:
+		vel.x *= maxf(0.0, 1.0 - drag * dt)
+	var gravity: float = cfg.arrow_gravity
+	if clashed:
+		gravity *= cfg.arrow_clashed_gravity_scale
+	vel.y += gravity * dt
 	var raw: Vector2 = pos + vel * dt
 	return [cfg.wrap_point(raw), vel, raw]
 
 
 ## Slab-method segment vs AABB test.
 static func seg_hits_rect(a: Vector2, b: Vector2, r: Rect2) -> bool:
+	return not segment_rect_impact(a, b, r).is_empty()
+
+
+## First swept contact with an AABB as [tick_fraction, outward_normal]. Keeping
+## the normal makes the same collision useful for deterministic ricochets.
+static func segment_rect_impact(a: Vector2, b: Vector2, r: Rect2) -> Array:
 	var d := b - a
 	var t0 := 0.0
 	var t1 := 1.0
+	var enter_normal := Vector2.ZERO
 	for axis in 2:
 		var dd: float = d[axis]
 		var lo: float = r.position[axis]
 		var hi: float = r.end[axis]
 		if absf(dd) < 0.000001:
 			if a[axis] < lo or a[axis] > hi:
-				return false
+				return []
 		else:
 			var ta: float = (lo - a[axis]) / dd
 			var tb: float = (hi - a[axis]) / dd
+			var near_normal := Vector2.ZERO
+			near_normal[axis] = -1.0 if dd > 0.0 else 1.0
 			if ta > tb:
 				var tmp := ta
 				ta = tb
 				tb = tmp
-			t0 = maxf(t0, ta)
+			if ta > t0:
+				t0 = ta
+				enter_normal = near_normal
 			t1 = minf(t1, tb)
 			if t0 > t1:
-				return false
-	return true
+				return []
+	return [t0, enter_normal]
 
 
 ## Closest distance between two swept segments, and where on each it happens.
@@ -281,6 +361,26 @@ func _draw() -> void:
 	# Drawn in local space along +X; node rotation points it along velocity
 	# (or tumbles it, once deflected).
 	var edge: Color = color.lightened(0.55)
+	# A frozen, already-existing knife gets a solid halo and a velocity chevron.
+	# Planned shots remain thin translucent paths, so danger versus intention is
+	# legible without another HUD sentence.
+	if cfg != null and cfg.state in [Phase.PLANNING, Phase.COMMITTING]:
+		var local_velocity := vel.rotated(-rotation).normalized()
+		if not local_velocity.is_zero_approx():
+			var marker_end := local_velocity * 28.0
+			draw_line(local_velocity * 16.0, marker_end,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+			var wing := local_velocity.orthogonal() * 4.0
+			draw_line(marker_end, marker_end - local_velocity * 7.0 + wing,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+			draw_line(marker_end, marker_end - local_velocity * 7.0 - wing,
+				Color(1.0, 0.96, 0.76, 0.82), 2.0)
+		draw_arc(Vector2.ZERO, 10.0, 0.0, TAU, 18,
+			Color(edge.r, edge.g, edge.b, 0.55), 1.5)
+	if boost_count > 0 or (cfg != null and vel.length() > cfg.arrow_speed_max):
+		draw_line(Vector2(-22.0, 0.0), Vector2(-5.0, 0.0),
+			Color(1.0, 0.72, 0.18, 0.78), 4.0, true)
+		draw_arc(Vector2.ZERO, 9.0, 0.0, TAU, 16, Color(1.0, 0.88, 0.42, 0.62), 1.5)
 	# blade
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(15.0, 0.0), Vector2(1.0, -3.6), Vector2(-3.0, -2.6),

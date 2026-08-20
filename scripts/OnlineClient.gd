@@ -89,8 +89,8 @@ func send_match_over(turn: int, winner: int, digest: String) -> bool:
 	return _send({"type": "match_over", "turn": turn, "winner": winner, "digest": digest})
 
 
-func send_rematch() -> bool:
-	return _send({"type": "rematch"})
+func send_rematch(level: int) -> bool:
+	return _send({"type": "rematch", "level": level})
 
 
 func is_socket_open() -> bool:

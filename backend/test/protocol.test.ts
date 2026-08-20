@@ -30,4 +30,13 @@ describe("plan protocol", () => {
     expect(parseClientMessage(JSON.stringify({ type: "turn_complete", turn: 1, digest: "bad" })))
       .toBeNull();
   });
+
+  it("accepts a host-selected rematch level while preserving legacy clients", () => {
+    expect(parseClientMessage(JSON.stringify({ type: "rematch", level: 1 })))
+      .toEqual({ type: "rematch", level: 1 });
+    expect(parseClientMessage(JSON.stringify({ type: "rematch" })))
+      .toEqual({ type: "rematch", level: null });
+    expect(parseClientMessage(JSON.stringify({ type: "rematch", level: -1 })))
+      .toBeNull();
+  });
 });

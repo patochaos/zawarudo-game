@@ -18,13 +18,14 @@ class_name Ai
 ## instead `step()` is given a few milliseconds per frame and finishes long
 ## before the AI is due to confirm.
 
-## Candidate movements as [direction, jump, ticks]; `ticks < 0` means "as long
-## as the stamina allows".
+## Candidate movements as [direction, jump, ticks, air_jump_tick]; `ticks < 0`
+## means "as long as the stamina allows" and -1 skips the second jump.
 const MOVES := [
-	[0, false, 0],
-	[-1, false, 18], [1, false, 18],
-	[-1, false, -1], [1, false, -1],
-	[-1, true, -1], [1, true, -1], [0, true, -1],
+	[0, false, 0, -1],
+	[-1, false, 18, -1], [1, false, 18, -1],
+	[-1, false, -1, -1], [1, false, -1, -1],
+	[-1, true, -1, -1], [1, true, -1, -1], [0, true, -1, -1],
+	[-1, true, -1, 15], [1, true, -1, 15], [0, true, -1, 15],
 ]
 
 const COARSE_STEP := 10.0        # degrees
@@ -92,7 +93,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	var scored: Array = []
 	for m in MOVES:
 		var ticks: int = budget if m[2] < 0 else mini(m[2], budget)
-		var path := _walk(_me, m[0], m[1], ticks)
+		var path := _walk(_me, m[0], m[1], ticks, m[3])
 		var safety: float = 0.0
 		if not _me.is_invulnerable():
 			safety = -600.0 * _danger(path, threats)
@@ -136,6 +137,12 @@ func finish() -> void:
 		pass
 
 
+## Locks the best result already evaluated without synchronously draining the
+## rest of the queue. Used only when the shared planning clock expires.
+func complete_early() -> void:
+	done = true
+
+
 ## Replays the decision through the normal piloting API, so stamina, the ghost
 ## and the recording all end up exactly as if a human had done it.
 func apply() -> void:
@@ -143,13 +150,15 @@ func apply() -> void:
 		return
 	var dir: int = _best_cand["move"][0]
 	var jump: bool = _best_cand["move"][1]
+	var air_jump_tick: int = _best_cand["move"][3]
 	var ticks: int = _best_cand["ticks"]
 	var fire_at: int = _best.get("tick", -1) if _best.has("elev") else -1
 
 	for t in ticks:
 		if fire_at == t:
 			_arm()
-		_gm._pilot_step(_idx, dir, t == 0 and jump, jump)   # holds for full height
+		var jump_now: bool = (t == 0 and jump) or t == air_jump_tick
+		_gm._pilot_step(_idx, dir, jump_now, jump)
 	if fire_at >= ticks:
 		_arm()
 
@@ -241,21 +250,31 @@ func _evaluate(item: Array) -> void:
 
 ## One movement candidate, played out over a whole window: driven for `ticks`,
 ## then coasting like the real thing.
-func _walk(who: Player, dir: int, jump: bool, ticks: int) -> PackedVector2Array:
+func _walk(who: Player, dir: int, jump: bool, ticks: int,
+		air_jump_tick: int = -1) -> PackedVector2Array:
 	var pos: Vector2 = who.position
 	var vel: Vector2 = who.vel
 	var og: bool = who.on_ground
+	var air_jumps: int = who.air_jumps_left
 	var path := PackedVector2Array()
 	path.append(pos)
 	for t in _gm.exec_ticks():
 		var d: int = dir if t < ticks else 0
-		if t == 0 and jump and og:
-			vel.y = -_gm.jump_impulse
-			og = false
-		var st := Player.step_state(pos, vel, og, d, jump and t < ticks, _dt, _gm)
+		var jump_now: bool = t < ticks and ((t == 0 and jump) or t == air_jump_tick)
+		var jump_result := Player.apply_jump(vel, og, air_jumps, jump_now, _gm.jump_impulse)
+		vel = jump_result[0]
+		og = jump_result[1]
+		air_jumps = jump_result[2]
+		# The search never drops through a ledge: it is a deliberate human verb,
+		# and adding it would multiply the candidate space for a move the AI has
+		# no way to value yet.
+		var st := Player.step_state(pos, vel, og, d, jump and t < ticks, _dt, _gm,
+			_gm.world_tick + t, 0, 0.0)
 		pos = st[0]
 		vel = st[1]
 		og = st[2]
+		if og:
+			air_jumps = Player.MAX_AIR_JUMPS
 		path.append(pos)
 	return path
 
@@ -269,11 +288,11 @@ func _threat_paths() -> Array:
 		var pts := PackedVector2Array()
 		pts.append(pos)
 		for t in _gm.exec_ticks():
-			var st := Arrow.step_state(pos, vel, _dt, _gm)
+			var st := Arrow.step_state(pos, vel, _dt, _gm, a.clashed)
 			var nxt: Vector2 = st[0]
 			vel = st[1]
 			var blocked := false
-			for r in _gm.solid_rects:
+			for r in _gm.solids_at(_gm.world_tick + t + 1):
 				if Arrow.seg_hits_rect(pos, st[2], r):
 					blocked = true
 					break
@@ -329,8 +348,12 @@ func _foe_futures() -> Array:
 ## distance to the opponent cannot be worth simulating, and discarding those
 ## before they cost anything is most of the speed-up.
 func _plausible(origin: Vector2, side: int, elev: float, power: float) -> bool:
-	var v: float = _gm.arrow_speed_for(power)
-	var reach: float = v * v * sin(2.0 * deg_to_rad(elev)) / _gm.arrow_gravity
+	var ang: float = elev if side > 0 else 180.0 - elev
+	var direct := Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
+	var launch_vel: Vector2 = _gm.knife_launch_velocity(direct, power)
+	var launch_elev: float = atan2(-launch_vel.y, absf(launch_vel.x))
+	var reach: float = launch_vel.length_squared() * sin(2.0 * launch_elev) \
+		/ _gm.arrow_gravity
 	var dx: float = _dist_along(origin.x, side)
 	return reach > dx * 0.5 and reach < dx * 2.0 + 200.0
 
@@ -355,17 +378,17 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 	var covered := [false, false, false]
 	var closest := 1e9
 
-	for off in _gm.knife_offsets(power):
-		var knife_dir: Vector2 = dir.rotated(deg_to_rad(off))
+	for launch_vel in _gm.knife_launch_velocities(dir, power):
+		var knife_dir: Vector2 = launch_vel.normalized()
 		var pos: Vector2 = launch + knife_dir * 22.0
-		var vel: Vector2 = knife_dir * _gm.arrow_speed_for(power)
+		var vel: Vector2 = launch_vel
 		for t in FLIGHT_CAP:
 			var st := Arrow.step_state(pos, vel, _dt, _gm)
 			var nxt: Vector2 = st[0]
 			vel = st[1]
 			var raw: Vector2 = st[2]
 			var blocked := false
-			for r2 in _gm.solid_rects:
+			for r2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
 				if Arrow.seg_hits_rect(pos, raw, r2):
 					blocked = true
 					break
