@@ -21,6 +21,13 @@ var drops: PackedByteArray = PackedByteArray()
 var shot_tick: int = -1     # tick the arrow is loosed on; -1 = no shot this turn
 var aim_angle: float = 0.0  # WORLD degrees: 0 = right, +90 = straight up
 var power: float = 0.5      # 0..1, maps to arrow speed
+## Grenadier-only planning choice. It persists between turns just like aim and
+## power; the fuse itself advances only while GameManager simulates execution.
+var grenade_fuse_seconds: int = 2
+## Attack captured when the charge starts. The Shock user maps LMB/0 to the
+## straight plasma lance and RMB/1 to the persistent lobbed orb. Other kits
+## ignore it, which keeps their normal verb singular and immediately readable.
+var attack_mode: int = 0
 ## A full meter plus the player's explicit SUPER toggle upgrades this shot. The
 ## flag is stored on the plan so rollback can change it without spending meter.
 var super_shot: bool = false

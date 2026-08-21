@@ -19,6 +19,15 @@ const AFTERIMAGE_LIFETIME := 0.32
 const AFTERIMAGE_MIN_SPEED := 105.0
 const AFTERIMAGE_MIN_DISTANCE := 10.0
 
+## Character-specific inks are deliberately few and bold. They change only the
+## procedural silhouette; the player color still owns the articulated body.
+const VELOCITY_ORANGE := Color(0.94, 0.37, 0.10, 0.98)
+const VELOCITY_CYAN := Color(0.24, 0.96, 1.0, 0.98)
+const VELOCITY_GOLD := Color(1.0, 0.76, 0.22, 0.98)
+const SHOCK_PINK := Color(1.0, 0.22, 0.76, 0.98)
+const SHOCK_VIOLET := Color(0.48, 0.18, 0.78, 0.98)
+const SHOCK_CYAN := Color(0.24, 0.96, 1.0, 0.98)
+
 ## Down + jump drops the body through the ledge it is standing on, so descending
 ## a level is a deliberate move rather than a walk to the nearest edge.
 ##
@@ -35,6 +44,9 @@ const DROP_THROUGH_NUDGE := 220.0
 
 var cfg                      # GameManager, holds tuning values + solid_rects
 var index: int = 0           # 0 = P1, 1 = P2
+## Cosmetic roster id mirrored from GameManager. Physics never reads it here;
+## it only gives every prototype a distinct procedural stick silhouette.
+var fighter_style: int = 0
 var color: Color = Color.WHITE
 var vel: Vector2 = Vector2.ZERO
 var on_ground: bool = false
@@ -177,7 +189,7 @@ func sim_free(dt: float, dir: int, jump: bool, jump_held: bool, drop: bool = fal
 	on_ground = jump_result[1]
 	air_jumps_left = jump_result[2]
 	var st := Player.step_state(position, vel, on_ground, dir, jump_held, dt, cfg, -1,
-		drop_ticks, drop_from_y)
+		drop_ticks, drop_from_y, cfg.movement_speed_scale(index))
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
@@ -206,7 +218,7 @@ func sim_step(dt: float, t: int, from_tick: int = -1) -> void:
 	on_ground = jump_result[1]
 	air_jumps_left = jump_result[2]
 	var st := Player.step_state(position, vel, on_ground, plan.dir_at(t), plan.hold_at(t), dt,
-		cfg, from_tick, drop_ticks, drop_from_y)
+		cfg, from_tick, drop_ticks, drop_from_y, cfg.movement_speed_scale(index))
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
@@ -250,7 +262,7 @@ static func apply_jump(vel: Vector2, on_ground: bool, air_jumps_left: int,
 ## system can run it on a copy of the state.
 static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, jump_held: bool,
 		dt: float, cfg, from_tick: int = -1, drop_ticks: int = 0,
-		drop_from_y: float = 0.0) -> Array:
+		drop_from_y: float = 0.0, move_speed_scale: float = 1.0) -> Array:
 	# Ride whatever moving piece this body is standing on, then resolve against
 	# the geometry as it stands at the END of the tick. Doing both from the same
 	# pure tick function is what lets a planning ghost and the live execution
@@ -268,7 +280,7 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	if vel.y < 0.0 and not jump_held:
 		vel.y = maxf(vel.y, -cfg.jump_impulse * cfg.jump_cut)
 
-	var target: float = float(dir) * cfg.player_move_speed
+	var target: float = float(dir) * cfg.player_move_speed * move_speed_scale
 	var accel: float = cfg.player_acceleration if on_ground else cfg.player_air_acceleration
 	vel.x = move_toward(vel.x, target, accel * dt)
 	vel.y = minf(vel.y + cfg.gravity * dt, cfg.max_fall_speed)
@@ -416,6 +428,296 @@ func _draw_knife_pair(grip: Vector2, d: Vector2) -> void:
 		draw_line(base - side * 3.2, base + side * 3.2, color.lightened(0.5), 1.4, true)
 
 
+func _draw_grenade(grip: Vector2) -> void:
+	draw_circle(grip + Vector2(2.0 * facing, -1.0), 8.0, Color(0.025, 0.02, 0.035, 0.96))
+	var shell_color := color.darkened(0.55)
+	shell_color.a = 0.98
+	draw_circle(grip, 6.7, shell_color)
+	draw_line(grip + Vector2(2.0 * facing, -5.0), grip + Vector2(7.0 * facing, -11.0),
+		color.lightened(0.45), 1.8, true)
+	draw_circle(grip + Vector2(8.0 * facing, -12.0), 2.2, color.lightened(0.55))
+
+
+func _is_dashblading() -> bool:
+	return fighter_style == 2 and cfg != null and cfg.has_method("_player_is_dashing") \
+		and cfg._player_is_dashing(index)
+
+
+## The special pose follows the attack vector, but it is cosmetic: the Player
+## position, 32x48 body and Dashblade guard rectangle remain authoritative.
+func _dashblade_pose(base_pose: Dictionary) -> Dictionary:
+	var pose := base_pose.duplicate(true)
+	var d := aim_dir().normalized()
+	if d.is_zero_approx():
+		d = Vector2(float(facing), 0.0)
+	var side := d.orthogonal()
+	pose["hip"] = -d * 1.0
+	pose["chest"] = -d * 7.0
+	pose["neck"] = -d * 12.0
+	pose["head"] = -d * 17.0 - side * 1.5
+	pose["shoulder"] = -d * 5.0 + side * 4.0
+	pose["aim_elbow"] = d * 1.0 + side * 2.5
+	pose["grip"] = d * 8.0
+	pose["free_shoulder"] = -d * 7.0 - side * 4.0
+	pose["free_elbow"] = d * 3.0 - side * 7.0
+	pose["free_hand"] = d * 15.0 - side * 4.0
+	pose["knee_a"] = -d * 6.0 + side * 7.0
+	pose["foot_a"] = -d * 17.0 + side * 10.0
+	pose["knee_b"] = -d * 8.0 - side * 6.0
+	pose["foot_b"] = -d * 20.0 - side * 8.0
+	return pose
+
+
+func _velocity_stored_frames() -> int:
+	if cfg == null or index < 0 or index >= cfg.frame_debt_cells.size():
+		return 0
+	return clampi(int(cfg.frame_debt_cells[index]), 0, 3)
+
+
+func _draw_velocity_lance(rear: Vector2, point: Vector2, d: Vector2,
+		side: Vector2, ring_origin: Vector2, stored: int) -> void:
+	var ink := Color(0.025, 0.02, 0.045, 0.99)
+	draw_line(rear, point - d * 7.0, ink, 7.0, true)
+	draw_line(rear, point - d * 7.0, VELOCITY_GOLD.darkened(0.48), 3.4, true)
+	draw_line(rear + side * 0.8, point - d * 9.0 + side * 0.8,
+		Color(0.22, 0.32, 0.48, 0.96), 1.3, true)
+	# The three sliding rings are the character-readable version of LOST FRAME.
+	for i in 3:
+		var at := ring_origin - d * (float(i) * 7.0)
+		var ring_color := VELOCITY_CYAN if i < stored else VELOCITY_GOLD
+		draw_line(at - side * 5.0, at + side * 5.0, ink, 4.2, true)
+		draw_line(at - side * 4.2, at + side * 4.2, ring_color, 2.0, true)
+	var neck := point - d * 9.0
+	var tip := PackedVector2Array([
+		point, neck + side * 5.2, neck - d * 7.0, neck - side * 5.2,
+	])
+	draw_colored_polygon(tip, ink)
+	draw_polyline(tip + PackedVector2Array([tip[0]]), VELOCITY_GOLD, 1.5, true)
+	draw_line(neck - d * 4.0, point - d * 2.0, VELOCITY_CYAN, 1.3, true)
+
+
+## Two shield halves leave a narrow central channel. The lance is drawn first,
+## so the shield visibly leads while the point passes through that channel.
+func _draw_velocity_shield(center: Vector2, d: Vector2, side: Vector2,
+		half_span: float, half_depth: float) -> void:
+	var ink := Color(0.025, 0.02, 0.045, 0.99)
+	for raw_sign in [-1.0, 1.0]:
+		var sign_value: float = float(raw_sign)
+		var shield_half := PackedVector2Array([
+			center + side * sign_value * 2.2 - d * half_depth,
+			center + side * sign_value * half_span - d * (half_depth * 0.72),
+			center + side * sign_value * (half_span + 3.0),
+			center + side * sign_value * (half_span - 2.0) + d * half_depth,
+			center + side * sign_value * 2.2 + d * (half_depth * 0.75),
+		])
+		draw_colored_polygon(shield_half, ink)
+		draw_polyline(shield_half + PackedVector2Array([shield_half[0]]),
+			VELOCITY_GOLD, 1.6, true)
+		var slit_start: Vector2 = center + side * sign_value * 6.0 \
+			- d * (half_depth * 0.38)
+		var slit_end: Vector2 = center + side * sign_value * (half_span - 3.5) \
+			+ d * (half_depth * 0.2)
+		draw_line(slit_start, slit_end, VELOCITY_CYAN, 2.0, true)
+
+
+func _draw_dashblade_kit(pose: Dictionary) -> void:
+	var d := aim_dir().normalized()
+	if d.is_zero_approx():
+		d = Vector2(float(facing), 0.0)
+	var side := d.orthogonal()
+	if _is_dashblading():
+		var committed: int = cfg.dash_frame_debt_spent(index) \
+			if cfg.has_method("dash_frame_debt_spent") else 0
+		# Weapon first, shield second: the charge is visually shield-led while the
+		# lance emerges through its split centre and remains the striking point.
+		_draw_velocity_lance(-d * 34.0, d * 62.0, d, side, -d * 7.0,
+			clampi(committed, 0, 3))
+		_draw_velocity_shield(d * 24.0, d, side, 26.0, 10.0)
+		return
+
+	var grip: Vector2 = pose["grip"]
+	_draw_velocity_lance(grip - d * 15.0, grip + d * 45.0, d, side,
+		grip - d * 1.0, _velocity_stored_frames())
+	# At rest the shield hangs from the free arm like an extravagant piece of
+	# runway hardware; it becomes the full leading slab only during the breach.
+	var shield_center: Vector2 = pose["free_hand"] + d * 4.0
+	_draw_velocity_shield(shield_center, d, side, 12.0, 6.0)
+
+
+func _draw_chakram_kit(pose: Dictionary) -> void:
+	var head: Vector2 = pose["head"]
+	# Long ears, glider membrane and a huge curled tail make the fighter read as
+	# Broodtail even when the portrait is nowhere near the action.
+	for offset in [-3.0, 3.0]:
+		draw_colored_polygon(PackedVector2Array([
+			head + Vector2(offset, -4.0), head + Vector2(offset * 1.5, -15.0),
+			head + Vector2(offset + signf(offset) * 4.0, -5.0),
+		]), color.darkened(0.18))
+	var shoulder: Vector2 = pose["shoulder"]
+	var hip: Vector2 = pose["hip"]
+	draw_colored_polygon(PackedVector2Array([
+		shoulder, pose["free_shoulder"], pose["free_elbow"], hip,
+	]), Color(color.r, color.g, color.b, 0.28))
+	draw_arc(hip + Vector2(-11.0 * facing, -2.0), 18.0, -2.2, 2.3, 24,
+		Color(0.45, 0.22, 0.62, 0.94), 6.0, true)
+	# The companion in hand is already curled into its living ring.
+	draw_arc(pose["grip"], 9.0, 0.0, TAU, 20, Color(0.48, 1.0, 0.92), 3.0, true)
+	draw_circle(pose["grip"] + Vector2(6.0 * facing, -2.0), 2.4, color.lightened(0.3))
+
+
+func _draw_shock_kit(pose: Dictionary) -> void:
+	var head: Vector2 = pose["head"]
+	# Two dense hair masses plus jagged static tails retain the magical-girl read
+	# at match scale. The asymmetry keeps her separate from a generic twin-tail.
+	var back := -float(facing)
+	var pink_mass := head + Vector2(8.0 * back, -5.0)
+	var violet_mass := head + Vector2(4.0 * back, 6.0)
+	draw_circle(pink_mass, 5.7, Color(0.025, 0.02, 0.045, 0.98))
+	draw_circle(pink_mass, 4.4, SHOCK_PINK)
+	draw_circle(violet_mass, 5.3, Color(0.025, 0.02, 0.045, 0.98))
+	draw_circle(violet_mass, 4.0, SHOCK_VIOLET)
+	draw_polyline(PackedVector2Array([
+		head + Vector2(-3.0 * facing, -3.0), head + Vector2(-15.0 * facing, -10.0),
+		head + Vector2(-23.0 * facing, -3.0), head + Vector2(-17.0 * facing, 4.0),
+	]), SHOCK_PINK, 4.0, true)
+	draw_polyline(PackedVector2Array([
+		head + Vector2(-2.0 * facing, 1.0), head + Vector2(-13.0 * facing, 7.0),
+		head + Vector2(-21.0 * facing, 13.0),
+	]), SHOCK_CYAN, 3.5, true)
+	# Four points are enough to read as the star clips from her portrait.
+	for clip_center in [pink_mass + Vector2(0.0, -4.0), violet_mass + Vector2(-2.0, 3.0)]:
+		var star := PackedVector2Array([
+			clip_center + Vector2(0.0, -3.2), clip_center + Vector2(1.2, -1.1),
+			clip_center + Vector2(3.2, 0.0), clip_center + Vector2(1.2, 1.1),
+			clip_center + Vector2(0.0, 3.2), clip_center + Vector2(-1.2, 1.1),
+			clip_center + Vector2(-3.2, 0.0), clip_center + Vector2(-1.2, -1.1),
+		])
+		draw_colored_polygon(star, VELOCITY_GOLD)
+	var d := aim_dir().normalized()
+	if d.is_zero_approx():
+		d = Vector2(float(facing), 0.0)
+	var side := d.orthogonal()
+	var grip: Vector2 = pose["grip"]
+	var muzzle := grip + d * 28.0
+	draw_line(grip - d * 8.0, muzzle, Color(0.055, 0.025, 0.09), 7.0, true)
+	draw_line(grip, muzzle, SHOCK_CYAN, 2.2, true)
+	draw_circle(grip - d * 3.0 + side * 4.0, 3.0, SHOCK_PINK)
+	if plan.attack_mode == 1:
+		draw_circle(muzzle, 6.2, Color(0.08, 0.02, 0.12, 0.98))
+		draw_arc(muzzle, 5.0, 0.0, TAU, 14, SHOCK_PINK, 2.0, true)
+		draw_circle(muzzle, 2.2, SHOCK_CYAN)
+	else:
+		var prong := PackedVector2Array([
+			muzzle + d * 4.0, muzzle - d * 2.0 + side * 3.5,
+			muzzle, muzzle - d * 2.0 - side * 3.5,
+		])
+		draw_colored_polygon(prong, SHOCK_PINK)
+	draw_circle(head + Vector2(3.0 * facing, -0.8), 0.7, SHOCK_CYAN)
+
+
+func _draw_default_costume(pose: Dictionary, head: Vector2, f: float) -> void:
+	var ink := Color(0.035, 0.035, 0.055, 0.98)
+	var collar := PackedVector2Array([
+		pose["neck"] + Vector2(-1.0 * f, 1.0),
+		pose["chest"] + Vector2(-7.0 * f, -1.0),
+		pose["chest"] + Vector2(-2.0 * f, 5.0),
+		pose["chest"] + Vector2(4.0 * f, 2.0),
+	])
+	draw_colored_polygon(collar, ink)
+	draw_polyline(collar, color.lightened(0.12), 1.4, true)
+	var hair := PackedVector2Array([
+		head + Vector2(-3.0 * f, -5.0),
+		head + Vector2(-9.0 * f, -7.0),
+		head + Vector2(-6.0 * f, -1.0),
+		head + Vector2(-11.0 * f, 2.0),
+		head + Vector2(-4.0 * f, 4.0),
+	])
+	draw_colored_polygon(hair, ink)
+	draw_polyline(hair, color.darkened(0.10), 2.0, true)
+
+
+func _draw_velocity_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
+	var ink := Color(0.025, 0.02, 0.045, 0.99)
+	# One trouser leg blooms into the portrait's runway flare. This stays outside
+	# collision and is intentionally only a few pixels wider than the stick leg.
+	var knee: Vector2 = pose["knee_b"]
+	var foot: Vector2 = pose["foot_b"]
+	var leg_axis := (foot - knee).normalized()
+	var leg_side := leg_axis.orthogonal()
+	var flare := PackedVector2Array([
+		knee - leg_side * 3.2, knee + leg_side * 3.2,
+		foot + leg_side * 6.5, foot + leg_axis * 2.0,
+		foot - leg_side * 6.5,
+	])
+	draw_colored_polygon(flare, Color(0.035, 0.08, 0.22, 0.98))
+	draw_polyline(flare + PackedVector2Array([flare[0]]), color.lightened(0.12), 1.2, true)
+	# Cropped cavalry jacket and the single huge orange lapel carry most of the
+	# fashion read; the body underneath remains the shared puppet.
+	var jacket := PackedVector2Array([
+		pose["chest"] + Vector2(-6.0 * f, -4.0),
+		pose["shoulder"] + Vector2(5.0 * f, -3.0),
+		pose["hip"] + Vector2(5.0 * f, -1.0),
+		pose["hip"] + Vector2(-4.0 * f, 1.0),
+	])
+	draw_colored_polygon(jacket, Color(0.03, 0.07, 0.18, 0.98))
+	draw_polyline(jacket + PackedVector2Array([jacket[0]]), VELOCITY_GOLD, 1.2, true)
+	var lapel := PackedVector2Array([
+		pose["neck"] + Vector2(-1.0 * f, 1.0),
+		pose["chest"] + Vector2(-10.0 * f, -6.0),
+		pose["chest"] + Vector2(-5.0 * f, 4.0),
+		pose["hip"] + Vector2(2.0 * f, -1.0),
+	])
+	draw_colored_polygon(lapel, VELOCITY_ORANGE)
+	draw_polyline(lapel + PackedVector2Array([lapel[0]]), ink, 1.2, true)
+	# The upward hair horn replaces a literal dragoon helmet.
+	var hair_horn := PackedVector2Array([
+		head + Vector2(-4.0 * f, 2.0),
+		head + Vector2(-7.0 * f, -3.0),
+		head + Vector2(-4.0 * f, -15.0),
+		head + Vector2(1.0 * f, -8.0),
+		head + Vector2(3.0 * f, -4.0),
+	])
+	draw_colored_polygon(hair_horn, Color(0.18, 0.055, 0.035, 0.99))
+	draw_polyline(hair_horn + PackedVector2Array([hair_horn[0]]),
+		VELOCITY_ORANGE.darkened(0.16), 1.4, true)
+	draw_circle(pose["shoulder"], 4.2, ink)
+	draw_arc(pose["shoulder"], 3.5, 0.0, TAU, 10, VELOCITY_GOLD, 1.3, true)
+
+
+func _draw_shock_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
+	var ink := Color(0.035, 0.015, 0.055, 0.99)
+	# A tiny star skirt, cropped jacket and oversized sleeve circles establish the
+	# magical-girl silhouette before the hair tails and plasma prop are added.
+	var skirt := PackedVector2Array([
+		pose["hip"] + Vector2(-4.0, -1.0),
+		pose["hip"] + Vector2(4.0, -1.0),
+		pose["hip"] + Vector2(10.0, 5.0),
+		pose["hip"] + Vector2(2.0, 4.0),
+		pose["hip"] + Vector2(0.0, 8.0),
+		pose["hip"] + Vector2(-3.0, 4.0),
+		pose["hip"] + Vector2(-10.0, 5.0),
+	])
+	draw_colored_polygon(skirt, SHOCK_VIOLET)
+	draw_polyline(skirt + PackedVector2Array([skirt[0]]), SHOCK_PINK, 1.3, true)
+	var jacket := PackedVector2Array([
+		pose["free_shoulder"] + Vector2(-3.0 * f, -2.0),
+		pose["shoulder"] + Vector2(4.0 * f, -2.0),
+		pose["chest"] + Vector2(5.0 * f, 5.0),
+		pose["chest"] + Vector2(-5.0 * f, 5.0),
+	])
+	draw_colored_polygon(jacket, ink)
+	draw_polyline(jacket + PackedVector2Array([jacket[0]]), SHOCK_PINK, 1.2, true)
+	for shoulder in [pose["free_shoulder"], pose["shoulder"]]:
+		draw_circle(shoulder, 4.1, ink)
+		draw_arc(shoulder, 3.2, 0.0, TAU, 10, SHOCK_CYAN, 1.1, true)
+	var bangs := PackedVector2Array([
+		head + Vector2(-5.0 * f, -4.0), head + Vector2(-1.0 * f, -9.0),
+		head + Vector2(1.0 * f, -4.0), head + Vector2(5.0 * f, -7.0),
+		head + Vector2(4.0 * f, 1.0),
+	])
+	draw_colored_polygon(bangs, SHOCK_VIOLET)
+
+
 func _draw_pose_shadow(pose: Dictionary) -> void:
 	# A hard offset shadow reads at sprite scale and matches the cel-shaded UI.
 	# It is separate from the contact shadow: airborne fighters keep this one.
@@ -459,7 +761,21 @@ func _draw_afterimage(pose: Dictionary, offset: Vector2, strength: float) -> voi
 	draw_circle(pose["head"] + offset, 7.0, echo)
 
 
+func _draw_missing_frame(offset: Vector2, strength: float) -> void:
+	var skew := 3.0 * signf(offset.x) if not is_zero_approx(offset.x) else 2.0
+	var panel := PackedVector2Array([
+		offset + Vector2(-18.0 + skew, -29.0),
+		offset + Vector2(18.0 + skew, -27.0),
+		offset + Vector2(17.0 - skew, 28.0),
+		offset + Vector2(-19.0 - skew, 26.0),
+	])
+	draw_colored_polygon(panel, Color(0.08, 0.88, 1.0, 0.025 * strength))
+	draw_polyline(panel + PackedVector2Array([panel[0]]),
+		Color(0.50, 0.96, 1.0, 0.72 * strength), 1.2, true)
+
+
 func _draw() -> void:
+	_draw_team_marker()
 	if not draw_legacy_visual:
 		return
 	if not alive:
@@ -479,10 +795,15 @@ func _draw() -> void:
 			if cfg != null and cfg.has_method("wrap_delta") \
 			else snapshot["position"] - position
 		var life: float = 1.0 - float(snapshot["age"]) / AFTERIMAGE_LIFETIME
+		if fighter_style == 2:
+			_draw_missing_frame(offset, life)
 		_draw_afterimage(snapshot["pose"], offset, 0.14 * life * life)
 
 	var f := float(facing)
 	var pose := _pose_points()
+	if _is_dashblading():
+		pose = _dashblade_pose(pose)
+		_draw_dash_aura()
 	# A completed late-match meter should be legible on the fighter even when the
 	# HUD is not where the player is looking. Arming it brightens and thickens the
 	# ring, so the toggle has world-space feedback as well as a panel label.
@@ -534,25 +855,14 @@ func _draw() -> void:
 
 	var head: Vector2 = pose["head"]
 	var ink := Color(0.035, 0.035, 0.055, 0.98)
-	# Angular collar and swept spikes add an aristocratic-vampire silhouette
-	# without turning the tiny fighter into a detailed costume sprite.
-	var collar := PackedVector2Array([
-		pose["neck"] + Vector2(-1.0 * f, 1.0),
-		pose["chest"] + Vector2(-7.0 * f, -1.0),
-		pose["chest"] + Vector2(-2.0 * f, 5.0),
-		pose["chest"] + Vector2(4.0 * f, 2.0),
-	])
-	draw_colored_polygon(collar, ink)
-	draw_polyline(collar, color.lightened(0.12), 1.4, true)
-	var hair := PackedVector2Array([
-		head + Vector2(-3.0 * f, -5.0),
-		head + Vector2(-9.0 * f, -7.0),
-		head + Vector2(-6.0 * f, -1.0),
-		head + Vector2(-11.0 * f, 2.0),
-		head + Vector2(-4.0 * f, 4.0),
-	])
-	draw_colored_polygon(hair, ink)
-	draw_polyline(hair, color.darkened(0.10), 2.0, true)
+	match fighter_style:
+		2:
+			_draw_velocity_fashion(pose, head, f)
+		4:
+			_draw_shock_fashion(pose, head, f)
+		_:
+			# The dagger/grenadier fallback keeps the aristocratic swept collar.
+			_draw_default_costume(pose, head, f)
 	draw_circle(head, 7.2, Color(0.035, 0.035, 0.055, 0.98))
 	draw_circle(head, 5.1, color.lightened(0.18))
 	draw_arc(head, 5.2, -0.9, 1.9, 10, color.lightened(0.55), 1.1, true)
@@ -561,7 +871,63 @@ func _draw() -> void:
 	draw_line(head + Vector2(0.7 * f, -2.5), head + Vector2(4.0 * f, -1.7),
 		Color(0.03, 0.03, 0.05), 1.2, true)
 
-	_draw_knife_pair(pose["grip"], aim_dir())
+	match fighter_style:
+		1:
+			_draw_grenade(pose["grip"])
+		2:
+			_draw_dashblade_kit(pose)
+		3:
+			_draw_chakram_kit(pose)
+		4:
+			_draw_shock_kit(pose)
+		_:
+			_draw_knife_pair(pose["grip"], aim_dir())
 
-	draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), "P%d" % (index + 1),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color.lightened(0.5))
+	if cfg == null or not bool(cfg.team_mode):
+		draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), "P%d" % (index + 1),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color.lightened(0.5))
+
+
+func _draw_team_marker() -> void:
+	if cfg == null or not bool(cfg.team_mode) or index >= cfg.player_teams.size():
+		return
+	var team: int = cfg.player_teams[index]
+	if team < 0 or team >= cfg.TEAM_COLORS.size():
+		return
+	var team_color: Color = cfg.TEAM_COLORS[team]
+	var marker_y := -HALF.y - 22.0
+	var chevron := PackedVector2Array([
+		Vector2(-14.0, marker_y - 8.0), Vector2(14.0, marker_y - 8.0),
+		Vector2(9.0, marker_y + 7.0), Vector2(0.0, marker_y + 12.0),
+		Vector2(-9.0, marker_y + 7.0),
+	])
+	draw_colored_polygon(chevron, Color(0.018, 0.012, 0.030, 0.94))
+	draw_polyline(chevron + PackedVector2Array([chevron[0]]),
+		Color(team_color.r, team_color.g, team_color.b, 0.96), 1.6, true)
+	draw_string(ThemeDB.fallback_font, Vector2(-9.0, marker_y + 6.0), "P%d" % (index + 1),
+		HORIZONTAL_ALIGNMENT_CENTER, 18.0, 11, team_color.lightened(0.28))
+
+
+func _draw_dash_aura() -> void:
+	var d := aim_dir().normalized()
+	var side := d.orthogonal()
+	draw_circle(Vector2.ZERO, 37.0, Color(0.18, 0.92, 1.0, 0.15))
+	draw_arc(Vector2.ZERO, 36.0, 0.0, TAU, 30, Color(0.35, 0.96, 1.0, 0.72), 2.2)
+	var committed: int = cfg.dash_frame_debt_spent(index) \
+		if cfg != null and cfg.has_method("dash_frame_debt_spent") else 0
+	for i in maxi(1, committed + 1):
+		var centre := -d * (18.0 + float(i) * 11.0) \
+			+ side * (float(i % 2) * 8.0 - 4.0)
+		var half_forward := 6.0 + float(i) * 0.7
+		var half_side := 17.0
+		var panel := PackedVector2Array([
+			centre - d * half_forward - side * half_side,
+			centre + d * half_forward - side * half_side,
+			centre + d * half_forward + side * half_side,
+			centre - d * half_forward + side * half_side,
+		])
+		draw_polyline(panel + PackedVector2Array([panel[0]]),
+			Color(0.42, 0.96, 1.0, 0.38 + 0.10 * float(i)), 1.8, true)
+	var shield_center := d * 24.0
+	draw_arc(shield_center, 29.0, d.angle() - 1.05, d.angle() + 1.05, 22,
+		Color(VELOCITY_CYAN.r, VELOCITY_CYAN.g, VELOCITY_CYAN.b, 0.42), 2.0, true)

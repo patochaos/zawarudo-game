@@ -31,8 +31,8 @@ class_name Levels
 ##
 ## HAZARDS
 ##   `hazards` lists pulse orbs (see Hazard.gd). An orb drifts on its own rail
-##   and, when a knife strikes it, blows fighters and knives radially outward
-##   before going dark for a couple of windows. Place them where being pushed is
+##   and, when a knife strikes it, pushes fighters and relaunches knives radially
+##   at full throw speed before going dark for a couple of windows. Place them where being pushed is
 ##   interesting — over a gap, beside a seam, under the crown — not where a push
 ##   simply ends the round.
 ##
@@ -53,17 +53,17 @@ const WALL_R := {"rect": Rect2(1280, -1400, 60, 2100), "hp": -1}
 
 
 static func count() -> int:
-	return 4
+	return 7
 
 
-static func build(index: int) -> Dictionary:
-	return _finish(_layout(index))
+static func build(index: int, player_count: int = 4) -> Dictionary:
+	return _finish(_layout(index), clampi(player_count, 2, 4))
 
 
 ## PROTOTYPE. Reached only through the prototype ruleset, never through the level
 ## cycle, so it cannot drift into being real content by accident.
 static func build_prototype() -> Dictionary:
-	return _finish(_proving_ground())
+	return _finish(_proving_ground(), 4)
 
 
 ## A quiet room for learning the three basic verbs. The open horizontal seam
@@ -77,6 +77,11 @@ static func build_tutorial() -> Dictionary:
 			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
 			Vector2(400.0, 446.0), Vector2(880.0, 446.0),
 		],
+		"respawn_points": [
+			Vector2(140.0, 596.0), Vector2(420.0, 596.0),
+			Vector2(860.0, 596.0), Vector2(1140.0, 596.0),
+			Vector2(180.0, 476.0), Vector2(640.0, 396.0), Vector2(1100.0, 476.0),
+		],
 		"core_spawns": [],
 		"hazards": [],
 		"platforms": [
@@ -84,25 +89,33 @@ static func build_tutorial() -> Dictionary:
 			{"rect": Rect2(510, 420, 260, 16), "hp": -1},
 			{"rect": Rect2(950, 500, 250, 16), "hp": -1},
 		],
-	})
+	}, 2)
 
 
 static func _layout(index: int) -> Dictionary:
 	match posmod(index, count()):
-		0: return _shattered_sanctum()
+		0: return _crosshair_court()
 		1: return _endless_descent()
 		2: return _pendulum()
-		_: return _foundry()
+		3: return _pulse_chamber()
+		4: return _shattered_sanctum()
+		5: return _foundry()
+		_: return _collision_course()
 
 
-static func _finish(lv: Dictionary) -> Dictionary:
+static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 	var plats: Array = []
 	if not lv.get("skip_ground", false):
 		plats.append(GROUND.duplicate())
 	if not lv.get("wrap_x", false):
 		plats.append(WALL_L.duplicate())
 		plats.append(WALL_R.duplicate())
-	plats.append_array(lv["platforms"])
+	for authored: Dictionary in lv["platforms"]:
+		if int(authored.get("min_players", 2)) > player_count:
+			continue
+		var pf: Dictionary = authored.duplicate(true)
+		pf.erase("min_players")
+		plats.append(pf)
 	for pf in plats:
 		pf["max_hp"] = pf["hp"]
 		# A mover is defined relative to where it was authored, so the home point
@@ -112,7 +125,15 @@ static func _finish(lv: Dictionary) -> Dictionary:
 	lv["platforms"] = plats
 	lv["wrap_x"] = lv.get("wrap_x", false)
 	lv["wrap_y"] = lv.get("wrap_y", false)
-	lv["hazards"] = lv.get("hazards", [])
+	var active_hazards: Array = []
+	for authored: Dictionary in lv.get("hazards", []):
+		if int(authored.get("min_players", 2)) > player_count:
+			continue
+		var hazard: Dictionary = authored.duplicate(true)
+		hazard.erase("min_players")
+		active_hazards.append(hazard)
+	lv["hazards"] = active_hazards
+	lv["player_count"] = player_count
 	return lv
 
 
@@ -128,6 +149,49 @@ static func wrap_label(lv: Dictionary) -> String:
 
 # ------------------------------------------------------------ walled arenas --
 
+## Thesis: learn the collision game before the arena starts moving.
+##
+## Every surface is permanent and every important firing lane has a simple,
+## visible answer: shoot flat through the middle, arc over the centre mast, or
+## use a side stair to change height. Extra fighters add small staging ledges,
+## but never new rules, so this is the control case for the whole level set.
+static func _crosshair_court() -> Dictionary:
+	return {
+		"name": "CROSSHAIR COURT",
+		"feature": "BASIC // static cover makes knife collisions and future danger easy to read.",
+		"spawns": [
+			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
+			Vector2(140.0, 296.0), Vector2(1140.0, 296.0),
+		],
+		"respawn_points": [
+			Vector2(120.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			Vector2(180.0, 476.0), Vector2(1100.0, 476.0),
+			Vector2(360.0, 386.0), Vector2(920.0, 386.0),
+			Vector2(550.0, 226.0), Vector2(730.0, 226.0),
+		],
+		"core_spawns": [Vector2(300.0, 460.0), Vector2(640.0, 555.0), Vector2(980.0, 460.0)],
+		"platforms": [
+			# Visible side architecture doubles as permanent P3/P4 spawn support.
+			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
+			# Simple two-step climbs keep every height reachable without a mover.
+			{"rect": Rect2(70, 500, 230, 16), "hp": -1},
+			{"rect": Rect2(980, 500, 230, 16), "hp": -1},
+			{"rect": Rect2(280, 410, 190, 16), "hp": -1},
+			{"rect": Rect2(810, 410, 190, 16), "hp": -1},
+			# The mast blocks the free upper-corner volley but leaves high arcs open.
+			{"rect": Rect2(616, 250, 48, 180), "hp": -1},
+			{"rect": Rect2(500, 250, 280, 16), "hp": -1},
+			{"rect": Rect2(520, 515, 240, 16), "hp": -1},
+			# Crowd-only shelves add landing choices as the number of threats grows.
+			{"rect": Rect2(345, 550, 130, 14), "hp": -1, "min_players": 3},
+			{"rect": Rect2(805, 550, 130, 14), "hp": -1, "min_players": 4},
+		],
+		"hazards": [],
+	}
+
 ## A four-corner sanctum built around forced vertical circulation. P1/P2 enter
 ## from the floor while P3/P4 own permanent upper balconies. Three short side
 ## tiers connect those openings; the warm middle steps are destructible, but a
@@ -135,10 +199,19 @@ static func wrap_label(lv: Dictionary) -> String:
 static func _shattered_sanctum() -> Dictionary:
 	return {
 		"name": "SHATTERED SANCTUM",
+		"feature": "BREAKABLE // destroy cover now to author the firing lanes of later turns.",
 		"wrap_x": true,
 		"spawns": [
 			Vector2(210.0, 596.0), Vector2(1070.0, 596.0),
 			Vector2(135.0, 296.0), Vector2(1145.0, 296.0),
+		],
+		"respawn_points": [
+			Vector2(180.0, 596.0), Vector2(400.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1100.0, 596.0),
+			Vector2(100.0, 446.0), Vector2(1180.0, 446.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			Vector2(370.0, 396.0), Vector2(910.0, 396.0),
+			Vector2(580.0, 261.0), Vector2(700.0, 261.0),
 		],
 		"core_spawns": [Vector2(125.0, 420.0), Vector2(640.0, 345.0), Vector2(1155.0, 420.0)],
 		"platforms": [
@@ -172,6 +245,8 @@ static func _shattered_sanctum() -> Dictionary:
 			{"rect": Rect2(535, 285, 210, 16), "hp": -1},
 			{"rect": Rect2(290, 270, 160, 16), "hp": 2},
 			{"rect": Rect2(830, 270, 160, 16), "hp": 2},
+			{"rect": Rect2(70, 550, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(1100, 550, 110, 14), "hp": 2, "min_players": 4},
 		],
 	}
 
@@ -183,6 +258,7 @@ static func _shattered_sanctum() -> Dictionary:
 static func _endless_descent() -> Dictionary:
 	return {
 		"name": "ENDLESS DESCENT",
+		"feature": "TUNNELS // threats can arrive from left, right, above or below through four-way wrap.",
 		"wrap_x": true,
 		"wrap_y": true,
 		"skip_ground": true,
@@ -190,6 +266,13 @@ static func _endless_descent() -> Dictionary:
 		"spawns": [
 			Vector2(280.0, 596.0), Vector2(1000.0, 596.0),
 			Vector2(160.0, 276.0), Vector2(1120.0, 276.0),
+		],
+		"respawn_points": [
+			Vector2(120.0, 596.0), Vector2(340.0, 596.0),
+			Vector2(940.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(130.0, 276.0), Vector2(1150.0, 276.0),
+			Vector2(240.0, 446.0), Vector2(360.0, 446.0),
+			Vector2(920.0, 446.0), Vector2(1040.0, 446.0),
 		],
 		"core_spawns": [Vector2(290.0, 440.0), Vector2(640.0, 510.0), Vector2(990.0, 440.0)],
 		"platforms": [
@@ -213,6 +296,8 @@ static func _endless_descent() -> Dictionary:
 			{"rect": Rect2(620, 216, 40, 119), "hp": -1},
 			{"rect": Rect2(540, 335, 200, 16), "hp": 3},
 			{"rect": Rect2(575, 545, 130, 14), "hp": 2},     # the tempting perch
+			{"rect": Rect2(445, 485, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(725, 485, 110, 14), "hp": 2, "min_players": 4},
 		],
 	}
 
@@ -226,16 +311,22 @@ static func _endless_descent() -> Dictionary:
 ## every two and a half seconds. Everything else is static and permanent enough
 ## to plan from: the lifts change what a route COSTS, not whether one exists.
 ##
-## Two pulse orbs drift horizontally across the upper field, right over the top
-## of each lift's travel. Spending a knife on one blows whoever is riding that
-## lift off it — the only way to punish a fighter who is about to be carried out
-## of your firing line.
+## No hazards compete for attention here. The level teaches one timing read:
+## where each lift will be when a player or persistent knife reaches it.
 static func _pendulum() -> Dictionary:
 	return {
 		"name": "PENDULUM",
+		"feature": "MOVING PLATFORMS // plan against two readable lifts that trade high ground.",
 		"spawns": [
 			Vector2(250.0, 596.0), Vector2(1030.0, 596.0),
 			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
+		],
+		"respawn_points": [
+			Vector2(160.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(860.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(110.0, 296.0), Vector2(1170.0, 296.0),
+			Vector2(120.0, 446.0), Vector2(1160.0, 446.0),
+			Vector2(600.0, 476.0), Vector2(680.0, 476.0),
 		],
 		"core_spawns": [Vector2(390.0, 250.0), Vector2(640.0, 568.0), Vector2(890.0, 250.0)],
 		"platforms": [
@@ -267,15 +358,69 @@ static func _pendulum() -> Dictionary:
 			# Low sacrificial steps, out of the lift corridors.
 			{"rect": Rect2(330, 545, 150, 14), "hp": 2},
 			{"rect": Rect2(800, 545, 150, 14), "hp": 2},
+			{"rect": Rect2(485, 565, 105, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(690, 565, 105, 14), "hp": 2, "min_players": 4},
+		],
+		"hazards": [],
+	}
+
+
+## Thesis: a hazard is a temporary promise, not ambient random damage.
+##
+## The three pulse orbs advertise their exact blast radius. A knife can spend a
+## charged orb to bend fighters and persistent knives away from their expected
+## futures; the dark recharge pips then guarantee a quiet interval. More crowded
+## matches add flank landings and a matching flank orb so available safe space
+## grows with the number of simultaneous plans.
+static func _pulse_chamber() -> Dictionary:
+	return {
+		"name": "PULSE CHAMBER",
+		"feature": "TEMPORARY HAZARDS // shoot charged orbs to bend danger, then exploit their visible cooldown.",
+		"wrap_x": true,
+		"spawns": [
+			Vector2(230.0, 596.0), Vector2(1050.0, 596.0),
+			Vector2(150.0, 286.0), Vector2(1130.0, 286.0),
+		],
+		"respawn_points": [
+			Vector2(160.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(860.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(110.0, 286.0), Vector2(1170.0, 286.0),
+			Vector2(100.0, 456.0), Vector2(1180.0, 456.0),
+			Vector2(330.0, 376.0), Vector2(950.0, 376.0),
+			Vector2(580.0, 496.0), Vector2(700.0, 496.0),
+		],
+		"core_spawns": [Vector2(260.0, 450.0), Vector2(640.0, 575.0), Vector2(1020.0, 450.0)],
+		"platforms": [
+			{"rect": Rect2(0, 310, 230, 16), "hp": -1},
+			{"rect": Rect2(1050, 310, 230, 16), "hp": -1},
+			{"rect": Rect2(0, 480, 210, 16), "hp": -1},
+			{"rect": Rect2(1070, 480, 210, 16), "hp": -1},
+			{"rect": Rect2(250, 400, 190, 16), "hp": -1},
+			{"rect": Rect2(840, 400, 190, 16), "hp": -1},
+			# A thin centre baffle blocks the opening upper volley without hiding an orb.
+			{"rect": Rect2(620, 230, 40, 130), "hp": -1},
+			{"rect": Rect2(530, 350, 220, 16), "hp": -1},
+			{"rect": Rect2(500, 520, 280, 16), "hp": -1},
+			{"rect": Rect2(330, 545, 130, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(820, 545, 130, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
-				"home": Vector2(330.0, 250.0),
-				"motion": {"axis": Vector2.RIGHT, "travel": 220.0, "period": 360, "phase": 0.0},
+				"home": Vector2(640.0, 455.0),
+				"blast_radius": 175.0,
+				"recharge_windows": 2,
 			},
 			{
-				"home": Vector2(950.0, 250.0),
-				"motion": {"axis": Vector2.LEFT, "travel": 220.0, "period": 360, "phase": 0.0},
+				"home": Vector2(300.0, 335.0),
+				"motion": {"axis": Vector2.RIGHT, "travel": 100.0, "period": 300, "phase": 0.0},
+				"blast_radius": 155.0,
+				"min_players": 3,
+			},
+			{
+				"home": Vector2(980.0, 335.0),
+				"motion": {"axis": Vector2.LEFT, "travel": 100.0, "period": 300, "phase": 0.0},
+				"blast_radius": 155.0,
+				"min_players": 4,
 			},
 		],
 	}
@@ -288,16 +433,22 @@ static func _pendulum() -> Dictionary:
 ## knife thrown at the shutter feeds the wall. Because the shutter is permanent
 ## it cannot be destroyed — it can only be waited out or gone around.
 ##
-## The orbs sit low on the flanks and drift upward. Their blast is a mobility
-## tool as much as a weapon: pop one under yourself and you are thrown over the
-## shutter lane a full window earlier than walking the galleries allows.
+## Unlike the final arena, no pulse orb can rewrite the timing. The shutter's
+## visible rail is the single clock both players are solving.
 static func _foundry() -> Dictionary:
 	return {
 		"name": "FOUNDRY",
+		"feature": "SHUTTER // one side of the direct shot opens while the other side closes.",
 		"wrap_x": true,
 		"spawns": [
 			Vector2(240.0, 596.0), Vector2(1040.0, 596.0),
 			Vector2(140.0, 276.0), Vector2(1140.0, 276.0),
+		],
+		"respawn_points": [
+			Vector2(120.0, 596.0), Vector2(360.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(920.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
+			Vector2(100.0, 446.0), Vector2(1180.0, 446.0),
 		],
 		"core_spawns": [Vector2(150.0, 350.0), Vector2(640.0, 560.0), Vector2(1130.0, 350.0)],
 		"platforms": [
@@ -327,17 +478,75 @@ static func _foundry() -> Dictionary:
 			# Low terraces, clear of the orb columns.
 			{"rect": Rect2(300, 540, 170, 14), "hp": 2},
 			{"rect": Rect2(810, 540, 170, 14), "hp": 2},
+			{"rect": Rect2(500, 545, 100, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(680, 545, 100, 14), "hp": 2, "min_players": 4},
+		],
+		"hazards": [],
+	}
+
+
+## Thesis: mastery means reading where several deterministic systems intersect.
+##
+## Two horizontal ferries squeeze the firing lane toward a permanent mast while
+## a pulse orb patrols vertically through the remaining gap. Nothing is random:
+## the rails, current positions and blast footprint expose the entire puzzle.
+## The safest plan is often to collide a knife early so its falling future misses
+## the next crossing rather than merely aiming at a fighter's current position.
+static func _collision_course() -> Dictionary:
+	return {
+		"name": "COLLISION COURSE",
+		"feature": "MASTERY // moving cover and a pulsing crossing make future knife collisions the real target.",
+		"spawns": [
+			Vector2(240.0, 596.0), Vector2(1040.0, 596.0),
+			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
+		],
+		"respawn_points": [
+			Vector2(120.0, 596.0), Vector2(360.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(920.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(110.0, 296.0), Vector2(1170.0, 296.0),
+			Vector2(120.0, 456.0), Vector2(1160.0, 456.0),
+			Vector2(600.0, 486.0), Vector2(680.0, 486.0),
+		],
+		"core_spawns": [Vector2(360.0, 455.0), Vector2(640.0, 555.0), Vector2(920.0, 455.0)],
+		"platforms": [
+			{"rect": Rect2(0, 320, 220, 16), "hp": -1},
+			{"rect": Rect2(1060, 320, 220, 16), "hp": -1},
+			{"rect": Rect2(45, 480, 175, 16), "hp": -1},
+			{"rect": Rect2(1060, 480, 175, 16), "hp": -1},
+			{"rect": Rect2(616, 232, 48, 158), "hp": -1},
+			# Ferries converge on the mast but preserve a readable 16px air seam.
+			{
+				"rect": Rect2(260, 380, 160, 16), "hp": -1,
+				"motion": {"axis": Vector2.RIGHT, "travel": 180.0, "period": 360, "phase": 0.0},
+			},
+			{
+				"rect": Rect2(860, 380, 160, 16), "hp": -1,
+				"motion": {"axis": Vector2.LEFT, "travel": 180.0, "period": 360, "phase": 0.0},
+			},
+			{"rect": Rect2(545, 510, 190, 16), "hp": -1},
+			{"rect": Rect2(300, 550, 150, 14), "hp": 2},
+			{"rect": Rect2(830, 550, 150, 14), "hp": 2},
+			{"rect": Rect2(455, 445, 105, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(720, 445, 105, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
-				"home": Vector2(245.0, 560.0),
-				"motion": {"axis": Vector2.UP, "travel": 120.0, "period": 300, "phase": 0.0},
-				"blast_impulse": 700.0,
+				"home": Vector2(640.0, 420.0),
+				"motion": {"axis": Vector2.DOWN, "travel": 115.0, "period": 240, "phase": 0.0},
+				"blast_radius": 165.0,
+				"recharge_windows": 3,
 			},
 			{
-				"home": Vector2(1035.0, 560.0),
-				"motion": {"axis": Vector2.UP, "travel": 120.0, "period": 300, "phase": 0.5},
-				"blast_impulse": 700.0,
+				"home": Vector2(300.0, 270.0),
+				"motion": {"axis": Vector2.RIGHT, "travel": 150.0, "period": 360, "phase": 0.5},
+				"blast_radius": 145.0,
+				"min_players": 3,
+			},
+			{
+				"home": Vector2(980.0, 270.0),
+				"motion": {"axis": Vector2.LEFT, "travel": 150.0, "period": 360, "phase": 0.5},
+				"blast_radius": 145.0,
+				"min_players": 4,
 			},
 		],
 	}
@@ -362,6 +571,11 @@ static func _proving_ground() -> Dictionary:
 		"spawns": [
 			Vector2(400.0, 596.0), Vector2(880.0, 596.0),
 			Vector2(380.0, 371.0), Vector2(900.0, 371.0),
+		],
+		"respawn_points": [
+			Vector2(160.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(180.0, 481.0), Vector2(1100.0, 481.0),
 		],
 		"core_spawns": [Vector2(220.0, 460.0), Vector2(640.0, 445.0), Vector2(1060.0, 460.0)],
 		"platforms": [

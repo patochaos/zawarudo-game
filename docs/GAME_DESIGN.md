@@ -33,8 +33,9 @@ ya no corrige: descubre si entendió bien la situación.
 - Duelo táctico 2D de vista lateral.
 - Planificación simultánea por turnos y resolución física en tiempo real.
 - Partidas cortas, al mejor de tres impactos.
-- Un jugador contra IA, dos jugadores en local, o un todos-contra-todos de
-  cuatro participantes con P1 humano y tres IAs independientes.
+- Un jugador contra IA, dos jugadores en local, un todos-contra-todos de tres
+  o cuatro participantes con P1 humano e IAs independientes, o una batalla
+  local 2v2 con mezcla libre de humanos e IAs.
 - Precisión, lectura espacial y anticipación por encima de la velocidad de
   reacción.
 
@@ -231,12 +232,64 @@ válida. Pueden:
 - chocar con cuchillos rivales;
 - desviarse, perder energía y girar;
 - volver a chocar después de una desviación;
+- rebotar hasta dos veces contra superficies HARD si conservan fuerza suficiente;
 - dañar o destruir cobertura;
 - convertirse en amenazas diferidas al caer.
 
 La complejidad debe provenir de estas interacciones combinables. Se debe evitar
 añadir tipos de proyectil que sólo introduzcan una regla aislada o una excepción
 difícil de leer.
+
+### Granadero experimental
+
+El segundo personaje jugable está disponible para P1 contra IA y para cualquiera
+de los dos jugadores humanos después de una pantalla de selección de personaje.
+La IA y Online conservan cuchillos. Su ataque normal reemplaza la ráfaga por una
+granada con arco pesado y rebotes. Durante la planificación el jugador elige un
+fusible de 1, 2 o 3 segundos: P1 usa las teclas numéricas y P2 usa L1/R1. Ese
+tiempo empieza al lanzar y sólo avanza durante la ejecución, por lo que congelar
+el mundo congela también la mecha.
+
+La granada detona por tres causas igualmente visibles: termina el fusible, recibe
+una daga o choca con otra granada. La explosión afecta combatientes dentro del
+radio con línea de visión, consume dagas cercanas y encadena otras granadas. La
+cobertura HARD bloquea el estallido. Por ahora la SUPER conserva la descarga de
+dagas existente, para evaluar el ataque normal sin sumar otro sistema nuevo.
+
+El Granadero se conserva como ruta de prueba heredada contra IA, pero deja de
+formar parte de la selección de personajes.
+
+### Prototipos de personaje
+
+- **The Velocity / Lost Frames:** se mueve al 75% porque elimina uno de cada
+  cuatro fotogramas de su propia locomoción. La distancia horizontal realmente
+  perdida al moverse llena hasta tres celdas persistentes; quedarse quieta o
+  empujar una pared no genera recurso. Su ataque **CUT TO END** convierte al
+  propio combatiente en la trayectoria comprometida y consume las celdas para
+  extenderla. Una carga completa añade guardia frontal. La espada intercepta
+  físicamente proyectiles y pierde durabilidad; no concede invulnerabilidad
+  abstracta.
+- **The Static Witch / Shock:** alterna entre un plasma recto cuya velocidad,
+  alcance y grosor crecen con la carga —solo la carga completa cruza toda la
+  pantalla— y un orbe lento que persiste, se arma y descansa
+  sobre plataformas. Un proyectil común o el fin de vida del orbe provoca una
+  detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
+  carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
+- **Broodtail / Chakram:** cuarto personaje seleccionable. Lanza un chakram
+  viviente a la mitad de su velocidad anterior y sigue exactamente la dirección
+  elegida. No rebota: una pared o plataforma dura lo deja clavado y girando,
+  mientras un lanzamiento que termine en el aire se detiene en ese punto.
+  Durante el turno siguiente permanece inmóvil y en el tercero regresa; cada
+  chakram conserva su propio turno de lanzamiento. Cualquier impacto de otro
+  proyectil lo destruye. La SUPER mantiene tres trayectorias frontales bajo el
+  mismo ciclo de espera y regreso.
+
+El concepto de **invocador de criaturas** queda reservado para un personaje
+posterior y separado. Sus criaturas caminarían y treparían plataformas,
+detectarían un combatiente dentro de un alcance explícito, mostrarían una breve
+señal y luego saltarían. Es una fantasía de presión territorial y retardada,
+distinta del arma de retorno de Broodtail; separarlas evita sobrecargar ambos
+kits y permite dar a las criaturas límites y contrajuego propios.
 
 ### Cobertura destructible
 
@@ -248,6 +301,10 @@ crear estancamiento.
 Que una plataforma se rompa durante la ejecución puede invalidar la ruta que el
 fantasma había previsto. Esta discrepancia es intencional: representa la
 interferencia legítima del rival sobre un mundo compartido.
+
+La lectura de material es binaria y explícita. HARD usa acero frío, remaches y
+etiqueta propia; devuelve cuchillos con fuerza suficiente. BREAK usa naranja,
+franjas diagonales, etiqueta y pips de vida; absorbe el mismo impacto y pierde HP.
 
 ---
 
@@ -299,6 +356,7 @@ premio fortuito.
 - Estado y velocidad de amenazas ya existentes.
 - Estado de cobertura, puntuación, protección, SUPER y Núcleo.
 - Transiciones inequívocas entre planificación, compromiso y ejecución.
+- Rebotes conocidos contra HARD y la dirección de relanzamiento de cada pulso.
 
 ### Lo que el juego no debe resolver por el jugador
 
@@ -314,6 +372,10 @@ premio fortuito.
 - **Dos jugadores local:** la información es deliberadamente abierta. Como ambos
   comparten pantalla, el diseño convierte observar y contrarrestar el plan
   rival en parte del duelo, en vez de fingir secreto.
+- **Batalla de equipos 2v2:** teclado/ratón y hasta tres mandos se unen de forma
+  explícita y eligen Crimson o Azure. Los huecos vacíos se rellenan con aliados
+  de IA. El equipo comparte puntuación; el fuego amigo mantiene su consecuencia
+  espacial —el aliado cae durante esa ventana— pero no concede puntos.
 - **Juego libre:** elimina turnos, puntuación y presión para evaluar sensación de
   movimiento y lanzamiento. Es una herramienta de experimentación, no el modo
   que define la experiencia principal.
@@ -331,20 +393,29 @@ premio fortuito.
 - Apariciones sostenidas y sin impacto gratuito inmediato.
 - Distribución de cuatro esquinas: P1/P2 abajo y P3/P4 en extremos superiores,
   nunca dos combatientes adyacentes sobre el mismo piso inicial.
+- Variantes anidadas para 2P, 3P y 4P: cada participante adicional incorpora
+  una plataforma táctica sin cambiar la regla definitoria de la arena.
 - Una columna vertebral vertical permanente que conecte las apariciones bajas y
   altas aun después de destruir toda la cobertura temporal.
 - Cobertura rompible fuera del corredor principal de lanzamiento, de modo que
   destruirla abra posibilidades.
 - Diferenciación visual inmediata entre estructura permanente y cobertura
   temporal.
+- Bordes laterales cerrados dibujados como muros continuos `NO PASS`; seams
+  transitables marcados con chevrons `WRAP` sólo en sus aperturas reales.
 - Espacios para el Núcleo que expongan al jugador a decisiones reales.
 
 ### Tesis actuales
 
 | Arena | Pregunta táctica principal |
 |---|---|
-| Shattered Sanctum | ¿Subo o bajo por las galerías de tres alturas para rodear el santuario y alcanzar el portal lateral elevado? |
+| Crosshair Court | ¿Dónde chocarán los cuchillos en un espacio estático que no esconde ninguna regla adicional? |
 | Endless Descent | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
+| Pendulum | ¿Dónde estará el piso móvil cuando llegue el cuchillo, no sólo cuando confirmo el plan? |
+| Pulse Chamber | ¿Activo ahora un peligro visible para desviar el futuro y acepto después su intervalo de recarga? |
+| Shattered Sanctum | ¿Qué cobertura destruyo ahora para abrir la amenaza de un turno posterior? |
+| Foundry | ¿Uso la mitad abierta del tiro directo o preparo un arco para cuando el shutter cambie de lado? |
+| Collision Course | ¿En qué cruce futuro coincidirán cobertura móvil, pulso y cuchillos persistentes? |
 
 ### Portales y continuidad espacial
 

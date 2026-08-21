@@ -31,6 +31,13 @@ const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
 const FIGHTER_VISUAL_SCRIPT := preload("res://scripts/FighterVisual.gd")
 const FIGHTER_SKIN_SCRIPT := preload("res://scripts/FighterSkin.gd")
+const GRENADE_SCRIPT := preload("res://scripts/Grenade.gd")
+const DASHBLADE_SCRIPT := preload("res://scripts/Dashblade.gd")
+const CHAKRAM_SCRIPT := preload("res://scripts/Chakram.gd")
+const SHOCK_PLASMA_SCRIPT := preload("res://scripts/ShockPlasma.gd")
+const SHOCK_ORB_SCRIPT := preload("res://scripts/ShockOrb.gd")
+const CHARACTER_SELECT_SCRIPT := preload("res://scripts/CharacterSelectLayer.gd")
+const TEAM_SELECT_SCRIPT := preload("res://scripts/TeamSelectLayer.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
@@ -43,14 +50,22 @@ const HIT_PAUSE_DURATION := 0.045
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
 const MAX_PLAYERS := 4
+const DEFAULT_HITS_TO_WIN := 5
+const MAX_HITS_TO_WIN := 7
 const PLAYER_COLORS := [
 	Color(0.96, 0.69, 0.18),
 	Color(0.76, 0.30, 1.00),
 	Color(0.18, 0.82, 0.92),
 	Color(1.00, 0.32, 0.42),
 ]
+const TEAM_COLORS := [Color(0.93, 0.19, 0.28), Color(0.16, 0.66, 0.98)]
+const TEAM_NAMES := ["CRIMSON", "AZURE"]
 
 enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
+## GRENADE remains reachable through its explicit legacy playtest route, but is
+## no longer offered as a roster fighter. The new ids are append-only so old
+## captures do not silently reinterpret id 1.
+enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
 
 # ------------------------------------------------------------------ tuning ---
 
@@ -69,7 +84,7 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 @export_group("Match")
 ## Hits needed to take the match. A hit does not end the round — the victim
 ## respawns and the world carries on exactly where it was.
-@export var hits_to_win: int = 3
+@export_range(3, MAX_HITS_TO_WIN, 2) var hits_to_win: int = DEFAULT_HITS_TO_WIN
 @export var respawn_invuln_turns: int = 1
 @export var banner_duration: float = 2.4
 
@@ -85,6 +100,13 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 
 @export_group("Loop Timing")
 @export var planning_duration: float = 5.0
+## Turns 1-3 use the authored window. Each later turn loses half a second until
+## this floor. Multi-bot searches intentionally return the best candidate they
+## have evaluated when the clock expires, so this is a gameplay-quality floor,
+## not a promise that every exhaustive search finishes on every arena.
+@export var planning_shrink_after_rounds: int = 3
+@export var planning_shrink_per_round: float = 0.5
+@export var minimum_planning_duration: float = 3.5
 @export var execution_duration: float = 0.75
 @export var commit_delay: float = 0.25
 
@@ -94,6 +116,10 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 ## Ghost piloting runs at this fraction of real time — below 1.0 for precision.
 @export var pilot_time_scale: float = 0.5
 @export var player_move_speed: float = 260.0
+## Locomotion is part of each prototype's identity. Acceleration and vertical
+## jump physics stay shared; these only change the horizontal speed target.
+@export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.75
+@export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 1.10
 @export var player_acceleration: float = 1800.0
 @export var player_air_acceleration: float = 900.0
 @export var jump_impulse: float = 780.0
@@ -126,6 +152,53 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 ## not have to predict exactly; a full wind-up is a tight, fast pair.
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
+
+@export_group("Grenades")
+## Grenades cross meaningful space before their setup pays off. They retain enough
+## momentum to turn walls and platforms into authored bank-shot routes.
+@export var grenade_speed_min: float = 340.0
+@export var grenade_speed_max: float = 700.0
+@export var grenade_gravity: float = 850.0
+@export_range(0.0, 2.0, 0.05) var grenade_drag: float = 0.06
+@export_range(0.0, 1.0, 0.05) var grenade_bounce_retention: float = 0.75
+@export_range(0.0, 1.0, 0.05) var grenade_ground_friction: float = 0.82
+@export var grenade_rest_speed: float = 35.0
+@export var grenade_blast_radius: float = 92.0
+@export_range(0.25, 1.0, 0.05) var grenade_direct_blast_scale: float = 0.75
+@export var grenade_cluster_fragment_speed: float = 330.0
+@export_range(0.1, 1.0, 0.05) var grenade_cluster_fragment_fuse: float = 0.35
+@export_range(0.25, 1.0, 0.05) var grenade_cluster_blast_scale: float = 0.58
+
+@export_group("Character Prototypes")
+@export var dash_speed_min: float = 660.0
+@export var dash_speed_max: float = 980.0
+@export var dash_duration_ticks_min: int = 8
+@export var dash_duration_ticks_max: int = 15
+@export var dash_guard_durability: int = 2
+@export_range(0.0, 1.0, 0.01) var dash_exit_momentum_retention: float = 0.28
+## Velocity moves at three quarters of the shared pace. The horizontal distance
+## denied by that ratio becomes Frame Debt: every completed cell adds one dash
+## tick, and a full three-cell cut adds one front-parry point.
+@export_range(1, 6, 1) var frame_debt_max_cells: int = 3
+@export_range(1.0, 32.0, 0.5) var frame_debt_distance_per_cell: float = 8.0
+@export_range(0, 4, 1) var frame_debt_dash_ticks_per_cell: int = 1
+@export_range(0, 3, 1) var frame_debt_full_guard_bonus: int = 1
+@export var chakram_speed_min: float = 200.0
+@export var chakram_speed_max: float = 360.0
+## The normal throw follows the committed aim exactly.
+@export var shock_plasma_speed_min: float = 860.0
+@export var shock_plasma_speed: float = 1160.0
+@export var shock_plasma_range_min: float = 320.0
+@export var shock_plasma_range_partial_max: float = 1040.0
+@export var shock_plasma_range_full: float = 1440.0
+@export var shock_orb_speed_min: float = 280.0
+@export var shock_orb_speed_max: float = 520.0
+@export var shock_orb_arm_ticks: int = 30
+@export var shock_small_radius: float = 84.0
+@export var shock_combo_radius_min: float = 190.0
+@export var shock_combo_radius: float = 280.0
+@export var shock_small_impulse: float = 460.0
+@export var shock_combo_impulse: float = 980.0
 @export_group("Knife Clash")
 ## Knives collide with each other in mid-air. Both survive, both get knocked off
 ## line and slowed, so a deflected pair falls in floaty arcs that nobody planned
@@ -220,14 +293,14 @@ enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
 ## knife to leave.
 @export var prototype_ready_grace: float = 0.6
 
-## Close Camera's persistent knives have a small deterministic physics
-## vocabulary: trailing boosts and energy-gated ricochets.
+## Close Camera keeps the experimental trailing-boost vocabulary. Terrain
+## ricochet below is global: every ruleset reads HARD and breakable the same way.
 @export var knife_boost_alignment: float = 0.82
 @export var knife_boost_min_closing_speed: float = 80.0
 @export var knife_boost_transfer: float = 0.72
 @export var knife_boost_speed_cap: float = 1.35
+@export_group("Knife Terrain Ricochet")
 @export var knife_ricochet_min_speed: float = 560.0
-@export_range(0.1, 0.9, 0.05) var knife_ricochet_max_normal_ratio: float = 0.55
 @export_range(0.1, 1.0, 0.05) var knife_ricochet_retention: float = 0.72
 @export var knife_ricochet_limit: int = 2
 
@@ -245,7 +318,15 @@ var level_name: String = ""
 var level_wrap: String = ""
 var player_count: int = 2
 var spawns: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var respawn_points: Array[Vector2] = []
+var _last_respawn_choice: Array[int] = [-1, -1, -1, -1]
 var score: Array[int] = [0, 0, 0, 0]
+var team_mode: bool = false
+var player_teams: Array[int] = [-1, -1, -1, -1]
+var team_score: Array[int] = [0, 0]
+var winning_team: int = -1
+var player_roles: Array[String] = ["HUMAN", "AI", "AI", "AI"]
+var player_devices: Array[int] = [-2, -1, -1, -1]
 
 var banner_text: String = ""
 var banner_color: Color = Color.WHITE
@@ -256,8 +337,11 @@ var _ai_think: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _ai_searches: Array = [null, null, null, null]
 var _ai_step_cursor: int = 0
 var _menu
+var _character_select: CharacterSelectLayer
+var _team_select: TeamSelectLayer
 var _tuning
 var planning_time_left: float = 0.0
+var planning_window_duration: float = 5.0
 var commit_time_left: float = 0.0
 var exec_tick: int = 0
 var exec_ticks_total: int = 0
@@ -303,8 +387,20 @@ const SEAM_MARGIN := 340.0   # how far from an edge a platform gets a seam copy
 
 var players: Array = []
 var arrows: Array = []
+var grenades: Array = []
+var dashblades: Array = []
+var chakrams: Array = []
+var shock_plasmas: Array = []
+var shock_orbs: Array = []
+var player_weapons: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
+var local_weapon_choices: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
+var _character_select_player_count: int = 2
+var _character_select_vs_ai: bool = false
+var _character_select_freeplay: bool = false
 var _next_volley: int = 1
 var _next_arrow_id: int = 1
+var _next_grenade_id: int = 1
+var _next_character_projectile_id: int = 100000
 
 ## Online mode is lockstep: this browser records only its assigned player and
 ## receives the rival plan after both sides confirm.
@@ -319,6 +415,9 @@ var _online_waiting_rematch: bool = false
 
 var aim_source: Array[int] = [AimSrc.MOUSE, AimSrc.KEYS, AimSrc.KEYS, AimSrc.KEYS]
 var charging: Array[bool] = [false, false, false, false]
+## Attack captured when a charge begins. Shock uses 0 for LMB plasma and 1 for
+## RMB orb; other kits leave this at zero.
+var charge_attack_mode: Array[int] = [0, 0, 0, 0]
 var stamina: Array[float] = [0.0, 0.0, 0.0, 0.0]
 ## Persistent for the whole match. It only resets when the super is actually
 ## released (or the match restarts), not between turns or after taking a hit.
@@ -327,6 +426,15 @@ var super_meter: Array[float] = [0.0, 0.0, 0.0, 0.0]
 ## before placing the shot. The choice persists between turns until changed or
 ## the burst is actually released.
 var super_armed: Array[bool] = [false, false, false, false]
+## Completed Lost Frame cells plus the sub-cell distance progress, retained
+## between turns. Progress is stored as thousandths of a pixel so lockstep state
+## never depends on repeatedly adding an imprecise display float.
+var frame_debt_cells: Array[int] = [0, 0, 0, 0]
+var frame_debt_units: Array[int] = [0, 0, 0, 0]
+## CUT TO END locks earning for the rest of that execution, preventing an early
+## dash from immediately reloading itself through its remaining movement plan.
+## Free Play has no turn boundary and deliberately ignores this lock.
+var frame_debt_locked: Array[bool] = [false, false, false, false]
 
 ## A location is telegraphed for one full turn before it becomes collectible.
 ## Once active it lasts for `core_active_turns` executions. A same-tick touch
@@ -350,6 +458,9 @@ var ghost_air_jumps: Array[int] = [
 ]
 var ghost_drop: Array[int] = [0, 0, 0, 0]
 var ghost_drop_from: Array[float] = [0.0, 0.0, 0.0, 0.0]
+## Combat-free copies of dashes that crossed a time-stop boundary. They advance
+## with the piloted ghost so ignored inputs and exit momentum match execution.
+var ghost_dash: Array = [null, null, null, null]
 ## Recorded path plus the coasted tail — always exactly one full window long.
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
@@ -404,6 +515,12 @@ var _settings: Dictionary = {
 	"maximized": true,
 	"telemetry": true,
 }
+
+
+func _exit_tree() -> void:
+	for pending_dash in ghost_dash:
+		if pending_dash != null and is_instance_valid(pending_dash):
+			pending_dash.free()
 
 
 func _ready() -> void:
@@ -479,12 +596,30 @@ func _ready() -> void:
 	_menu = MENU_SCRIPT.new()
 	add_child(_menu)
 	_menu.start_requested.connect(_on_menu_start)
+	_menu.character_select_requested.connect(_on_menu_character_select)
+	_menu.team_battle_requested.connect(_on_menu_team_battle)
+	_menu.roster_select_requested.connect(_on_menu_roster_select)
+	_menu.configured_match_requested.connect(_on_menu_configured_match)
 	_menu.freeplay_requested.connect(_on_menu_freeplay)
 	_menu.online_requested.connect(_on_menu_online)
 	_menu.tutorial_requested.connect(_on_menu_tutorial)
 	_menu.option_changed.connect(_on_option_changed)
 	_menu.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_menu.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+
+	_character_select = CHARACTER_SELECT_SCRIPT.new()
+	add_child(_character_select)
+	_character_select.selection_confirmed.connect(_on_local_character_selection)
+	_character_select.canceled.connect(_on_character_select_canceled)
+	_character_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_character_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+
+	_team_select = TEAM_SELECT_SCRIPT.new()
+	add_child(_team_select)
+	_team_select.formation_confirmed.connect(_on_team_formation_confirmed)
+	_team_select.canceled.connect(_on_team_select_canceled)
+	_team_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_team_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_online_client = ONLINE_CLIENT_SCRIPT.new()
 	add_child(_online_client)
@@ -518,14 +653,20 @@ func _ready() -> void:
 	_load_settings()
 	_menu.configure_options(_settings)
 	_assign_pads()
-	Input.joy_connection_changed.connect(func(_d, _c): _assign_pads())
+	Input.joy_connection_changed.connect(func(_d, _c):
+		_assign_pads()
+		if _menu != null:
+			_menu.refresh_controller_assignments()
+		if _team_select != null:
+			_team_select.refresh_connections())
 	_prev_mouse = get_viewport().get_mouse_position()
 	_begin_planning(true)
 	_open_menu()
 
 
 func is_ai(i: int) -> bool:
-	return not online_mode and vs_ai and i > 0 and i < players.size()
+	return not online_mode and i >= 0 and i < players.size() \
+		and i < player_roles.size() and player_roles[i] == "AI"
 
 
 ## The AI's plan is hidden for the same reason a human opponent's would be if we
@@ -550,36 +691,194 @@ func _open_menu() -> void:
 	_tuning.visible = false
 	if _online_lobby != null:
 		_online_lobby.close()
+	if _character_select != null:
+		_character_select.close()
+	if _team_select != null:
+		_team_select.close()
 	_menu.open()
 	if _transition != null:
 		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
 
 
+func _on_menu_character_select() -> void:
+	team_mode = false
+	_open_character_select(2, false, false, ["HUMAN", "HUMAN"])
+
+
+func _on_menu_team_battle() -> void:
+	tutorial_mode = false
+	online_mode = false
+	online_player = -1
+	team_mode = true
+	state = Phase.TEAM_SELECT
+	_ui.visible = false
+	_tuning.visible = false
+	_menu.close()
+	_character_select.close()
+	if _transition != null:
+		_transition.visible = false
+	_team_select.open(_menu.level)
+
+
+func _on_team_formation_confirmed(slots: Array, selected_level: int) -> void:
+	if slots.size() != MAX_PLAYERS:
+		return
+	for i in MAX_PLAYERS:
+		var slot: Dictionary = slots[i]
+		player_roles[i] = str(slot["role"])
+		player_devices[i] = int(slot["device"])
+		player_teams[i] = int(slot["team"])
+	_menu.level = posmod(selected_level, Levels.count())
+	var roles: Array[String] = []
+	for i in MAX_PLAYERS:
+		roles.append(("CRIMSON" if player_teams[i] == 0 else "AZURE") + " · " + player_roles[i])
+	_team_select.close()
+	_character_select_player_count = MAX_PLAYERS
+	_character_select_vs_ai = true
+	_character_select_freeplay = false
+	state = Phase.CHARACTER_SELECT
+	_character_select.open(local_weapon_choices, MAX_PLAYERS, roles, true, player_roles)
+
+
+func _on_team_select_canceled() -> void:
+	team_mode = false
+	state = Phase.MENU
+	_team_select.close()
+	_menu.open()
+	_menu._show_local_menu()
+
+
+func _on_menu_roster_select(requested_players: int, freeplay: bool) -> void:
+	team_mode = false
+	var count := 2 if freeplay else clampi(requested_players, 2, MAX_PLAYERS)
+	var slot_roles: Array[String] = ["HUMAN"]
+	for i in range(1, count):
+		slot_roles.append("DUMMY" if freeplay else "AI")
+	_open_character_select(count, not freeplay, freeplay, slot_roles)
+
+
+func _on_menu_configured_match(config: Dictionary) -> void:
+	var mode := int(config.get("mode", MENU_SCRIPT.BattleMode.VS))
+	var count := clampi(int(config.get("player_count", 2)), 2, MAX_PLAYERS)
+	var weapons: Array = config.get("weapons", [])
+	var roles: Array = config.get("roles", [])
+	if mode == MENU_SCRIPT.BattleMode.FREE_PLAY:
+		_start_freeplay(int(config.get("level", 0)), weapons, count,
+			config.get("roles", []), config.get("devices", []))
+		return
+	team_mode = mode == MENU_SCRIPT.BattleMode.TEAM_BATTLE
+	_start_local_match(roles.has("AI"),
+		int(config.get("level", 0)), count, weapons, config)
+
+
+func _open_character_select(count: int, ai: bool, freeplay: bool, slot_roles: Array) -> void:
+	tutorial_mode = false
+	online_mode = false
+	online_player = -1
+	_character_select_player_count = clampi(count, 2, MAX_PLAYERS)
+	_character_select_vs_ai = ai
+	_character_select_freeplay = freeplay
+	state = Phase.CHARACTER_SELECT
+	_ui.visible = false
+	_tuning.visible = false
+	_menu.close()
+	if _transition != null:
+		_transition.visible = false
+	_character_select.open(local_weapon_choices, _character_select_player_count, slot_roles)
+
+
+func _on_local_character_selection(weapons: Array) -> void:
+	for i in _character_select_player_count:
+		local_weapon_choices[i] = _roster_weapon_or_default(int(weapons[i]))
+	_character_select.close()
+	if _character_select_freeplay:
+		_start_freeplay(_menu.level, weapons)
+	else:
+		_start_local_match(_character_select_vs_ai, _menu.level,
+			_character_select_player_count, weapons)
+
+
+func _on_character_select_canceled() -> void:
+	if team_mode:
+		state = Phase.TEAM_SELECT
+		_character_select.close()
+		_team_select.open(_menu.level)
+		return
+	state = Phase.MENU
+	_menu.open()
+	_menu._show_local_menu()
+
+
 func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
+	team_mode = false
+	_start_local_match(ai, lvl, requested_players, [])
+
+
+func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Array,
+		setup: Dictionary = {}) -> void:
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
 	_apply_ruleset(_menu.ruleset)
-	vs_ai = ai
+	hits_to_win = clampi(_menu.match_lives, 3, MAX_HITS_TO_WIN)
+	if not setup.is_empty():
+		var configured_roles: Array = setup.get("roles", [])
+		var configured_devices: Array = setup.get("devices", [])
+		var configured_teams: Array = setup.get("teams", [])
+		for i in MAX_PLAYERS:
+			player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else "AI"
+			player_devices[i] = int(configured_devices[i]) if i < configured_devices.size() else -1
+			player_teams[i] = int(configured_teams[i]) if i < configured_teams.size() else -1
+	elif not team_mode:
+		winning_team = -1
+		team_score = [0, 0]
+		for i in MAX_PLAYERS:
+			player_teams[i] = -1
+			player_roles[i] = "HUMAN" if not ai or i == 0 else "AI"
+			player_devices[i] = -2 if i == 0 else -1
+	vs_ai = player_roles.has("AI") if not setup.is_empty() or team_mode else ai
+	player_weapons.fill(Weapon.KNIVES)
+	if not weapons.is_empty():
+		for i in mini(requested_players, weapons.size()):
+			player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
+	elif ai and requested_players == 2 and _menu.human_weapon == Weapon.GRENADE:
+		player_weapons[0] = Weapon.GRENADE
+	elif not ai and requested_players == 2:
+		player_weapons[0] = local_weapon_choices[0]
+		player_weapons[1] = local_weapon_choices[1]
 	_set_player_count(requested_players)
 	_ui.visible = true
 	_tuning.visible = false
 	_menu.close()
+	_character_select.close()
 	_load_level(lvl)
 	restart()
 	_sfx.play("title")
-	_begin_match_telemetry("ai_%s" % ("close" if prototype_mode else "wide") \
-		if ai else "local_%dp" % requested_players)
-	_transition.play("%s // %s" % ["VS AI" if ai else "LOCAL DUEL", level_name],
+	var team_shape := "%dv%d" % [
+		int(ceil(float(requested_players) / 2.0)), int(requested_players / 2),
+	]
+	var telemetry_mode := "local_team_%s" % team_shape if team_mode else \
+		("ai_grenadier_wide" if uses_grenade(0) else \
+		("ai_%s" % ("close" if prototype_mode else "wide")) if ai else \
+		("local_2p_%s_%s" % [weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower()] \
+		if requested_players == 2 else "local_%dp" % requested_players))
+	_begin_match_telemetry(telemetry_mode)
+	var matchup := "CRIMSON VS AZURE // %s" % team_shape.to_upper() if team_mode else \
+		("%dP ROSTER" % requested_players if requested_players > 2 else \
+		("GRENADIER VS AI" if ai and uses_grenade(0) else \
+		("VS AI" if ai else "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)])))
+	_transition.play("%s // %s" % [matchup, level_name],
 		"WRITE THE MOVE", PLAYER_COLORS[0], reduced_flashes)
 
 
 func _on_menu_tutorial() -> void:
+	team_mode = false
 	tutorial_mode = true
 	online_mode = false
 	online_player = -1
 	_apply_ruleset(0)
 	vs_ai = false
+	player_weapons.fill(Weapon.KNIVES)
 	_set_player_count(1)
 	_ui.visible = true
 	_ui.show_controls(true)
@@ -594,6 +893,7 @@ func _on_menu_tutorial() -> void:
 
 
 func _on_menu_online(lvl: int) -> void:
+	team_mode = false
 	tutorial_mode = false
 	_apply_ruleset(0)
 	_menu.close()
@@ -712,6 +1012,8 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int) -> void:
 		return
 	online_mode = true
 	vs_ai = false
+	hits_to_win = DEFAULT_HITS_TO_WIN
+	player_weapons.fill(Weapon.KNIVES)
 	_set_player_count(2)
 	_online_seed = seed_value
 	rng.seed = _online_seed
@@ -781,12 +1083,33 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 ## movement and shooting can be judged by feel, with the tuning values editable
 ## live. Whatever you set here is what the real match uses afterwards.
 func _on_menu_freeplay(lvl: int) -> void:
+	team_mode = false
+	_start_freeplay(lvl, [])
+
+
+func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
+		configured_roles: Array = [], configured_devices: Array = []) -> void:
+	team_mode = false
+	winning_team = -1
+	team_score = [0, 0]
+	for i in MAX_PLAYERS:
+		player_teams[i] = -1
+		player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else \
+			("HUMAN" if i == 0 else "DUMMY")
+		player_devices[i] = int(configured_devices[i]) if i < configured_devices.size() else \
+			(-2 if i == 0 else -1)
 	tutorial_mode = false
+	online_mode = false
+	online_player = -1
+	vs_ai = false
+	player_weapons.fill(Weapon.KNIVES)
+	for i in mini(requested_players, weapons.size()):
+		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
 	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = true
-	_set_player_count(2)
+	_set_player_count(requested_players)
 	_load_level(lvl)
 	_reset_freeplay()
 	state = Phase.FREEPLAY
@@ -842,10 +1165,15 @@ func _reset_freeplay() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
+	for g in grenades:
+		g.queue_free()
+	grenades.clear()
+	_clear_character_projectiles()
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
+		p.fighter_style = player_weapons[i]
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
@@ -859,12 +1187,26 @@ func _reset_freeplay() -> void:
 		p.plan.power = 0.5
 		super_meter[i] = 0.0
 		super_armed[i] = false
+		frame_debt_cells[i] = 0
+		frame_debt_units[i] = 0
+		frame_debt_locked[i] = false
 		p.queue_redraw()
 	charging[0] = false
 	_charge_t[0] = 0.0
 	_jump_prev[0] = _jump_input_held(0)
 	_reset_temporal_core()
 	banner_time = 0.0
+
+
+func _clear_character_projectiles() -> void:
+	for group in [dashblades, chakrams, shock_plasmas, shock_orbs]:
+		for entity in group:
+			if is_instance_valid(entity):
+				entity.queue_free()
+	dashblades.clear()
+	chakrams.clear()
+	shock_plasmas.clear()
+	shock_orbs.clear()
 
 
 ## Wraps a point back into the arena. Vertical wrapping uses a band that starts
@@ -960,6 +1302,18 @@ func solids_at(abs_tick: int) -> Array[Rect2]:
 	return out
 
 
+## Collision geometry paired with its material. Projectile previews need this
+## richer view because HARD surfaces ricochet while breakable ones terminate and
+## take damage; a flat rect list cannot express that difference.
+func platform_colliders_at(abs_tick: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for pf: Dictionary in platforms:
+		var posed: Rect2 = pf["rect"] if abs_tick < 0 else platform_rect_at(pf, abs_tick)
+		for rect: Rect2 in _seam_copies(posed):
+			out.append({"rect": rect, "hp": int(pf.get("hp", -1))})
+	return out
+
+
 ## Displacement a body inherits from the moving piece it is standing on when the
 ## world advances from `abs_tick` to the next tick. Without it a rising lift
 ## would pass straight through its rider and a sliding one would leave it behind.
@@ -1008,7 +1362,7 @@ func _apply_movers(abs_tick: int) -> void:
 func _load_level(index: int) -> void:
 	level_index = posmod(index, Levels.count())
 	var lv := Levels.build_tutorial() if tutorial_mode else \
-		(Levels.build_prototype() if prototype_mode else Levels.build(level_index))
+		(Levels.build_prototype() if prototype_mode else Levels.build(level_index, player_count))
 	level_name = lv["name"]
 	_backdrop.show_level(level_index)
 	level_wrap = Levels.wrap_label(lv)
@@ -1017,9 +1371,13 @@ func _load_level(index: int) -> void:
 	wrap_x = lv["wrap_x"]
 	wrap_y = lv["wrap_y"]
 	platforms = lv["platforms"]
+	_arena.configure_level(level_index, wrap_x, wrap_y)
 	var sp: Array = lv["spawns"]
 	for i in MAX_PLAYERS:
 		spawns[i] = sp[i]
+	respawn_points.clear()
+	for point in lv.get("respawn_points", sp):
+		respawn_points.append(point)
 	core_spawn_points.clear()
 	for point in lv.get("core_spawns", []):
 		core_spawn_points.append(point)
@@ -1041,6 +1399,7 @@ func _load_hazards(specs: Array) -> void:
 		h.motion = spec.get("motion", {})
 		h.blast_radius = float(spec.get("blast_radius", h.blast_radius))
 		h.blast_impulse = float(spec.get("blast_impulse", h.blast_impulse))
+		h.dagger_launch_speed = float(spec.get("dagger_launch_speed", arrow_speed_max))
 		h.recharge_windows = int(spec.get("recharge_windows", h.recharge_windows))
 		h.sync_to_tick(world_tick)
 		_hazard_layer.add_child(h)
@@ -1145,6 +1504,7 @@ func _add_player(i: int) -> void:
 	var p := Player.new()
 	p.cfg = self
 	p.index = i
+	p.fighter_style = player_weapons[i]
 	p.color = PLAYER_COLORS[i]
 	p.position = spawns[i]
 	p.on_ground = true
@@ -1182,6 +1542,12 @@ func _default_aim_vector(i: int) -> Vector2:
 func _assign_pads() -> void:
 	var list := Input.get_connected_joypads()
 	_pads.fill(-1)
+	if team_mode:
+		for i in mini(players.size(), player_devices.size()):
+			var device := player_devices[i]
+			if device >= 0 and device in list and not is_ai(i):
+				_pads[i] = device
+		return
 	if list.is_empty():
 		return
 	# A local duel has one intentional device split: P1 owns keyboard + mouse;
@@ -1195,6 +1561,164 @@ func _assign_pads() -> void:
 
 func arrow_speed_for(power: float) -> float:
 	return lerpf(arrow_speed_min, arrow_speed_max, clampf(power, 0.0, 1.0))
+
+
+func uses_grenade(i: int) -> bool:
+	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.GRENADE
+
+
+func uses_dashblade(i: int) -> bool:
+	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.DASHBLADE
+
+
+func uses_chakram(i: int) -> bool:
+	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.CHAKRAM
+
+
+func uses_shock(i: int) -> bool:
+	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.SHOCK
+
+
+func can_pilot_move(i: int) -> bool:
+	return i >= 0 and i < players.size()
+
+
+func movement_speed_scale(i: int) -> float:
+	if i < 0 or i >= player_weapons.size():
+		return 1.0
+	match player_weapons[i]:
+		Weapon.DASHBLADE:
+			return velocity_move_speed_scale
+		Weapon.SHOCK:
+			return shock_move_speed_scale
+		_:
+			return 1.0
+
+
+func _frame_debt_threshold_units() -> int:
+	return maxi(1, roundi(maxf(0.001, frame_debt_distance_per_cell) * 1000.0))
+
+
+## Convert real horizontal displacement into the distance Velocity was denied
+## by her class multiplier. At 75%, every three travelled pixels represent one
+## deleted pixel. Pressing into a wall earns nothing because no movement exists
+## to edit out of the sequence.
+func _frame_debt_units_between(i: int, from: Vector2, to: Vector2) -> int:
+	var scale := movement_speed_scale(i)
+	if scale <= 0.0 or scale >= 1.0:
+		return 0
+	var travelled := absf(wrap_delta(from, to).x)
+	var missing_ratio := 1.0 / scale - 1.0
+	return maxi(0, roundi(travelled * missing_ratio * 1000.0))
+
+
+func _accrue_frame_debt(i: int, from: Vector2, to: Vector2, input_dir: int) -> void:
+	if not uses_dashblade(i) or input_dir == 0 or frame_debt_cells[i] >= frame_debt_max_cells \
+			or (frame_debt_locked[i] and state != Phase.FREEPLAY):
+		return
+	var total := frame_debt_units[i] + _frame_debt_units_between(i, from, to)
+	var threshold := _frame_debt_threshold_units()
+	var gained := total / threshold
+	if gained <= 0:
+		frame_debt_units[i] = total
+		return
+	frame_debt_cells[i] = mini(frame_debt_max_cells, frame_debt_cells[i] + gained)
+	frame_debt_units[i] = 0 if frame_debt_cells[i] >= frame_debt_max_cells else total % threshold
+	players[i].queue_redraw()
+
+
+func _projected_frame_debt_from_path(i: int, path: PackedVector2Array,
+		through_tick: int, input_at: Callable) -> int:
+	if not uses_dashblade(i):
+		return 0
+	var threshold := _frame_debt_threshold_units()
+	var total := frame_debt_cells[i] * threshold + frame_debt_units[i]
+	var steps := mini(maxi(0, through_tick), maxi(0, path.size() - 1))
+	for t in steps:
+		if int(input_at.call(t)) != 0:
+			total += _frame_debt_units_between(i, path[t], path[t + 1])
+	return mini(frame_debt_max_cells, total / threshold)
+
+
+## Planning preview counterpart to live accumulation. `ghost_path` is built by
+## the same movement primitive as execution, so the promised dash endpoint also
+## includes every cell that will exist before its chosen release tick.
+func projected_frame_debt(i: int, through_tick: int = -1) -> int:
+	if i < 0 or i >= players.size() or not uses_dashblade(i):
+		return 0
+	var pl: PlayerPlan = players[i].plan
+	var limit := pl.recorded_ticks() if through_tick < 0 else through_tick
+	return _projected_frame_debt_from_path(i, ghost_path[i], limit,
+		func(t: int) -> int: return pl.dir_at(t))
+
+
+func projected_frame_debt_for_constant_path(i: int, path: PackedVector2Array,
+		through_tick: int, input_dir: int) -> int:
+	return _projected_frame_debt_from_path(i, path, through_tick,
+		func(_t: int) -> int: return input_dir)
+
+
+func dash_frame_debt_spent(i: int) -> int:
+	for dash in dashblades:
+		if dash.active and dash.owner_index == i:
+			return dash.frame_debt_spent
+	return 0
+
+
+func shock_orb_count(i: int) -> int:
+	var count := 0
+	for orb in shock_orbs:
+		if orb.shooter == i:
+			count += 1
+	return count
+
+
+func _roster_weapon_or_default(value: int) -> int:
+	return value if value in [Weapon.KNIVES, Weapon.DASHBLADE, Weapon.SHOCK,
+		Weapon.CHAKRAM] \
+		else Weapon.KNIVES
+
+
+func weapon_short_name(i: int) -> String:
+	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
+		Weapon.GRENADE: return "GRENADIER"
+		Weapon.DASHBLADE: return "VELOCITY"
+		Weapon.CHAKRAM: return "BROODTAIL"
+		Weapon.SHOCK: return "STATIC WITCH"
+		_: return "DUELIST"
+
+
+func character_display_name(i: int) -> String:
+	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
+		Weapon.GRENADE: return "THE GRENADIER"
+		Weapon.DASHBLADE: return "THE VELOCITY"
+		Weapon.CHAKRAM: return "BROODTAIL"
+		Weapon.SHOCK: return "THE STATIC WITCH"
+		_: return "DAGGER DUELIST"
+
+
+func grenade_launch_velocity(aim: Vector2, power: float) -> Vector2:
+	var direct := aim.normalized()
+	if direct.is_zero_approx():
+		direct = Vector2.RIGHT
+	return direct * lerpf(grenade_speed_min, grenade_speed_max, clampf(power, 0.0, 1.0))
+
+
+## Shared Chakram launch geometry. Execution and the planning preview both read
+## these velocities so the normal direct throw and SUPER spread cannot drift.
+func chakram_launch_velocities(aim: Vector2, power: float,
+		empowered: bool = false) -> Array[Vector2]:
+	var direct := aim.normalized()
+	if direct.is_zero_approx():
+		direct = Vector2.RIGHT
+	var speed := lerpf(chakram_speed_min, chakram_speed_max,
+		clampf(power, 0.0, 1.0))
+	var offsets := PackedFloat32Array([-14.0, 0.0, 14.0]) if empowered else \
+		PackedFloat32Array([0.0])
+	var launches: Array[Vector2] = []
+	for offset in offsets:
+		launches.append(direct.rotated(deg_to_rad(offset)) * speed)
+	return launches
 
 
 ## Authored launch: power changes speed, while the player's aim owns direction.
@@ -1387,7 +1911,7 @@ func _sim_tick(dt: float) -> void:
 		if since_launch == 0 and not _super_cutins_shown[p.index]:
 			_super_cutins_shown[p.index] = true
 			if _super_freeze != null:
-				_super_freeze.play(p.index, p.color)
+				_super_freeze.play(p.index, p.color, player_weapons[p.index])
 			_sfx.play("muda")
 			return
 
@@ -1397,12 +1921,15 @@ func _sim_tick(dt: float) -> void:
 			continue
 		if p.plan.super_shot:
 			var since_launch: int = exec_tick - p.plan.shot_tick
-			if since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
+			if player_weapons[p.index] in [Weapon.KNIVES, Weapon.GRENADE] \
+					and since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
 				var wave: int = since_launch / maxi(1, super_wave_interval_ticks)
 				if wave < maxi(1, super_waves):
 					_spawn_super_wave(p, wave)
+			elif since_launch == 0:
+				_spawn_character_super(p)
 		elif p.plan.shot_tick == exec_tick:
-			_spawn_arrow(p)
+			_spawn_player_attack(p)
 
 	# The world advances first, so bodies resolve against the geometry as it
 	# stands at the END of this tick and inherit the movement of whatever they
@@ -1412,7 +1939,10 @@ func _sim_tick(dt: float) -> void:
 	_apply_movers(world_tick)
 
 	for p in players:
-		p.sim_step(dt, exec_tick, from_tick)
+		if not _player_is_dashing(p.index):
+			var move_from: Vector2 = p.position
+			p.sim_step(dt, exec_tick, from_tick)
+			_accrue_frame_debt(p.index, move_from, p.position, p.plan.dir_at(exec_tick))
 	_check_core_collection()
 	_step_arrows(dt)
 
@@ -1436,7 +1966,11 @@ func _freeplay_tick(delta: float) -> void:
 		or _touch_controls.wait_held
 	var drop_now: bool = jump_edge and wait_now
 
+	var was_dashing := _player_is_dashing(0)
+	var move_from: Vector2 = p.position
 	p.sim_free(delta, dir, jump_edge and not drop_now, jump_now and not drop_now, drop_now)
+	if not was_dashing:
+		_accrue_frame_debt(0, move_from, p.position, dir)
 	players[1].sim_free(delta, 0, false, false)
 
 	if _touch_controls.enabled:
@@ -1451,21 +1985,26 @@ func _freeplay_tick(delta: float) -> void:
 	_update_facing()
 
 	# hold to draw, release to loose — immediately, no turn to wait for
-	var held: bool = _held(K_P1["charge"]) or _touch_controls.charge_held
+	var primary_held: bool = _held(K_P1["charge"]) or _touch_controls.charge_held
+	var secondary_held: bool = uses_shock(0) and not _touch_controls.has_active_touches() \
+		and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	if not _touch_controls.has_active_touches() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		held = true
+		primary_held = true
 	if _pads[0] >= 0 and Input.get_joy_axis(_pads[0], JOY_AXIS_TRIGGER_RIGHT) > trigger_threshold:
-		held = true
+		primary_held = true
+	var held: bool = secondary_held or primary_held
 	if held:
 		if not charging[0]:
 			charging[0] = true
 			_charge_t[0] = 0.0
+			charge_attack_mode[0] = 1 if secondary_held and not primary_held else 0
+			p.plan.attack_mode = charge_attack_mode[0]
 		else:
 			_charge_t[0] = minf(_charge_t[0] + delta, charge_time)
 		p.plan.power = _charge_t[0] / charge_time
 	elif charging[0]:
 		charging[0] = false
-		_spawn_arrow(p)
+		_spawn_player_attack(p)
 
 	_step_arrows(delta)
 
@@ -1485,8 +2024,9 @@ func _freeplay_tick(delta: float) -> void:
 func _step_arrows(dt: float) -> void:
 	var survivors: Array = []
 	var damaged: Array[int] = []
+	var hittable_players: Array = players.filter(func(p): return not _player_is_dashing(p.index))
 	for a in arrows:
-		var res: Dictionary = a.sim_step(dt, players)
+		var res: Dictionary = a.sim_step(dt, hittable_players)
 		if res["hit_player"] >= 0:
 			_on_player_hit(res["hit_player"], a.position, a.shooter)
 		if res["hit_platform"] >= 0:
@@ -1503,10 +2043,541 @@ func _step_arrows(dt: float) -> void:
 		else:
 			a.queue_free()
 	survivors = _resolve_hazard_strikes(survivors)
+	_step_dashblades(dt, survivors)
 	_resolve_clashes(survivors)
 	arrows = survivors
+	_step_grenades(dt)
+	_step_chakrams(dt)
+	_step_shock_weapons(dt)
 	if not damaged.is_empty():
 		_apply_platform_damage(damaged)
+
+
+func _player_is_dashing(player_index: int) -> bool:
+	for dash in dashblades:
+		if dash.active and dash.owner_index == player_index:
+			return true
+	return false
+
+
+func _step_dashblades(dt: float, live_arrows: Array) -> void:
+	var live: Array = []
+	for dash in dashblades:
+		var owner: Player = players[dash.owner_index]
+		var from: Vector2 = dash.position
+		var result: Dictionary = dash.sim_step(dt, live_arrows, players, platforms)
+		owner.position = wrap_point(result["position"])
+		owner.vel = result["velocity"]
+		owner.queue_redraw()
+		for victim: int in result["hit_fighters"]:
+			_on_player_hit(victim, players[victim].position, dash.owner_index)
+		for projectile in result["owner_hit_projectiles"]:
+			if live_arrows.has(projectile):
+				live_arrows.erase(projectile)
+				projectile.queue_free()
+				_on_player_hit(dash.owner_index, owner.position, projectile.shooter)
+		for orb in shock_orbs.duplicate():
+			var closest := Arrow.moving_points_closest(from, dash.position,
+				orb.prev_pos, orb.position)
+			if closest[0] > Dashblade.DEFAULT_GUARD_HALF_LENGTH + ShockOrb.COLLISION_RADIUS:
+				continue
+			if orb.is_armed():
+				_detonate_shock_orb(orb, false, dash.owner_index)
+			else:
+				orb.vel = dash.velocity * 0.72
+				orb.resting = false
+				orb.support_platform = -1
+		if result["stopped_by_hard"]:
+			_effects.add(Effects.Kind.CLASH, owner.position, owner.color.lightened(0.45))
+			_sfx.play("clash")
+		if result["active"] and owner.alive:
+			live.append(dash)
+		else:
+			dash.queue_free()
+	dashblades = live
+
+
+func _step_grenades(dt: float) -> void:
+	var live: Array = []
+	var triggered: Array = []
+	for g in grenades:
+		var res: Dictionary = g.sim_step(dt, players)
+		if res["alive"]:
+			live.append(g)
+			if res["detonate"]:
+				triggered.append(g)
+		else:
+			g.queue_free()
+	grenades = live
+	arrows = _resolve_grenade_knife_contacts(arrows, triggered)
+
+	# Two moving grenades use the same synchronised swept test as knife clashes.
+	# Both are detonated, and the breadth-first explosion pass handles any chain.
+	for i in grenades.size():
+		for j in range(i + 1, grenades.size()):
+			var a = grenades[i]
+			var b = grenades[j]
+			if Arrow.moving_points_closest(a.prev_pos, a.position, b.prev_pos, b.position)[0] \
+					<= a.collision_radius() + b.collision_radius():
+				if not triggered.has(a):
+					triggered.append(a)
+				if not triggered.has(b):
+					triggered.append(b)
+
+	if not triggered.is_empty():
+		_detonate_grenades(triggered)
+
+
+func _step_chakrams(dt: float) -> void:
+	var live: Array = []
+	for chakram in chakrams:
+		var simulation_turn := -1 if state == Phase.FREEPLAY else turn
+		var result: Dictionary = chakram.sim_step(dt, players, simulation_turn)
+		if result["hit_player"] >= 0:
+			_on_player_hit(result["hit_player"], chakram.position, chakram.shooter)
+		if result.get("stuck", false):
+			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.35))
+			_remember_aftermath("CHAKRAM STUCK", chakram.position, chakram.color)
+			_sfx.play("thud")
+		if result["alive"]:
+			live.append(chakram)
+		else:
+			chakram.queue_free()
+	chakrams = live
+
+	# Any opposing dagger impact destroys the chakram; the dagger keeps its
+	# trajectory. Stationary holding discs still participate through swept-point
+	# contact, making them destructible during their extra arena turn.
+	for chakram in chakrams.duplicate():
+		for arrow: Arrow in arrows:
+			if chakram.shooter == arrow.shooter \
+					or not chakram.can_clash_with_projectile(arrow.stable_id()):
+				continue
+			var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
+				arrow.prev_pos, arrow.position)
+			if contact[0] > Chakram.COLLISION_RADIUS + knife_clash_radius * 0.5:
+				continue
+			var clash: Dictionary = chakram.resolve_projectile_clash(arrow.vel, arrow.stable_id())
+			if not clash["accepted"]:
+				continue
+			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
+			_sfx.play("clash")
+			if not clash["alive"]:
+				chakrams.erase(chakram)
+				chakram.queue_free()
+			break
+
+	# Opposing chakrams are projectiles too: direct disc-on-disc contact breaks
+	# both instead of creating another reflection rule.
+	var broken_chakrams: Array = []
+	for i in chakrams.size():
+		for j in range(i + 1, chakrams.size()):
+			var a = chakrams[i]
+			var b = chakrams[j]
+			if a.shooter == b.shooter:
+				continue
+			var contact := Arrow.moving_points_closest(a.prev_pos, a.position,
+				b.prev_pos, b.position)
+			if contact[0] <= Chakram.COLLISION_RADIUS * 2.0:
+				if not broken_chakrams.has(a): broken_chakrams.append(a)
+				if not broken_chakrams.has(b): broken_chakrams.append(b)
+	for chakram in broken_chakrams:
+		if chakrams.has(chakram):
+			chakrams.erase(chakram)
+			chakram.queue_free()
+			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
+	if not broken_chakrams.is_empty():
+		_sfx.play("clash")
+
+	# A direct grenade body impact breaks the chakram and primes the grenade's
+	# ordinary detonation path; the explosion remains owned by its shooter.
+	var triggered_grenades: Array = []
+	for chakram in chakrams.duplicate():
+		for grenade in grenades:
+			if chakram.shooter == grenade.shooter:
+				continue
+			var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
+				grenade.prev_pos, grenade.position)
+			if contact[0] > Chakram.COLLISION_RADIUS + grenade.collision_radius():
+				continue
+			chakrams.erase(chakram)
+			chakram.queue_free()
+			if not triggered_grenades.has(grenade):
+				triggered_grenades.append(grenade)
+			break
+	if not triggered_grenades.is_empty():
+		_detonate_grenades(triggered_grenades)
+
+
+func _step_shock_weapons(dt: float) -> void:
+	# Expiration is a real small pop now, not a silent deletion. Iterate a copy
+	# because detonation removes the orb and may redirect every other live shot.
+	for orb in shock_orbs.duplicate():
+		if not shock_orbs.has(orb):
+			continue
+		var result: Dictionary = orb.sim_step(dt)
+		if not result["alive"] and result["expired"]:
+			_detonate_shock_orb(orb, false, orb.shooter)
+		elif not result["alive"]:
+			shock_orbs.erase(orb)
+			orb.queue_free()
+
+	var live_plasma: Array = []
+	for plasma in shock_plasmas:
+		# Dash bodies are resolved together with their moving front guards below;
+		# letting plasma hit the body first would make an interceptible bolt ignore
+		# the blade merely because the integration order reached it later.
+		var plasma_targets: Array = players.filter(
+			func(player): return not _player_is_dashing(player.index))
+		var result: Dictionary = plasma.sim_step(dt, plasma_targets)
+		var dash_contact: Dictionary = {}
+		for dash in dashblades:
+			if not dash.active:
+				continue
+			var contact: Dictionary = dash.swept_projectile_contact(
+				plasma.prev_pos, plasma.position, ShockPlasma.COLLISION_RADIUS)
+			var first_time: float = minf(contact["guard_time"], contact["body_time"])
+			if first_time < INF and (dash_contact.is_empty() \
+					or first_time < float(dash_contact["time"])):
+				dash_contact = {"dash": dash, "contact": contact, "time": first_time}
+		if not dash_contact.is_empty():
+			var struck_dash = dash_contact["dash"]
+			var contact: Dictionary = dash_contact["contact"]
+			var guard_first: bool = float(contact["guard_time"]) <= float(contact["body_time"])
+			if guard_first and struck_dash.spend_guard():
+				var parry_at: Vector2 = players[struck_dash.owner_index].position \
+					+ struck_dash.direction * struck_dash.guard_offset
+				_effects.add(Effects.Kind.CLASH, parry_at, plasma.color.lightened(0.25))
+				_remember_aftermath("PLASMA PARRY", parry_at, plasma.color)
+				_sfx.play("clash")
+				plasma.queue_free()
+				continue
+			elif float(contact["body_time"]) < INF:
+				_on_player_hit(struck_dash.owner_index,
+					players[struck_dash.owner_index].position, plasma.shooter)
+				plasma.queue_free()
+				continue
+		# Plasma continues through a chakram, but the disc itself is destroyed on
+		# contact like it is by every other opposing projectile family.
+		for chakram in chakrams.duplicate():
+			if chakram.shooter == plasma.shooter:
+				continue
+			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
+				chakram.prev_pos, chakram.position)
+			if contact[0] <= ShockPlasma.COLLISION_RADIUS + Chakram.COLLISION_RADIUS:
+				chakrams.erase(chakram)
+				chakram.queue_free()
+				_effects.add(Effects.Kind.CLASH, chakram.position, plasma.color)
+				_sfx.play("clash")
+		var combo_orb = null
+		var combo_time := INF
+		for orb in shock_orbs:
+			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
+				orb.prev_pos, orb.position)
+			if contact[0] <= ShockPlasma.COLLISION_RADIUS + ShockOrb.COLLISION_RADIUS \
+					and contact[3] < combo_time:
+				var request: Dictionary = orb.request_plasma_hit(plasma.shooter)
+				if request["detonate"]:
+					combo_orb = orb
+					combo_time = contact[3]
+		var blocking_arrow = null
+		var block_time := INF
+		for arrow: Arrow in arrows:
+			if arrow.shooter == plasma.shooter:
+				continue
+			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
+				arrow.prev_pos, arrow.position)
+			if contact[0] <= ShockPlasma.COLLISION_RADIUS + knife_clash_radius * 0.5 \
+					and contact[3] < block_time:
+				blocking_arrow = arrow
+				block_time = contact[3]
+		if blocking_arrow != null and block_time <= combo_time:
+			_effects.add(Effects.Kind.CLASH, blocking_arrow.position, plasma.color)
+			_sfx.play("clash")
+			arrows.erase(blocking_arrow)
+			blocking_arrow.queue_free()
+			# One dagger attenuates the lance instead of buying an entire Witch turn.
+			# The spent bolt can be intercepted again on a later tick, while a clean
+			# single blade still strips most of its threat and range.
+			plasma.vel *= 0.45
+			live_plasma.append(plasma)
+			continue
+		if combo_orb != null:
+			_detonate_shock_orb(combo_orb, true, plasma.shooter,
+				plasma.charge_power, plasma)
+			plasma.queue_free()
+			continue
+		if result["hit_player"] >= 0:
+			_on_player_hit(result["hit_player"], result["contact_position"], plasma.shooter)
+		if result["hit_platform"] >= 0:
+			_effects.add(Effects.Kind.SPARK, result["contact_position"], plasma.color)
+			_sfx.play("thud")
+		if result["alive"]:
+			live_plasma.append(plasma)
+		else:
+			plasma.queue_free()
+	shock_plasmas = live_plasma
+
+	# Ordinary projectiles can deny an armed orb for its small blast. Before
+	# arming, contact merely bats both objects apart so setup cannot be erased by
+	# an invisible exception.
+	for orb in shock_orbs.duplicate():
+		var trigger = null
+		for arrow: Arrow in arrows:
+			var contact := Arrow.moving_points_closest(arrow.prev_pos, arrow.position,
+				orb.prev_pos, orb.position)
+			if contact[0] <= ShockOrb.COLLISION_RADIUS + knife_clash_radius * 0.5:
+				trigger = arrow
+				break
+		if trigger == null:
+			for chakram in chakrams:
+				var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
+					orb.prev_pos, orb.position)
+				if contact[0] <= ShockOrb.COLLISION_RADIUS + Chakram.COLLISION_RADIUS:
+					trigger = chakram
+					break
+		if trigger == null:
+			continue
+		if trigger is Chakram:
+			chakrams.erase(trigger)
+			trigger.queue_free()
+		if orb.is_armed():
+			_detonate_shock_orb(orb, false, trigger.shooter)
+		else:
+			orb.vel += trigger.vel * 0.28
+			orb.resting = false
+			orb.support_platform = -1
+			if trigger is Arrow:
+				trigger.deflect(trigger.vel * 0.55, knife_clash_spin,
+					knife_clash_cooldown, orb.network_id)
+
+
+func shock_plasma_speed_for_power(power: float) -> float:
+	return lerpf(shock_plasma_speed_min, shock_plasma_speed, clampf(power, 0.0, 1.0))
+
+
+func shock_plasma_range_for_power(power: float) -> float:
+	var amount := clampf(power, 0.0, 1.0)
+	# Full charge is a deliberate breakpoint: partial shots trade screen coverage
+	# for speed of release, while only a completed draw crosses the whole arena.
+	if amount >= 1.0:
+		return shock_plasma_range_full
+	return lerpf(shock_plasma_range_min, shock_plasma_range_partial_max,
+		pow(amount, 1.35))
+
+
+func shock_combo_radius_for_power(power: float) -> float:
+	return lerpf(shock_combo_radius_min, shock_combo_radius, clampf(power, 0.0, 1.0))
+
+
+func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
+		combo_power: float = 1.0, source_projectile = null) -> void:
+	if not shock_orbs.has(orb):
+		return
+	var radius: float = shock_combo_radius_for_power(combo_power) \
+		if combo else shock_small_radius
+	var impulse: float = shock_combo_impulse if combo else shock_small_impulse
+	# Opponents may deny the large combo with a regular hit, but they do not
+	# steal ownership of the Witch's smaller trap. A plasma combo remains owned
+	# by the fighter who supplied the plasma, enabling deliberate cross-Witch play.
+	var scorer: int = trigger_shooter if combo and trigger_shooter >= 0 else orb.shooter
+	var blast_color: Color = Color(0.35, 0.95, 1.0) if combo else orb.color
+	_blasts_this_execution += 1
+	_effects.add(Effects.Kind.EXPLOSION, orb.position, blast_color,
+		clampf(radius / 108.0, 0.75, 2.75))
+	_remember_aftermath("SHOCK COMBO" if combo else "SHOCK POP", orb.position, blast_color)
+	_sfx.play("explosion")
+	for player: Player in players:
+		if not combo and player.index == orb.shooter:
+			continue
+		var blast_contact := _shock_blast_player_contact(orb.position, radius, player)
+		if player.alive and not player.is_invulnerable() \
+				and blast_contact.is_finite() \
+				and _grenade_blast_reaches(orb.position, blast_contact):
+			_on_player_hit(player.index, player.position, scorer)
+	for arrow: Arrow in arrows:
+		var local_position: Vector2 = orb.position + wrap_delta(orb.position, arrow.position)
+		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
+			arrow.vel, impulse, radius)
+		if not redirected.is_equal_approx(arrow.vel):
+			arrow.relaunch(redirected)
+	for chakram in chakrams:
+		var local_position: Vector2 = orb.position + wrap_delta(orb.position, chakram.position)
+		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
+			chakram.vel, impulse, radius)
+		if not redirected.is_equal_approx(chakram.vel):
+			chakram.vel = redirected
+			chakram.force_recall()
+	for grenade in grenades:
+		var local_position: Vector2 = orb.position + wrap_delta(orb.position, grenade.position)
+		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
+			grenade.vel, impulse, radius)
+		if not redirected.is_equal_approx(grenade.vel):
+			grenade.vel = redirected
+			grenade.prev_pos = grenade.position
+	for other_plasma in shock_plasmas:
+		if other_plasma == source_projectile:
+			continue
+		var local_position: Vector2 = orb.position \
+			+ wrap_delta(orb.position, other_plasma.position)
+		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
+			other_plasma.vel, impulse, radius)
+		if not redirected.is_equal_approx(other_plasma.vel):
+			other_plasma.vel = redirected
+			other_plasma.prev_pos = other_plasma.position
+			other_plasma.rotation = redirected.angle()
+	for other_orb in shock_orbs:
+		if other_orb == orb:
+			continue
+		var local_position: Vector2 = orb.position + wrap_delta(orb.position, other_orb.position)
+		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
+			other_orb.vel, impulse, radius)
+		if not redirected.is_equal_approx(other_orb.vel):
+			other_orb.vel = redirected
+			other_orb.prev_pos = other_orb.position
+			other_orb.resting = false
+			other_orb.support_platform = -1
+	shock_orbs.erase(orb)
+	orb.queue_free()
+
+
+## Returns the nearest point where the radial blast touches the fighter's real
+## body rectangle (including seam copies), or INF when there is no contact.
+func _shock_blast_player_contact(origin: Vector2, radius: float,
+		player: Player) -> Vector2:
+	var nearest := Vector2(INF, INF)
+	var nearest_distance_sq := INF
+	for body: Rect2 in body_rects(player):
+		var contact := Vector2(
+			clampf(origin.x, body.position.x, body.end.x),
+			clampf(origin.y, body.position.y, body.end.y))
+		var distance_sq := origin.distance_squared_to(contact)
+		if distance_sq <= radius * radius and distance_sq < nearest_distance_sq:
+			nearest = contact
+			nearest_distance_sq = distance_sq
+	return nearest
+
+
+func _resolve_grenade_knife_contacts(live_arrows: Array, triggered: Array) -> Array:
+	if grenades.is_empty() or live_arrows.is_empty():
+		return live_arrows
+	var kept: Array = []
+	for a: Arrow in live_arrows:
+		var struck = null
+		var contact: Array = []
+		for g in grenades:
+			contact = Arrow.moving_points_closest(a.prev_pos, a.position, g.prev_pos, g.position)
+			if contact[0] <= g.collision_radius() + knife_clash_radius * 0.5:
+				struck = g
+				break
+		if struck == null:
+			kept.append(a)
+			continue
+		struck.position = contact[2]
+		struck.prev_pos = struck.position
+		if not triggered.has(struck):
+			triggered.append(struck)
+		a.queue_free()
+	return kept
+
+
+func _detonate_grenades(initial: Array) -> void:
+	var pending: Array = initial.duplicate()
+	var exploded: Array = []
+	var cluster_specs: Array[Dictionary] = []
+	var cursor := 0
+	while cursor < pending.size():
+		var g = pending[cursor]
+		cursor += 1
+		if exploded.has(g) or not grenades.has(g):
+			continue
+		exploded.append(g)
+		_blasts_this_execution += 1
+		_effects.add(Effects.Kind.EXPLOSION, g.position, g.color)
+		_remember_aftermath("BLAST", g.position, g.color)
+		_sfx.play("explosion")
+		var blast_radius: float = grenade_blast_radius * g.blast_radius_scale
+		# A three-second grenade rewards the full setup only when its timer matures.
+		# Early dagger, bomb and player impacts still detonate it normally.
+		if not g.cluster_fragment and g.fuse_ticks_total >= 3 * Engine.physics_ticks_per_second \
+				and g.fuse_ticks_left <= 0:
+			cluster_specs.append({
+				"position": g.position,
+				"shooter": g.shooter,
+				"color": g.color,
+			})
+
+		for p: Player in players:
+			if not p.alive or p.is_invulnerable():
+				continue
+			if wrap_delta(g.position, p.position).length() <= blast_radius \
+					and _grenade_blast_reaches(g.position, p.position):
+				_on_player_hit(p.index, p.position, g.shooter)
+
+		# An explosion consumes nearby knives. This prevents the dagger that lit
+		# the fuse from continuing invisibly through the blast.
+		var kept_arrows: Array = []
+		for a: Arrow in arrows:
+			if wrap_delta(g.position, a.position).length() <= blast_radius \
+					and _grenade_blast_reaches(g.position, a.position):
+				a.queue_free()
+			else:
+				kept_arrows.append(a)
+		arrows = kept_arrows
+
+		for other in grenades:
+			if other == g or exploded.has(other) or pending.has(other):
+				continue
+			if wrap_delta(g.position, other.position).length() <= blast_radius \
+					and _grenade_blast_reaches(g.position, other.position):
+				pending.append(other)
+
+	var kept_grenades: Array = []
+	for g in grenades:
+		if exploded.has(g):
+			g.queue_free()
+		else:
+			kept_grenades.append(g)
+	grenades = kept_grenades
+	_spawn_cluster_fragments(cluster_specs)
+
+
+func _spawn_cluster_fragments(specs: Array[Dictionary]) -> void:
+	var fragment_ticks := maxi(1, int(round(grenade_cluster_fragment_fuse \
+		* Engine.physics_ticks_per_second)))
+	var directions := PackedFloat32Array([-150.0, -90.0, -30.0])
+	for spec: Dictionary in specs:
+		var volley := _next_volley
+		_next_volley += 1
+		for degrees: float in directions:
+			var direction := Vector2.from_angle(deg_to_rad(degrees))
+			var g = GRENADE_SCRIPT.new()
+			g.cfg = self
+			g.shooter = int(spec["shooter"])
+			g.volley = volley
+			g.network_id = _next_grenade_id
+			_next_grenade_id += 1
+			g.color = spec["color"]
+			g.cluster_fragment = true
+			g.blast_radius_scale = grenade_cluster_blast_scale
+			g.position = wrap_point(Vector2(spec["position"]) + direction * 28.0)
+			g.prev_pos = g.position
+			g.vel = direction * grenade_cluster_fragment_speed
+			g.fuse_ticks_total = fragment_ticks
+			g.fuse_ticks_left = fragment_ticks
+			_arrow_layer.add_child(g)
+			grenades.append(g)
+
+
+## Hard cover blocks blast damage. The target is unfolded across wrapping seams
+## before the segment test so the shortest visible route is always used.
+func _grenade_blast_reaches(origin: Vector2, target: Vector2) -> bool:
+	var endpoint := origin + wrap_delta(origin, target)
+	for r: Rect2 in solid_rects:
+		var impact := Arrow.segment_rect_impact(origin, endpoint, r)
+		if not impact.is_empty() and impact[0] > 0.025 and impact[0] < 0.975:
+			return false
+	return true
 
 
 ## A knife that reaches a charged orb is spent on it and the orb detonates.
@@ -1530,9 +2601,15 @@ func _resolve_hazard_strikes(live: Array) -> Array:
 			kept.append(a)
 			continue
 		triggered.append(struck)
-		a.queue_free()
-	# Detonate only once the survivor list is final, so a blast never pushes a
-	# knife that was already spent this tick.
+		# The triggering knife survives. Snap it to the contact point so radial
+		# launch points back out of the face it entered instead of beyond the orb.
+		var contact := Arrow.moving_points_closest(
+			a.prev_pos, a.position, struck.position, struck.position)
+		a.position = contact[1]
+		a.prev_pos = a.position
+		kept.append(a)
+	# Detonate only once the survivor list is final, so every triggering knife
+	# participates in the same deterministic relaunch as the bystanders.
 	for h: Hazard in triggered:
 		_detonate(h, kept)
 	return kept
@@ -1557,12 +2634,14 @@ func _detonate(h: Hazard, affected_arrows: Array) -> void:
 		if p.vel.y < 0.0:
 			p.on_ground = false
 	for a: Arrow in affected_arrows:
-		var push: Vector2 = _blast_impulse_at(h, a.position)
-		if push.is_zero_approx():
+		var offset: Vector2 = wrap_delta(h.position, a.position)
+		if offset.length() >= h.blast_radius:
 			continue
-		# Reuse the deflected read: a knife shoved by a pulse is no longer on
-		# anyone's aimed line, and its tumble says so.
-		a.deflect(a.vel + push, knife_clash_spin, knife_clash_cooldown)
+		# At the exact centre, send the knife back against its incoming direction.
+		# Everywhere else, the public blast ring gives the radial launch direction.
+		var dir: Vector2 = offset.normalized() if not offset.is_zero_approx() \
+			else (-a.vel.normalized() if not a.vel.is_zero_approx() else Vector2.UP)
+		a.relaunch(dir * h.dagger_launch_speed)
 
 
 ## Full strength at the centre, nothing at the rim, straight line between. The
@@ -1868,8 +2947,29 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		banner_color = victim.color
 		banner_time = banner_duration
 		return
+	if team_mode and player_teams[scorer] == player_teams[victim_idx]:
+		banner_text = "%s FRIENDLY HIT — NO POINT" % TEAM_NAMES[player_teams[scorer]]
+		banner_color = TEAM_COLORS[player_teams[scorer]]
+		banner_time = banner_duration
+		return
 	score[scorer] += 1
 
+	if team_mode:
+		var scoring_team := player_teams[scorer]
+		team_score[scoring_team] += 1
+		if team_score[scoring_team] >= hits_to_win:
+			state = Phase.GAME_OVER
+			winner = scorer
+			winning_team = scoring_team
+			_prime_game_over_pad_state()
+			banner_text = "TEAM %s WINS" % TEAM_NAMES[scoring_team]
+			banner_color = TEAM_COLORS[scoring_team]
+			_finish_match_telemetry()
+		else:
+			banner_text = "%s SCORES — %d : %d" % [TEAM_NAMES[scoring_team], team_score[0], team_score[1]]
+			banner_color = TEAM_COLORS[scoring_team]
+		banner_time = banner_duration
+		return
 	if score[scorer] >= hits_to_win:
 		state = Phase.GAME_OVER
 		winner = scorer
@@ -1884,6 +2984,8 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 
 
 func _score_text() -> String:
+	if team_mode:
+		return "CRIMSON  %d   ·   %d  AZURE" % [team_score[0], team_score[1]]
 	var parts := PackedStringArray()
 	for i in players.size():
 		parts.append("P%d %d" % [i + 1, score[i]])
@@ -1917,11 +3019,13 @@ func _begin_planning(first: bool) -> void:
 	if _super_freeze != null:
 		_super_freeze.cancel()
 	state = Phase.PLANNING
-	planning_time_left = planning_duration
 	_online_plan_sent = false
 	_online_match_reported = false
 	if not first:
 		turn += 1
+	_advance_chakrams_for_turn()
+	planning_window_duration = _planning_duration_for_turn(turn)
+	planning_time_left = planning_window_duration
 	for i in players.size():
 		charging[i] = false
 		_charge_t[i] = 0.0
@@ -1954,11 +3058,30 @@ func _begin_planning(first: bool) -> void:
 		_ai_think[i] = rng.randf_range(ai_think_min, ai_think_max)
 
 
+func _advance_chakrams_for_turn() -> void:
+	var live: Array = []
+	for chakram in chakrams:
+		if chakram.advance_to_turn(turn):
+			live.append(chakram)
+		else:
+			chakram.queue_free()
+	chakrams = live
+
+
+func _planning_duration_for_turn(turn_number: int) -> float:
+	if tutorial_mode:
+		return planning_duration
+	var reductions := maxi(0, turn_number - maxi(1, planning_shrink_after_rounds))
+	return maxf(minimum_planning_duration,
+		planning_duration - float(reductions) * maxf(0.0, planning_shrink_per_round))
+
+
 func start_tutorial_timed_turns() -> void:
 	if not tutorial_mode or state != Phase.PLANNING:
 		return
 	planning_duration = 5.0
-	planning_time_left = planning_duration
+	planning_window_duration = planning_duration
+	planning_time_left = planning_window_duration
 	banner_text = "TIMED TURNS"
 	banner_color = Color(1.0, 0.78, 0.30)
 	banner_time = 1.5
@@ -1998,14 +3121,29 @@ func _tick_ai(delta: float) -> void:
 
 func _ai_target_for(ai_idx: int) -> int:
 	var best := -1
-	var best_distance := INF
+	var best_cost := INF
+	var best_tie_rank := MAX_PLAYERS + 1
+	var preferred := posmod(ai_idx + turn, players.size())
+	if preferred == ai_idx:
+		preferred = posmod(preferred + 1, players.size())
 	for i in players.size():
 		if i == ai_idx or not players[i].alive:
 			continue
+		if team_mode and player_teams[i] == player_teams[ai_idx]:
+			continue
 		var distance: float = wrap_delta(players[ai_idx].position, players[i].position).length_squared()
-		if distance < best_distance:
-			best_distance = distance
+		# In a crowd, a nearby score leader is the meaningful threat. This mirrors
+		# natural table politics and prevents a fast opener from farming its nearest
+		# respawn while every other bot looks away. The bonus is deliberately below
+		# the cost of crossing an entire arena, so proximity still matters.
+		var leader_pressure: float = float(score[i]) * 120_000.0 if players.size() > 2 else 0.0
+		var cost := distance - leader_pressure
+		var tie_rank := posmod(i - preferred, players.size())
+		if cost < best_cost - 0.01 \
+				or (is_equal_approx(cost, best_cost) and tie_rank < best_tie_rank):
+			best_cost = cost
 			best = i
+			best_tie_rank = tie_rank
 	return best
 
 
@@ -2044,6 +3182,7 @@ func _begin_execution() -> void:
 	_hit_this_execution = false
 	_core_collected_this_execution = false
 	_blasts_this_execution = 0
+	frame_debt_locked.fill(false)
 	if _time_stop != null:
 		_time_stop.phase_changed(Phase.EXECUTING)
 	if _sfx != null:
@@ -2100,6 +3239,26 @@ func _capture_replay_frame() -> void:
 			"trail": a.trail.duplicate(),
 		})
 
+	var grenade_frames: Array[Dictionary] = []
+	for g in grenades:
+		grenade_frames.append({
+			"network_id": g.network_id,
+			"shooter": g.shooter,
+			"volley": g.volley,
+			"position": g.position,
+			"prev_pos": g.prev_pos,
+			"vel": g.vel,
+			"rotation": g.rotation,
+			"color": g.color,
+			"fuse_ticks_left": g.fuse_ticks_left,
+			"fuse_ticks_total": g.fuse_ticks_total,
+			"age_ticks": g.age_ticks,
+			"bounce_count": g.bounce_count,
+			"blast_radius_scale": g.blast_radius_scale,
+			"cluster_fragment": g.cluster_fragment,
+			"trail": g.trail.duplicate(),
+		})
+
 	var hazard_frames: Array[Dictionary] = []
 	for h: Hazard in hazards:
 		hazard_frames.append({
@@ -2114,11 +3273,14 @@ func _capture_replay_frame() -> void:
 		"score": score.duplicate(),
 		"players": player_frames,
 		"arrows": arrow_frames,
+		"grenades": grenade_frames,
 		"hazards": hazard_frames,
 		"world_tick": world_tick,
 		"platforms": platforms.duplicate(true),
 		"super_meter": super_meter.duplicate(),
 		"super_armed": super_armed.duplicate(),
+		"frame_debt_cells": frame_debt_cells.duplicate(),
+		"frame_debt_units": frame_debt_units.duplicate(),
 		"core_position": core_position,
 		"core_announced": core_announced,
 		"core_active": core_active,
@@ -2160,10 +3322,14 @@ func _apply_replay_frame(frame: Dictionary) -> void:
 	var frame_score: Array = frame["score"]
 	var frame_meter: Array = frame["super_meter"]
 	var frame_armed: Array = frame["super_armed"]
+	var frame_cells: Array = frame.get("frame_debt_cells", frame_debt_cells)
+	var frame_units: Array = frame.get("frame_debt_units", frame_debt_units)
 	for i in players.size():
 		score[i] = int(frame_score[i])
 		super_meter[i] = float(frame_meter[i])
 		super_armed[i] = bool(frame_armed[i])
+		frame_debt_cells[i] = int(frame_cells[i])
+		frame_debt_units[i] = int(frame_units[i])
 		var p: Player = players[i]
 		var data: Dictionary = frame["players"][i]
 		p.position = data["position"]
@@ -2214,6 +3380,40 @@ func _apply_replay_frame(frame: Dictionary) -> void:
 		frame_arrows.append(a)
 	arrows = frame_arrows
 
+	var grenade_by_id: Dictionary = {}
+	for child in _arrow_layer.get_children():
+		if child is Grenade:
+			grenade_by_id[child.network_id] = child
+			child.visible = false
+	var frame_grenades: Array = []
+	for data: Dictionary in frame.get("grenades", []):
+		var id := int(data["network_id"])
+		var g = grenade_by_id.get(id)
+		if g == null:
+			g = GRENADE_SCRIPT.new()
+			g.cfg = self
+			g.network_id = id
+			_arrow_layer.add_child(g)
+			grenade_by_id[id] = g
+		g.visible = true
+		g.shooter = int(data["shooter"])
+		g.volley = int(data["volley"])
+		g.position = data["position"]
+		g.prev_pos = data["prev_pos"]
+		g.vel = data["vel"]
+		g.rotation = float(data["rotation"])
+		g.color = data["color"]
+		g.fuse_ticks_left = int(data["fuse_ticks_left"])
+		g.fuse_ticks_total = int(data["fuse_ticks_total"])
+		g.age_ticks = int(data["age_ticks"])
+		g.bounce_count = int(data["bounce_count"])
+		g.blast_radius_scale = float(data.get("blast_radius_scale", 1.0))
+		g.cluster_fragment = bool(data.get("cluster_fragment", false))
+		g.trail = PackedVector2Array(data["trail"])
+		g.queue_redraw()
+		frame_grenades.append(g)
+	grenades = frame_grenades
+
 	world_tick = int(frame["world_tick"])
 	platforms = frame["platforms"].duplicate(true)
 	_rebuild_solids()
@@ -2244,11 +3444,15 @@ func _finish_match_replay() -> void:
 	if not _replay_terminal_frame.is_empty():
 		_apply_replay_frame(_replay_terminal_frame)
 	for child in _arrow_layer.get_children():
-		if child is Arrow and not arrows.has(child):
+		if (child is Arrow and not arrows.has(child)) \
+				or (child is Grenade and not grenades.has(child)):
 			child.queue_free()
 	state = Phase.GAME_OVER
-	banner_text = "PLAYER %d WINS THE MATCH" % (winner + 1) if winner >= 0 else "MATCH OVER"
-	banner_color = PLAYER_COLORS[winner] if winner >= 0 else Color.WHITE
+	banner_text = "TEAM %s WINS THE MATCH" % TEAM_NAMES[winning_team] \
+		if team_mode and winning_team >= 0 else \
+		("PLAYER %d WINS THE MATCH" % (winner + 1) if winner >= 0 else "MATCH OVER")
+	banner_color = TEAM_COLORS[winning_team] if team_mode and winning_team >= 0 else \
+		(PLAYER_COLORS[winner] if winner >= 0 else Color.WHITE)
 	banner_time = banner_duration
 	_replay_frame_index = 0
 	_replay_accum = 0.0
@@ -2259,7 +3463,7 @@ func _end_execution() -> void:
 	for p in players:
 		if p.alive and p.plan.has_shot() and not p.plan.super_shot \
 				and p.plan.shot_tick >= exec_ticks_total:
-			_spawn_arrow(p)
+			_spawn_player_attack(p)
 	for p in players:
 		if p.invuln_turns > 0:
 			p.invuln_turns -= 1
@@ -2281,7 +3485,7 @@ func _end_execution() -> void:
 func _respawn(i: int) -> void:
 	var p: Player = players[i]
 	p.clear_afterimages()
-	p.position = spawns[i]
+	p.position = _choose_respawn_point(i)
 	p.vel = Vector2.ZERO
 	p.on_ground = true
 	p.air_jumps_left = Player.MAX_AIR_JUMPS
@@ -2292,8 +3496,230 @@ func _respawn(i: int) -> void:
 	p.queue_redraw()
 
 
+## Maximin placement: score every authored socket by its nearest living rival,
+## then take the socket whose nearest threat is farthest away. Because every
+## fighter respawned earlier in this same sweep is already alive, simultaneous
+## deaths also spread out correctly in three- and four-player matches.
+func _choose_respawn_point(player_index: int) -> Vector2:
+	var candidates: Array[Vector2] = respawn_points if not respawn_points.is_empty() else spawns
+	if candidates.is_empty():
+		return spawns[player_index]
+	var best_index := 0
+	var best_distance := -INF
+	var death_position: Vector2 = players[player_index].position
+	var has_other_player := false
+	for other_index in players.size():
+		if other_index != player_index and players[other_index].alive:
+			has_other_player = true
+			break
+	for candidate_index in candidates.size():
+		var candidate: Vector2 = candidates[candidate_index]
+		var nearest := INF
+		if has_other_player:
+			for other_index in players.size():
+				if other_index == player_index or not players[other_index].alive:
+					continue
+				nearest = minf(nearest,
+					wrap_delta(candidate, players[other_index].position).length_squared())
+		else:
+			# A total wipe has no living rival yet. Move the first respawn away from
+			# where they died; subsequent respawns spread from that player.
+			nearest = wrap_delta(candidate, death_position).length_squared()
+		var avoids_repeat := candidate_index != _last_respawn_choice[player_index]
+		var best_avoids_repeat := best_index != _last_respawn_choice[player_index]
+		if nearest > best_distance + 0.001 or (is_equal_approx(nearest, best_distance) \
+				and avoids_repeat and not best_avoids_repeat):
+			best_distance = nearest
+			best_index = candidate_index
+	_last_respawn_choice[player_index] = best_index
+	return candidates[best_index]
+
+
 ## One throw looses the whole fan from the same point at the same tick — the
 ## spread is the shot, not a sequence of shots.
+func _spawn_player_attack(p: Player) -> void:
+	match player_weapons[p.index]:
+		Weapon.GRENADE:
+			_spawn_grenade(p)
+		Weapon.DASHBLADE:
+			_spawn_dashblade(p, false)
+		Weapon.CHAKRAM:
+			_spawn_chakram(p)
+		Weapon.SHOCK:
+			_spawn_shock_attack(p)
+		_:
+			_spawn_arrow(p)
+
+
+func _spawn_dashblade(p: Player, empowered: bool) -> void:
+	# One committed body trajectory at a time. Re-firing while an old dash is
+	# somehow still live ends the old action at its current physical position.
+	for old in dashblades.duplicate():
+		if old.owner_index == p.index:
+			dashblades.erase(old)
+			old.queue_free()
+	var lost_frames := frame_debt_max_cells if empowered else frame_debt_cells[p.index]
+	var dash_params := dash_parameters(p.plan.power, empowered, lost_frames)
+	var dash = DASHBLADE_SCRIPT.new()
+	dash.begin(p.position, p.aim_dir(), dash_params["speed"], dash_params["ticks"],
+		p.index, dash_params["durability"], lost_frames, dash_exit_momentum_retention)
+	_arrow_layer.add_child(dash)
+	dashblades.append(dash)
+	frame_debt_locked[p.index] = true
+	frame_debt_cells[p.index] = 0
+	if empowered:
+		frame_debt_units[p.index] = 0
+	if lost_frames > 0:
+		_effects.add(Effects.Kind.CLASH, p.position, Color(0.36, 0.96, 1.0))
+		_remember_aftermath("%d LOST FRAME%s" % [lost_frames,
+			"" if lost_frames == 1 else "S"], p.position, Color(0.36, 0.96, 1.0))
+	p.queue_redraw()
+	_sfx.play("shoot")
+
+
+func dash_parameters(power: float, empowered: bool = false,
+		lost_frames: int = 0) -> Dictionary:
+	var amount := clampf(power, 0.0, 1.0)
+	var speed := lerpf(dash_speed_min, dash_speed_max, amount)
+	var duration := roundi(lerpf(float(dash_duration_ticks_min),
+		float(dash_duration_ticks_max), amount))
+	var durability := dash_guard_durability
+	var committed := clampi(lost_frames, 0, frame_debt_max_cells)
+	duration += committed * frame_debt_dash_ticks_per_cell
+	if committed >= frame_debt_max_cells:
+		durability += frame_debt_full_guard_bonus
+	if empowered:
+		speed *= 1.28
+		duration += 6
+		durability += 3
+	return {"speed": speed, "ticks": duration, "durability": durability,
+		"lost_frames": committed}
+
+
+## Uses the exact dash primitive against the current frozen terrain. The preview
+## can therefore promise a body endpoint—including a wall shimmy—rather than
+## showing a dagger-shaped guess.
+func dash_preview_path(origin: Vector2, direction: Vector2, power: float,
+		empowered: bool = false, lost_frames: int = 0) -> PackedVector2Array:
+	var params := dash_parameters(power, empowered, lost_frames)
+	var preview_dash = DASHBLADE_SCRIPT.new()
+	preview_dash.begin(origin, direction, params["speed"], params["ticks"], -1,
+		params["durability"], lost_frames, dash_exit_momentum_retention)
+	var path := PackedVector2Array([origin])
+	var safety := 0
+	while preview_dash.active and safety < 64:
+		var result: Dictionary = preview_dash.sim_step(tick_dt(), [], [], platforms)
+		path.append(result["position"])
+		safety += 1
+	preview_dash.free()
+	return path
+
+
+func _spawn_chakram(p: Player, angle_offset: float = 0.0,
+		recall_scale: float = 1.0) -> void:
+	var direct: Vector2 = p.aim_dir().rotated(deg_to_rad(angle_offset))
+	var chakram = CHAKRAM_SCRIPT.new()
+	chakram.cfg = self
+	chakram.shooter = p.index
+	chakram.volley = _next_volley
+	_next_volley += 1
+	chakram.network_id = _next_character_projectile_id
+	_next_character_projectile_id += 1
+	chakram.color = p.color
+	chakram.begin_lifecycle(turn)
+	chakram.position = p.shoulder() + direct * 24.0
+	chakram.prev_pos = chakram.position
+	chakram.vel = direct * lerpf(chakram_speed_min, chakram_speed_max, p.plan.power)
+	chakram.freeplay_window_ticks = maxi(12, roundi(float(exec_ticks()) * recall_scale))
+	_arrow_layer.add_child(chakram)
+	chakrams.append(chakram)
+	_sfx.play("shoot")
+
+
+func _spawn_shock_attack(p: Player) -> void:
+	var direct := p.aim_dir()
+	if p.plan.attack_mode == 1:
+		_spawn_shock_orb(p, direct, false)
+	else:
+		_spawn_shock_plasma(p, direct)
+
+
+func _spawn_shock_plasma(p: Player, direct: Vector2) -> void:
+	var plasma = SHOCK_PLASMA_SCRIPT.new()
+	plasma.cfg = self
+	plasma.shooter = p.index
+	plasma.network_id = _next_character_projectile_id
+	_next_character_projectile_id += 1
+	plasma.color = p.color.lightened(0.35)
+	plasma.position = p.shoulder() + direct.normalized() * 24.0
+	plasma.configure_launch(direct, shock_plasma_speed_for_power(p.plan.power),
+		p.plan.power, shock_plasma_range_for_power(p.plan.power))
+	_arrow_layer.add_child(plasma)
+	shock_plasmas.append(plasma)
+	_sfx.play("shoot")
+
+
+func _spawn_shock_orb(p: Player, direct: Vector2, prearmed: bool) -> void:
+	# Every cast adds another persistent setup. Lifetime and counterplay bound the
+	# field naturally; casting a new orb never silently dismisses an older one.
+	var orb = SHOCK_ORB_SCRIPT.new()
+	orb.cfg = self
+	orb.shooter = p.index
+	orb.arm_ticks = maxi(1, shock_orb_arm_ticks)
+	orb.network_id = _next_character_projectile_id
+	_next_character_projectile_id += 1
+	orb.color = p.color
+	orb.position = p.shoulder() + direct.normalized() * (180.0 if prearmed else 24.0)
+	orb.configure_lob(direct, 120.0 if prearmed else lerpf(
+		shock_orb_speed_min, shock_orb_speed_max, p.plan.power))
+	if prearmed:
+		orb.age_ticks = orb.arm_ticks
+	_arrow_layer.add_child(orb)
+	shock_orbs.append(orb)
+	_sfx.play("shoot")
+
+
+func _spawn_character_super(p: Player) -> void:
+	super_meter[p.index] = 0.0
+	super_armed[p.index] = false
+	p.queue_redraw()
+	_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
+	banner_text = "PLAYER %d — %s" % [p.index + 1, weapon_short_name(p.index)]
+	banner_color = PLAYER_COLORS[p.index].lightened(0.35)
+	banner_time = 0.9
+	match player_weapons[p.index]:
+		Weapon.DASHBLADE:
+			_spawn_dashblade(p, true)
+		Weapon.CHAKRAM:
+			for launch in chakram_launch_velocities(p.aim_dir(), p.plan.power, true):
+				var offset := rad_to_deg(p.aim_dir().angle_to(launch))
+				_spawn_chakram(p, offset, 1.4)
+		Weapon.SHOCK:
+			_spawn_shock_orb(p, p.aim_dir(), true)
+			_spawn_shock_plasma(p, p.aim_dir())
+
+
+func _spawn_grenade(p: Player) -> void:
+	var launch := grenade_launch_velocity(p.aim_dir(), p.plan.power)
+	var g = GRENADE_SCRIPT.new()
+	g.cfg = self
+	g.shooter = p.index
+	g.volley = _next_volley
+	_next_volley += 1
+	g.network_id = _next_grenade_id
+	_next_grenade_id += 1
+	g.color = p.color
+	g.position = p.shoulder() + launch.normalized() * 24.0
+	g.prev_pos = g.position
+	g.vel = launch
+	g.fuse_ticks_total = clampi(p.plan.grenade_fuse_seconds, 1, 3) \
+		* Engine.physics_ticks_per_second
+	g.fuse_ticks_left = g.fuse_ticks_total
+	_arrow_layer.add_child(g)
+	grenades.append(g)
+	_sfx.play("shoot")
+
+
 func _spawn_arrow(p: Player) -> void:
 	var launches: Array[Vector2] = knife_launch_velocities(p.aim_dir(), p.plan.power)
 	var origin: Vector2 = p.shoulder() + launches[0].normalized() * 22.0
@@ -2374,12 +3800,19 @@ func restart() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
+	for g in grenades:
+		g.queue_free()
+	grenades.clear()
+	_clear_character_projectiles()
 	_next_volley = 1
 	_next_arrow_id = 1
+	_next_grenade_id = 1
+	_next_character_projectile_id = 100000
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
+		p.fighter_style = player_weapons[i]
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
@@ -2393,10 +3826,16 @@ func restart() -> void:
 		p.queue_redraw()
 	turn = 1
 	winner = -1
+	winning_team = -1
+	team_score = [0, 0]
 	for i in MAX_PLAYERS:
 		score[i] = 0
+		_last_respawn_choice[i] = -1
 		super_meter[i] = 0.0
 		super_armed[i] = false
+		frame_debt_cells[i] = 0
+		frame_debt_units[i] = 0
+		frame_debt_locked[i] = false
 	_reset_temporal_core()
 	banner_time = 0.0
 	_begin_planning(true)
@@ -2406,6 +3845,9 @@ func restart() -> void:
 
 func _reset_pilot(i: int) -> void:
 	var p: Player = players[i]
+	if ghost_dash[i] != null and is_instance_valid(ghost_dash[i]):
+		ghost_dash[i].free()
+	ghost_dash[i] = _dash_prediction_copy(i)
 	p.plan.clear_path()
 	p.plan.shot_tick = -1
 	p.plan.super_shot = false
@@ -2435,6 +3877,19 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	# The tick this step LEAVES, in absolute time — the moving world is projected
 	# forward from here, so the ghost meets the geometry the plan will meet.
 	var from_tick: int = world_tick + pl.recorded_ticks()
+	var pending_dash = ghost_dash[i]
+	if pending_dash != null and pending_dash.active:
+		# Execution ignores locomotion while a body dash owns this tick. Record the
+		# elapsed tick, but do not promise a jump or directional acceleration.
+		pl.record(dir, false, false, false)
+		var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
+		ghost_pos[i] = wrap_point(dash_result["position"])
+		ghost_vel[i] = dash_result["velocity"]
+		stamina[i] = maxf(0.0, stamina[i] - tick_dt())
+		if not pending_dash.active:
+			pending_dash.free()
+			ghost_dash[i] = null
+		return true
 	var drop_result := Player.apply_drop(ghost_pos[i].y, ghost_vel[i], ghost_ground[i],
 		ghost_drop[i], ghost_drop_from[i], drop)
 	ghost_vel[i] = drop_result[0]
@@ -2449,7 +3904,8 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	var jumped: bool = jump_result[3]
 	pl.record(dir, jumped, hold or jumped, drop)
 	var st := Player.step_state(ghost_pos[i], ghost_vel[i], ghost_ground[i], dir,
-		hold or jumped, tick_dt(), self, from_tick, ghost_drop[i], ghost_drop_from[i])
+		hold or jumped, tick_dt(), self, from_tick, ghost_drop[i], ghost_drop_from[i],
+		movement_speed_scale(i))
 	ghost_pos[i] = st[0]
 	ghost_vel[i] = st[1]
 	ghost_ground[i] = st[2]
@@ -2473,8 +3929,15 @@ func _rebuild_ghost_paths() -> void:
 		var air_jumps: int = p.air_jumps_left
 		var drop: int = p.drop_ticks
 		var drop_from: float = p.drop_from_y
+		var pending_dash = _dash_prediction_copy(i)
 		path.append(pos)
-		for t in pl.recorded_ticks():
+		for t in exec_ticks():
+			if pending_dash != null and pending_dash.active:
+				var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
+				pos = wrap_point(dash_result["position"])
+				vel = dash_result["velocity"]
+				path.append(pos)
+				continue
 			var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
 			vel = drop_result[0]
 			og = drop_result[1]
@@ -2485,18 +3948,23 @@ func _rebuild_ghost_paths() -> void:
 			og = jump_result[1]
 			air_jumps = jump_result[2]
 			var st := Player.step_state(pos, vel, og, pl.dir_at(t), pl.hold_at(t), tick_dt(),
-				self, world_tick + t, drop, drop_from)
+				self, world_tick + t, drop, drop_from, movement_speed_scale(i))
 			pos = st[0]
 			vel = st[1]
 			og = st[2]
 			if og:
 				air_jumps = Player.MAX_AIR_JUMPS
 			path.append(pos)
-		# coast whatever is left of the window
-		var tail := PredictionSystem.coast(pos, vel, og, exec_ticks() - pl.recorded_ticks(), self,
-			world_tick + pl.recorded_ticks(), drop, drop_from)
-		path.append_array(tail["path"])
+		if pending_dash != null:
+			pending_dash.free()
 		ghost_path[i] = path
+
+
+func _dash_prediction_copy(i: int):
+	for dash in dashblades:
+		if dash.active and dash.owner_index == i:
+			return dash.prediction_copy()
+	return null
 
 
 ## Where the ghost currently stands — the point a shot would be loosed from.
@@ -2553,7 +4021,24 @@ func _input_map_for(i: int) -> Dictionary:
 	# machine, regardless of whether the server assigned them slot 0 or slot 1.
 	# In a local duel P2 is gamepad-only so the two players never fight over one
 	# keyboard or accidentally drive each other's plan.
-	return K_P1 if online_mode else (K_P1 if i == 0 else K_GAMEPAD_ONLY)
+	return K_P1 if online_mode else (K_P1 if i == _keyboard_player() else K_GAMEPAD_ONLY)
+
+
+func _keyboard_player() -> int:
+	if online_mode:
+		return online_player
+	if team_mode:
+		for i in player_devices.size():
+			if player_devices[i] == TeamSelectLayer.KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
+				return i
+	return 0
+
+
+func _slot_for_device(device_id: int) -> int:
+	for i in player_devices.size():
+		if player_devices[i] == device_id and player_roles[i] == "HUMAN":
+			return i
+	return -1
 
 
 func _touch_player() -> int:
@@ -2622,14 +4107,40 @@ func _cycle_rematch_level(direction: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == Phase.TEAM_SELECT:
+		var team_joy := event as InputEventJoypadButton
+		if team_joy != null and team_joy.pressed:
+			_team_select.handle_input(team_joy)
+		return
+	if state == Phase.CHARACTER_SELECT:
+		var joy := event as InputEventJoypadButton
+		if joy != null and joy.pressed:
+			if team_mode:
+				_character_select.handle_joy_button_for_slot(_slot_for_device(joy.device), joy.button_index)
+			else:
+				_character_select.handle_joy_button(joy.button_index)
+		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
-		_rollback(online_player if online_mode else 0)
+		var mouse_player := _keyboard_player()
+		if state in [Phase.PLANNING, Phase.FREEPLAY] and uses_shock(mouse_player):
+			# Shock owns RMB as its orb trigger; it must never undo the plan.
+			return
+		_rollback(mouse_player)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
+		return
+	if state == Phase.TEAM_SELECT:
+		_team_select.handle_input(k)
+		return
+	if state == Phase.CHARACTER_SELECT:
+		if team_mode:
+			_character_select.handle_key_for_slot(_keyboard_player(), k.keycode)
+		else:
+			_character_select.handle_key(k.keycode)
 		return
 
 	if state == Phase.MENU:
@@ -2654,6 +4165,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_activate_secret_triple_match()
 			KEY_F8:
 				_fill_test_super(k.shift_pressed)
+			KEY_1, KEY_2, KEY_3:
+				if uses_grenade(0):
+					players[0].plan.grenade_fuse_seconds = int(k.keycode - KEY_0)
+					banner_text = "FREEPLAY GRENADE FUSE — %dS" % \
+						players[0].plan.grenade_fuse_seconds
+					banner_color = PLAYER_COLORS[0]
+					banner_time = 1.0
+				elif uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
+					_set_shock_attack_mode(0, 0 if k.keycode == KEY_1 else 1)
+				else:
+					_tuning.handle_key(k.keycode, k.shift_pressed)
 			_:
 				_tuning.handle_key(k.keycode, k.shift_pressed)
 		return
@@ -2780,13 +4302,34 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	# Local P1 owns keyboard + mouse. Right Shift used to confirm P2, but local P2
 	# is now deliberately gamepad-only and confirms with Start.
+	var keyboard_player := _keyboard_player()
 	if k.keycode == KEY_SHIFT:
-		if k.location != KEY_LOCATION_RIGHT and not is_ai(0):
-			_confirm(0)
+		if k.location != KEY_LOCATION_RIGHT and not is_ai(keyboard_player):
+			_confirm(keyboard_player)
 		return
 
 	if state != Phase.PLANNING:
 		return
+
+	if uses_grenade(keyboard_player):
+		match k.keycode:
+			KEY_1:
+				_set_grenade_fuse(keyboard_player, 1)
+				return
+			KEY_2:
+				_set_grenade_fuse(keyboard_player, 2)
+				return
+			KEY_3:
+				_set_grenade_fuse(keyboard_player, 3)
+				return
+	elif uses_shock(keyboard_player):
+		match k.keycode:
+			KEY_1:
+				_set_shock_attack_mode(keyboard_player, 0)
+				return
+			KEY_2:
+				_set_shock_attack_mode(keyboard_player, 1)
+				return
 
 	for i in players.size():
 		if is_ai(i):
@@ -2798,6 +4341,40 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_rollback(i)
 		elif k.keycode in map["reset"]:
 			_reset_path(i)
+
+
+func _set_grenade_fuse(i: int, seconds: int) -> void:
+	if state != Phase.PLANNING or not uses_grenade(i) or is_ai(i):
+		return
+	var p: Player = players[i]
+	if not p.alive or p.plan.confirmed:
+		return
+	p.plan.grenade_fuse_seconds = clampi(seconds, 1, 3)
+	banner_text = "P%d GRENADE FUSE — %d SECOND%s" % [
+		i + 1, p.plan.grenade_fuse_seconds,
+		"" if p.plan.grenade_fuse_seconds == 1 else "S",
+	]
+	banner_color = p.color
+	banner_time = 1.1
+	if _telemetry != null:
+		_telemetry.record("grenade_fuse_changed", turn, {
+			"player": i + 1, "seconds": p.plan.grenade_fuse_seconds,
+		})
+	p.queue_redraw()
+
+
+func _set_shock_attack_mode(i: int, mode: int) -> void:
+	if state not in [Phase.PLANNING, Phase.FREEPLAY] or not uses_shock(i) or is_ai(i):
+		return
+	var p: Player = players[i]
+	if not p.alive or p.plan.confirmed:
+		return
+	p.plan.attack_mode = clampi(mode, 0, 1)
+	banner_text = "P%d SHOCK — %s" % [i + 1,
+		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
+	banner_color = p.color
+	banner_time = 1.1
+	p.queue_redraw()
 
 
 func _toggle_super(i: int) -> void:
@@ -2964,6 +4541,8 @@ func _poll_pad_meta(i: int) -> void:
 	var b := _pad_edge(i, pad, JOY_BUTTON_B)
 	var x := _pad_edge(i, pad, JOY_BUTTON_X)
 	var y := _pad_edge(i, pad, JOY_BUTTON_Y)
+	var fuse_previous := _pad_edge(i, pad, JOY_BUTTON_LEFT_SHOULDER)
+	var fuse_next := _pad_edge(i, pad, JOY_BUTTON_RIGHT_SHOULDER)
 	if start:
 		_confirm(i)
 	if back or b:
@@ -2972,6 +4551,10 @@ func _poll_pad_meta(i: int) -> void:
 		_reset_path(i)
 	if y:
 		_toggle_super(i)
+	if fuse_previous:
+		_cycle_grenade_fuse(i, -1)
+	if fuse_next:
+		_cycle_grenade_fuse(i, 1)
 
 
 func _pad_edge(i: int, pad: int, btn: int) -> bool:
@@ -2979,6 +4562,18 @@ func _pad_edge(i: int, pad: int, btn: int) -> bool:
 	var was: bool = _pad_btn_prev[i].get(btn, false)
 	_pad_btn_prev[i][btn] = now
 	return now and not was
+
+
+func _cycle_grenade_fuse(i: int, direction: int) -> void:
+	if direction == 0:
+		return
+	if uses_shock(i):
+		_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
+		return
+	if not uses_grenade(i):
+		return
+	var current: int = players[i].plan.grenade_fuse_seconds
+	_set_grenade_fuse(i, posmod(current - 1 + direction, 3) + 1)
 
 
 ## Free platformer control of the ghost, metered by stamina. Time only advances
@@ -3109,7 +4704,7 @@ func _poll_aim(i: int, delta: float, mouse_moved: bool) -> void:
 		aim_source[i] = AimSrc.KEYS
 	elif i == _touch_player() and _touch_controls.aim_active:
 		aim_source[i] = AimSrc.TOUCH
-	elif i == (online_player if online_mode else 0) \
+	elif i == _keyboard_player() \
 			and should_accept_mouse_aim(_touch_controls.enabled, mouse_moved):
 		aim_source[i] = AimSrc.MOUSE
 
@@ -3144,18 +4739,28 @@ func _poll_charge(i: int, delta: float) -> void:
 	var map: Dictionary = _input_map_for(i)
 	var pad: int = _pads[i]
 
-	var held: bool = _held(map["charge"]) or (i == _touch_player() and _touch_controls.charge_held)
-	if i == (online_player if online_mode else 0) \
+	var primary_held: bool = _held(map["charge"]) \
+		or (i == _touch_player() and _touch_controls.charge_held)
+	var secondary_held := false
+	if i == _keyboard_player() \
 			and not _touch_controls.has_active_touches() \
 			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		held = true
+		primary_held = true
+	if uses_shock(i) and i == _keyboard_player() \
+			and not _touch_controls.has_active_touches() \
+			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		secondary_held = true
 	if pad >= 0 and Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_RIGHT) > trigger_threshold:
-		held = true
+		primary_held = true
+	var held: bool = primary_held or secondary_held
 
 	if held:
 		if not charging[i]:
 			charging[i] = true
 			_charge_t[i] = 0.0
+			charge_attack_mode[i] = 1 if secondary_held and not primary_held else 0
+			if uses_shock(i):
+				p.plan.attack_mode = charge_attack_mode[i]
 		else:
 			_charge_t[i] = minf(_charge_t[i] + delta, charge_time)
 		p.plan.power = _charge_t[i] / charge_time
@@ -3245,7 +4850,7 @@ func _online_state_digest() -> String:
 	var parts := PackedStringArray()
 	parts.append("turn:%d" % turn)
 	parts.append("score:%d,%d" % [score[0], score[1]])
-	parts.append("ids:%d,%d" % [_next_volley, _next_arrow_id])
+	parts.append("ids:%d,%d,%d" % [_next_volley, _next_arrow_id, _next_grenade_id])
 	parts.append("rng:%d" % rng.state)
 	for i in players.size():
 		var p: Player = players[i]
@@ -3258,10 +4863,16 @@ func _online_state_digest() -> String:
 			1 if p.alive else 0, p.invuln_turns,
 			int(round(super_meter[i] * 1000000.0)), 1 if super_armed[i] else 0,
 		])
+		parts.append("fd%d:%d,%d" % [i, frame_debt_cells[i], frame_debt_units[i]])
+		parts.append("fdl%d:%d" % [i, 1 if frame_debt_locked[i] else 0])
 	var ordered_arrows: Array = arrows.duplicate()
 	ordered_arrows.sort_custom(func(a: Arrow, b: Arrow): return a.network_id < b.network_id)
 	for a: Arrow in ordered_arrows:
 		parts.append("a:" + a.lockstep_digest_fragment())
+	var ordered_grenades: Array = grenades.duplicate()
+	ordered_grenades.sort_custom(func(a, b): return a.network_id < b.network_id)
+	for g in ordered_grenades:
+		parts.append("g:" + g.lockstep_digest_fragment())
 	for i in platforms.size():
 		var pf: Dictionary = platforms[i]
 		var rect: Rect2 = pf["rect"]
@@ -3283,4 +4894,5 @@ func _online_state_digest() -> String:
 
 
 func _clamp_planning_timer() -> void:
-	planning_time_left = minf(planning_time_left, planning_duration)
+	planning_window_duration = _planning_duration_for_turn(turn)
+	planning_time_left = minf(planning_time_left, planning_window_duration)

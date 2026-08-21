@@ -31,8 +31,15 @@ $tests = @(
     "SuperCutInTest",
     "KineticArenaTest",
     "TouchControlsTest",
-    "MenuInteractionTest",
-    "MatchReplayTest",
+	"MenuInteractionTest",
+	"GrenadierTest",
+	"DashbladeTest",
+	"ChakramTest",
+	"ShockWeaponTest",
+	"CharacterKitsTest",
+	"CharacterSelectTest",
+	"TeamBattleTest",
+	"MatchReplayTest",
     "CloseCameraTest",
     "LevelLayoutTest",
     "UserJourneyTest"
@@ -51,4 +58,4 @@ if ($failed.Count -gt 0) {
     throw "Godot test failures: $($failed -join ', ')"
 }
 
-Write-Host "Gate 1 contract and all 13 established Godot suites passed."
+Write-Host "All established Godot gameplay and journey suites passed."

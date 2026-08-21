@@ -188,19 +188,28 @@ func _test_trailing_boost() -> void:
 
 func _test_grazing_ricochet() -> void:
 	var gm = GAME_MANAGER.new()
-	gm.prototype_mode = true
-	gm.platforms = [{"rects": [Rect2(100.0, 0.0, 20.0, 200.0)]}]
+	gm.prototype_mode = false
+	gm.platforms = [{"rects": [Rect2(100.0, 0.0, 20.0, 200.0)], "hp": -1}]
 	var skip := _knife(Vector2(94.0, 40.0), Vector2(94.0, 40.0), Vector2(400.0, 900.0), 1)
 	skip.cfg = gm
 	var result := skip.sim_step(gm.tick_dt(), [])
 	_check(result["alive"] and result["ricochet"] and skip.vel.x < 0.0,
-		"a fast grazing wall impact must ricochet in close-camera mode")
+		"a forceful HARD impact must ricochet in every ruleset")
 
 	var square := _knife(Vector2(94.0, 40.0), Vector2(94.0, 40.0), Vector2(700.0, 0.0), 2)
 	square.cfg = gm
 	var square_result := square.sim_step(gm.tick_dt(), [])
-	_check(not square_result["alive"] and not square_result["ricochet"],
-		"a square wall impact must embed instead of bouncing")
+	_check(square_result["alive"] and square_result["ricochet"] and square.vel.x < 0.0,
+		"sufficient force, rather than a hidden angle exception, must trigger HARD ricochet")
+
+	gm.platforms = [{"rects": [Rect2(100.0, 0.0, 20.0, 200.0)], "hp": 2}]
+	var breaker := _knife(Vector2(94.0, 40.0), Vector2(94.0, 40.0), Vector2(700.0, 0.0), 3)
+	breaker.cfg = gm
+	var break_result := breaker.sim_step(gm.tick_dt(), [])
+	_check(not break_result["alive"] and not break_result["ricochet"] \
+			and break_result["hit_platform"] == 0,
+		"breakable cover must absorb the same force and report damage instead")
+	breaker.free()
 	skip.free()
 	square.free()
 	gm.free()

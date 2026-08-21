@@ -5,11 +5,10 @@ class_name Hazard
 ## make it one.
 ##
 ## It drifts along a [Mover] rail, so it is stationary while time is stopped and
-## only travels during an execution window. Striking it with a knife spends that
-## knife and detonates a radial forcefield which shoves every fighter and every
-## knife inside the blast outward. Nobody is damaged — knives remain the only
-## source of damage — but positions, velocities and firing lines all change, and
-## the knives thrown outward stay in the world afterwards.
+## only travels during an execution window. Striking it with a knife detonates a
+## radial forcefield: fighters are shoved, while every knife in the ring — the
+## trigger included — is relaunched outward at full throw speed. Nobody is
+## damaged directly, but positions, velocities and firing lines all change.
 ##
 ## The orb then goes dark and recharges over a fixed number of execution
 ## windows, so it is a contested resource on a visible timer rather than a
@@ -25,6 +24,9 @@ var motion: Dictionary = {}
 var blast_radius: float = 190.0
 ## Speed added to a body at the centre of the blast, falling to zero at its rim.
 var blast_impulse: float = 620.0
+## Knives inside the ring are relaunched at full player-throw force rather than
+## receiving a small additive nudge. This stays independent from fighter push.
+var dagger_launch_speed: float = 720.0
 var recharge_windows: int = 2
 
 var charged: bool = true
@@ -101,9 +103,16 @@ func _draw() -> void:
 			Color(0.55, 0.92, 1.0, 0.10 + 0.06 * pulse), 1.5)
 		for i in 24:
 			var a: float = TAU * float(i) / 24.0
-			var from: Vector2 = Vector2(cos(a), sin(a)) * blast_radius
-			draw_line(from, from * 0.965, Color(0.62, 0.95, 1.0, 0.30), 1.5)
+			var d := Vector2(cos(a), sin(a))
+			var tip: Vector2 = d * blast_radius
+			var base: Vector2 = tip - d * 10.0
+			var wing: Vector2 = d.orthogonal() * 4.0
+			draw_line(base - wing, tip, Color(0.62, 0.95, 1.0, 0.42), 1.5)
+			draw_line(base + wing, tip, Color(0.62, 0.95, 1.0, 0.42), 1.5)
 		draw_circle(Vector2.ZERO, CHARGE_RING + 3.0 * pulse, Color(0.45, 0.85, 1.0, 0.14))
+		draw_string(ThemeDB.fallback_font, Vector2(-42.0, -blast_radius - 9.0),
+			"DAGGERS OUT", HORIZONTAL_ALIGNMENT_CENTER, 84.0, 9,
+			Color(0.72, 0.98, 1.0, 0.82))
 
 	draw_circle(Vector2.ZERO, RADIUS + 2.5, Color(0.03, 0.03, 0.06, 0.92))
 	draw_circle(Vector2.ZERO, RADIUS, body.darkened(0.45))

@@ -34,8 +34,13 @@ const REFINE_STEP := 2.0
 const COARSE_POWERS := [0.4, 0.7, 1.0]
 const REFINE_POWERS := [-0.12, -0.06, 0.0, 0.06, 0.12]
 const MOVES_SEARCHED := 2        # movement candidates that get a shot search
+const SHOCK_SETUP_ORB_TARGET := 2
 const FLIGHT_CAP := 110          # ticks of arrow flight to look ahead
 const HYPOTHESES := [-1, 0, 1]   # what the opponent might do with their feet
+const VELOCITY_DASH_DANGER_WEIGHT := 900.0
+const VELOCITY_PARRY_ALIGNMENT := 0.82
+const VELOCITY_PARRY_FAILURE_SCORE := -350.0
+const VELOCITY_WITHHOLD_SCORE := -220.0
 
 var done: bool = false
 
@@ -85,30 +90,51 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	_seam = gm.SEAM_MARGIN
 	_wide = Vector2(gm.ARENA_W, 0.0)
 	var budget: int = mini(int(round(gm.movement_budget / _dt)), gm.exec_ticks())
+	var move_options: Array = MOVES
 
 	var threats := _threat_paths()
 	_futures = _foe_futures()
 
 	# Rank movements by safety first — this part is cheap enough to do at once.
 	var scored: Array = []
-	for m in MOVES:
+	for m in move_options:
 		var ticks: int = budget if m[2] < 0 else mini(m[2], budget)
 		var path := _walk(_me, m[0], m[1], ticks, m[3])
 		var safety: float = 0.0
 		if not _me.is_invulnerable():
 			safety = -600.0 * _danger(path, threats)
+			# A rival Velocity is a potential body projectile even though its plan
+			# remains private. Test a small envelope of plausible release moments and
+			# reward routes which leave the committed line before it arrives.
+			if _gm.uses_dashblade(_foe.index):
+				safety -= VELOCITY_DASH_DANGER_WEIGHT * _velocity_dash_danger(path)
 		var core_value: float = _core_value(path)
 		var variety: float = 12.0 if ticks > 0 else 0.0
+		# A body-dash kit cannot create pressure from the opposite side of the
+		# arena. Prefer safe paths that close the gap instead of letting the generic
+		# projectile planner wander on a random tiebreak.
+		var engage_value: float = 0.0
+		if _gm.uses_dashblade(_idx):
+			engage_value = -_gm.wrap_delta(path[path.size() - 1], _foe.position).length() * 0.22
 		# Safety usually ties across candidates, and only the top few get a shot
 		# search — without a tiebreak the list order alone decides, so the jump
 		# options were never even considered. The jitter also makes the AI
 		# harder to read, which matters in a game about prediction.
 		var toss: float = _gm.rng.randf() * 10.0
 		scored.append({"move": m, "ticks": ticks, "path": path,
-			"base": safety + core_value + variety + toss})
+			"base": safety + core_value + variety + engage_value + toss})
 	scored.sort_custom(func(a, b): return a["base"] > b["base"])
+	# Not attacking is a legal tactical answer. Seed the search with the safest
+	# movement-only plan against Velocity; a projectile plan must beat this after
+	# accounting for the chance that a frontal shot is simply parried back.
+	if _gm.uses_dashblade(_foe.index) and not scored.is_empty():
+		_best_cand = scored[0]
+		_best = {"score": VELOCITY_WITHHOLD_SCORE, "withheld_for_velocity": true}
+		_best_total = float(scored[0]["base"]) + VELOCITY_WITHHOLD_SCORE
 
-	for i in mini(MOVES_SEARCHED, scored.size()):
+	var searched: int = scored.size() if gm.uses_dashblade(idx) \
+		else mini(MOVES_SEARCHED, scored.size())
+	for i in searched:
 		_cands.append(scored[i])
 	_build_coarse_queue()
 
@@ -171,11 +197,77 @@ func _arm() -> void:
 	pl.set_aim_from_vector(Vector2(float(_best["side"]), -1.0), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.set_elevation(_best["elev"] + _gm.rng.randf_range(-j, j), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.power = clampf(_best["power"] + _gm.rng.randf_range(-0.02, 0.02), 0.0, 1.0)
+	if _gm.uses_grenade(_idx):
+		pl.grenade_fuse_seconds = int(_best.get("fuse", _choose_grenade_fuse(_me.position)))
+	elif _gm.uses_dashblade(_idx):
+		_aim_dashblade(pl)
+	elif _gm.uses_shock(_idx):
+		_aim_shock(pl)
 	# The AI has no physical button, but makes the same explicit choice immediately
 	# before placing its shot rather than receiving an automatic upgrade.
 	if _gm.super_meter[_idx] >= 1.0:
 		_gm.super_armed[_idx] = true
 	_gm._release_charge(_idx)
+
+
+## The shared search still chooses movement and launch timing, but these kits do
+## not use dagger ballistics. Translate its chosen origin into an honest kit-
+## specific decision before going through the normal release API.
+func _aim_dashblade(plan: PlayerPlan) -> void:
+	var origin := _chosen_origin()
+	var target: Vector2 = _best.get("dash_target", _future_target(plan.recorded_ticks()))
+	var delta: Vector2 = _gm.wrap_delta(origin, target)
+	if delta.is_zero_approx():
+		delta = Vector2.RIGHT if _idx % 2 == 0 else Vector2.LEFT
+	plan.set_aim_from_vector(delta, _gm.aim_min_angle, _gm.aim_max_angle)
+	plan.power = clampf(float(_best.get("power", plan.power)), 0.0, 1.0)
+
+
+func _aim_shock(plan: PlayerPlan) -> void:
+	var origin := _chosen_origin()
+	var owned_orbs := _owned_shock_orbs()
+
+	# First establish an orb, then deliberately cash it out with plasma. When a
+	# setup has been denied, periodic straight plasma prevents a predictable
+	# endless relob loop.
+	var foe_target := _future_target(plan.recorded_ticks())
+	var combo: Dictionary = _best_shock_combo(owned_orbs)
+	var combo_ready: bool = bool(combo.get("ready", false))
+	var establish_orb: bool = not combo_ready and _should_establish_shock_orb(owned_orbs)
+	plan.attack_mode = 1 if establish_orb else 0
+	var target: Vector2 = combo["orb"].position if combo_ready else \
+		(_shock_setup_target() if establish_orb else \
+		_best.get("shock_target", foe_target) as Vector2)
+	var delta: Vector2 = _gm.wrap_delta(origin, target)
+	if delta.is_zero_approx():
+		delta = Vector2.RIGHT if _idx % 2 == 0 else Vector2.LEFT
+	if establish_orb:
+		# Give the persistent projectile enough lift to clear bodies and low lips;
+		# distance still controls its authored speed through charge.
+		var side := 1.0 if delta.x >= 0.0 else -1.0
+		var lift := clampf(absf(delta.x) * 0.32 - delta.y, 70.0, 260.0)
+		plan.set_aim_from_vector(Vector2(absf(delta.x) * side, -lift),
+			_gm.aim_min_angle, _gm.aim_max_angle)
+		# The player can use the new full-range lob, but ordinary AI setup should
+		# still settle near its target instead of sailing through the whole arena.
+		plan.power = clampf(delta.length() / 1150.0, 0.15, 1.0)
+	else:
+		plan.set_aim_from_vector(delta, _gm.aim_min_angle, _gm.aim_max_angle)
+		plan.power = 1.0
+
+
+func _chosen_origin() -> Vector2:
+	if _best_cand.is_empty() or not _best_cand.has("path"):
+		return _me.position
+	var path: PackedVector2Array = _best_cand["path"]
+	return path[clampi(int(_best.get("tick", 0)), 0, path.size() - 1)]
+
+
+func _future_target(tick: int) -> Vector2:
+	if _futures.is_empty():
+		return _foe.position
+	var hold: PackedVector2Array = _futures[1]
+	return hold[clampi(tick, 0, hold.size() - 1)]
 
 
 # ------------------------------------------------------------ search queue ---
@@ -204,7 +296,9 @@ func _build_coarse_queue() -> void:
 				var e := lo
 				while e <= top:
 					for power in COARSE_POWERS:
-						if e < 5.0 or _plausible(origin, side, e, power):
+						if _gm.uses_grenade(_idx) or _gm.uses_dashblade(_idx) \
+								or _gm.uses_shock(_idx) or e < 5.0 \
+								or _plausible(origin, side, e, power):
 							_queue.append([cand, ft, e, power, side])
 					e += COARSE_STEP
 
@@ -234,7 +328,7 @@ func _evaluate(item: Array) -> void:
 	var path: PackedVector2Array = cand["path"]
 	var origin: Vector2 = path[clampi(ft, 0, path.size() - 1)]
 
-	var res := _fire(origin, side, elev, power, ft)
+	var res := _fire(origin, side, elev, power, ft, cand)
 	var total: float = cand["base"] + res["score"]
 	if total > _best_total:
 		_best_total = total
@@ -269,7 +363,7 @@ func _walk(who: Player, dir: int, jump: bool, ticks: int,
 		# and adding it would multiply the candidate space for a move the AI has
 		# no way to value yet.
 		var st := Player.step_state(pos, vel, og, d, jump and t < ticks, _dt, _gm,
-			_gm.world_tick + t, 0, 0.0)
+			_gm.world_tick + t, 0, 0.0, _gm.movement_speed_scale(who.index))
 		pos = st[0]
 		vel = st[1]
 		og = st[2]
@@ -316,6 +410,95 @@ func _danger(path: PackedVector2Array, threats: Array) -> float:
 				# earlier hits are worse — less chance the world saves you
 				return 1.0 + float(n - t) / float(maxi(n, 1))
 	return 0.0
+
+
+## Blind counterplay for a possible CUT TO END. The AI does not inspect the
+## rival plan; it asks whether an early, middle or late full-power dash from each
+## ordinary footwork hypothesis could still catch this candidate route.
+func _velocity_dash_danger(path: PackedVector2Array) -> float:
+	if not _gm.uses_dashblade(_foe.index) or path.is_empty():
+		return 0.0
+	var params: Dictionary = _gm.dash_parameters(1.0, false, _gm.frame_debt_max_cells)
+	var speed: float = float(params["speed"])
+	var ticks: int = int(params["ticks"])
+	var budget: int = mini(_gm.movement_tick_budget(), _gm.exec_ticks() - 1)
+	var releases: Array[int] = [0, mini(15, budget), budget]
+	var worst: float = 0.0
+	for future: PackedVector2Array in _futures:
+		for release: int in releases:
+			if release >= future.size() or release >= path.size():
+				continue
+			var origin: Vector2 = future[release]
+			var target_tick: int = release
+			var target: Vector2 = path[target_tick]
+			for _refinement in 2:
+				var distance: float = _gm.wrap_delta(origin, target).length()
+				var travel_ticks: int = clampi(
+					roundi(distance / maxf(speed * _dt, 0.001)), 0, ticks)
+				target_tick = clampi(release + travel_ticks, 0, path.size() - 1)
+				target = path[target_tick]
+			var delta: Vector2 = _gm.wrap_delta(origin, target)
+			if delta.is_zero_approx():
+				continue
+			var dash_direction := delta.normalized()
+			for t in range(1, ticks + 1):
+				var body_tick: int = release + t
+				if body_tick >= path.size():
+					break
+				# The avoidance envelope deliberately ignores fine wall-shimmy detail;
+				# it is a cheap blind hypothesis evaluated for every movement option,
+				# not a second full AI search or a read of the opponent's real plan.
+				var dash_position: Vector2 = _gm.wrap_point(
+					origin + dash_direction * speed * _dt * float(t))
+				var miss: float = _gm.wrap_delta(dash_position, path[body_tick]).length()
+				if miss <= Player.HALF.length() + Dashblade.DEFAULT_GUARD_DEPTH:
+					var urgency: float = 1.0 + float(path.size() - body_tick) \
+						/ float(maxi(path.size(), 1))
+					worst = maxf(worst, urgency)
+					break
+	return worst
+
+
+## A projectile launched directly down the line of a plausible incoming dash is
+## not pressure—it is ammunition for Velocity's moving guard. Range includes
+## both bodies closing during the dash, and angular risk falls to zero for real
+## over/under shots which can bypass the narrow front surface.
+func _velocity_front_parry_risk(origin: Vector2, projectile_direction: Vector2,
+		projectile_speed: float, fire_tick: int, candidate: Dictionary) -> float:
+	if not _gm.uses_dashblade(_foe.index) or projectile_direction.is_zero_approx():
+		return 0.0
+	var params: Dictionary = _gm.dash_parameters(1.0, false, _gm.frame_debt_max_cells)
+	var active_time: float = float(params["ticks"]) * _dt
+	var closing_reach: float = (float(params["speed"]) + maxf(0.0, projectile_speed)) \
+		* active_time + Dashblade.DEFAULT_GUARD_DEPTH + Player.HALF.length()
+	var route: PackedVector2Array = candidate.get("path", PackedVector2Array())
+	var risk: float = 0.0
+	for future: PackedVector2Array in _futures:
+		if fire_tick < 0 or fire_tick >= future.size():
+			continue
+		var foe_origin: Vector2 = future[fire_tick]
+		var to_foe: Vector2 = _gm.wrap_delta(origin, foe_origin)
+		var distance: float = to_foe.length()
+		if distance <= 0.001 or distance > closing_reach:
+			continue
+		var alignment: float = projectile_direction.normalized().dot(to_foe / distance)
+		if alignment <= VELOCITY_PARRY_ALIGNMENT:
+			continue
+		# If the candidate already escaped far from its launch point, reduce the
+		# likelihood that Velocity would choose this frontal line in the first place.
+		var escape_scale: float = 1.0
+		if not route.is_empty():
+			var later: Vector2 = route[clampi(
+				fire_tick + int(params["ticks"]), 0, route.size() - 1)]
+			var lateral: float = absf(
+				_gm.wrap_delta(origin, later).dot(to_foe.normalized().orthogonal()))
+			escape_scale = clampf(1.0 - lateral / 140.0, 0.25, 1.0)
+		var angular: float = inverse_lerp(VELOCITY_PARRY_ALIGNMENT, 1.0, alignment)
+		var proximity: float = clampf(
+			(closing_reach - distance) / maxf(closing_reach * 0.35, 1.0),
+			0.25, 1.0)
+		risk = maxf(risk, angular * proximity * escape_scale)
+	return risk
 
 
 ## The objective is worth contesting, but never outweighs the existing danger
@@ -370,7 +553,14 @@ func _dist_along(ox: float, side: int) -> float:
 ## Flies the full knife fan and scores the distinct movement hypotheses it
 ## covers. The alternatives are mutually exclusive futures, so a knife may be
 ## checked against all of them without one hypothetical hit consuming it.
-func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int) -> Dictionary:
+func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int,
+		candidate: Dictionary = {}) -> Dictionary:
+	if _gm.uses_grenade(_idx):
+		return _fire_grenade(origin, side, elev, power, fire_tick)
+	if _gm.uses_dashblade(_idx):
+		return _fire_dashblade(origin, power, fire_tick, candidate)
+	if _gm.uses_shock(_idx):
+		return _fire_shock(origin, fire_tick, candidate)
 	var ang: float = elev if side > 0 else 180.0 - elev
 	var r := deg_to_rad(ang)
 	var dir := Vector2(cos(r), -sin(r))
@@ -411,4 +601,303 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 	for did_hit in covered:
 		if did_hit:
 			hits += 1
-	return {"score": float(hits) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2}
+	var score := float(hits) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2
+	var parry_risk := _velocity_front_parry_risk(origin, dir,
+		_gm.knife_launch_velocity(dir, power).length(), fire_tick, candidate)
+	if parry_risk > 0.0:
+		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
+	return {"score": score, "velocity_parry_risk": parry_risk}
+
+
+## Trace the real dash body against the same left/hold/right futures used by the
+## dagger planner. The chosen target is returned to `_aim_dashblade`, preventing
+## the final aim pass from collapsing back to the stationary hypothesis.
+func _fire_dashblade(origin: Vector2, power: float, fire_tick: int,
+		candidate: Dictionary = {}) -> Dictionary:
+	var lost_frames: int = _gm.frame_debt_cells[_idx]
+	if candidate.has("path") and candidate.has("move"):
+		lost_frames = _gm.projected_frame_debt_for_constant_path(_idx,
+			candidate["path"], fire_tick, int(candidate["move"][0]))
+	var params: Dictionary = _gm.dash_parameters(power, false, lost_frames)
+	var speed: float = float(params["speed"])
+	var ticks: int = int(params["ticks"])
+	var best := {"score": -INF, "dash_target": _future_target(fire_tick)}
+	for aimed_future: PackedVector2Array in _futures:
+		var target_tick := fire_tick
+		var target: Vector2 = aimed_future[clampi(target_tick, 0, aimed_future.size() - 1)]
+		# Refine once for where that hypothesis will stand when the dash arrives.
+		for refinement in 2:
+			var distance: float = _gm.wrap_delta(origin, target).length()
+			var travel_ticks := clampi(roundi(distance / maxf(speed * _dt, 0.001)), 0, ticks)
+			target_tick = fire_tick + travel_ticks
+			target = aimed_future[clampi(target_tick, 0, aimed_future.size() - 1)]
+		var delta: Vector2 = _gm.wrap_delta(origin, target)
+		if delta.is_zero_approx():
+			delta = Vector2.RIGHT if _idx % 2 == 0 else Vector2.LEFT
+		var path: PackedVector2Array = _gm.dash_preview_path(
+			origin, delta, power, false, lost_frames)
+		var covered := [false, false, false]
+		var closest := INF
+		for h in _futures.size():
+			var future: PackedVector2Array = _futures[h]
+			for t in range(1, path.size()):
+				var fi := clampi(fire_tick + t, 0, future.size() - 1)
+				var miss: float = _gm.wrap_delta(path[t], future[fi]).length()
+				closest = minf(closest, miss)
+				if miss <= Player.HALF.length() + Dashblade.DEFAULT_GUARD_DEPTH:
+					covered[h] = true
+					break
+		var hits := 0
+		for did_hit in covered:
+			if did_hit:
+				hits += 1
+		var score := float(hits) * 1200.0 - closest * 0.08 - float(fire_tick) * 0.2
+		if score > float(best["score"]):
+			best = {"score": score, "dash_target": target}
+	return best
+
+
+## Static Witch decisions are direct lines (plasma or plasma-to-orb), while the
+## orb lob is deliberately established by `_aim_shock`. Score the tactical line
+## instead of paying for a ballistic knife simulation that this kit never uses.
+func _fire_shock(origin: Vector2, fire_tick: int,
+		candidate: Dictionary = {}) -> Dictionary:
+	var owned_orbs := _owned_shock_orbs()
+	var foe_target := _future_target(fire_tick)
+	var combo: Dictionary = _best_shock_combo(owned_orbs)
+	var combo_ready: bool = bool(combo.get("ready", false))
+	var establish_orb: bool = not combo_ready and _should_establish_shock_orb(owned_orbs)
+	if not combo_ready and not establish_orb:
+		var plasma_solution := _shock_plasma_solution(origin, fire_tick)
+		var plasma_direction: Vector2 = _gm.wrap_delta(
+			origin, plasma_solution["target"]).normalized()
+		var parry_risk := _velocity_front_parry_risk(origin, plasma_direction,
+			_gm.shock_plasma_speed, fire_tick, candidate)
+		var plasma_score := float(plasma_solution["score"])
+		if parry_risk > 0.0:
+			plasma_score = lerpf(plasma_score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
+		return {
+			"score": plasma_score,
+			"attack_mode": 0,
+			"shock_target": plasma_solution["target"],
+			"velocity_parry_risk": parry_risk,
+		}
+	var target: Vector2 = combo["orb"].position if combo_ready else \
+		(_shock_setup_target() if establish_orb else foe_target)
+	var distance: float = _gm.wrap_delta(origin, target).length()
+	var blocked: bool = false if establish_orb else \
+		_line_blocked(origin, target, ShockPlasma.COLLISION_RADIUS, fire_tick)
+	var payoff := 520.0 if establish_orb else (1600.0 if combo_ready else 1000.0)
+	return {"score": (payoff if not blocked else 0.0) \
+		- distance * 0.035 - float(fire_tick) * 0.2,
+		"attack_mode": 1 if establish_orb else 0}
+
+
+func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
+	var best := {"score": -INF, "target": _future_target(fire_tick)}
+	for aimed_future: PackedVector2Array in _futures:
+		var target: Vector2 = aimed_future[clampi(fire_tick, 0, aimed_future.size() - 1)]
+		for refinement in 2:
+			var distance: float = _gm.wrap_delta(origin, target).length()
+			var travel_ticks := roundi(distance / maxf(_gm.shock_plasma_speed * _dt, 0.001))
+			target = aimed_future[clampi(fire_tick + travel_ticks, 0, aimed_future.size() - 1)]
+		var direction: Vector2 = _gm.wrap_delta(origin, target).normalized()
+		if direction.is_zero_approx():
+			direction = Vector2.RIGHT if _idx % 2 == 0 else Vector2.LEFT
+		var pos: Vector2 = Player.shoulder_at(origin) + direction * 24.0
+		var covered := [false, false, false]
+		var closest := INF
+		for t in mini(72, _gm.exec_ticks() - fire_tick):
+			var raw: Vector2 = pos + direction * float(_gm.shock_plasma_speed) * _dt
+			var blocked := false
+			for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
+				if Arrow.seg_hits_rect(pos, raw, solid.grow(ShockPlasma.COLLISION_RADIUS)):
+					blocked = true
+					break
+			var world_t := fire_tick + t
+			for h in _futures.size():
+				var future: PackedVector2Array = _futures[h]
+				var fi := clampi(world_t, 0, future.size() - 1)
+				if not covered[h] and _hits_body(pos, raw, future[fi]):
+					covered[h] = true
+				closest = minf(closest, _gm.wrap_delta(raw, future[fi]).length())
+			if blocked:
+				break
+			pos = _gm.wrap_point(raw)
+		var hits := 0
+		for did_hit in covered:
+			if did_hit:
+				hits += 1
+		var score := float(hits) * 1100.0 - closest * 0.06 - float(fire_tick) * 0.2
+		if score > float(best["score"]):
+			best = {"score": score, "target": target}
+	return best
+
+
+func _shock_combo_opportunity(orb) -> Dictionary:
+	if orb == null or not orb.is_armed():
+		return {"ready": false}
+	var best_target := -1
+	var best_distance := INF
+	for player: Player in _gm.players:
+		if player.index == _idx or not player.alive:
+			continue
+		var distance: float = _gm.wrap_delta(orb.position, player.position).length()
+		if distance <= _gm.shock_combo_radius * 0.88 and distance < best_distance \
+				and _gm._grenade_blast_reaches(orb.position, player.position):
+			best_target = player.index
+			best_distance = distance
+	return {"ready": best_target >= 0, "target": best_target, "distance": best_distance}
+
+
+func _owned_shock_orbs() -> Array:
+	var owned: Array = []
+	for orb in _gm.shock_orbs:
+		if orb.shooter == _idx:
+			owned.append(orb)
+	return owned
+
+
+func _best_shock_combo(owned_orbs: Array) -> Dictionary:
+	var best := {"ready": false, "orb": null, "distance": INF}
+	for orb in owned_orbs:
+		var opportunity := _shock_combo_opportunity(orb)
+		if bool(opportunity.get("ready", false)) \
+				and float(opportunity.get("distance", INF)) < float(best["distance"]):
+			best = opportunity.duplicate()
+			best["orb"] = orb
+	return best
+
+
+func _should_establish_shock_orb(owned_orbs: Array) -> bool:
+	if owned_orbs.size() >= SHOCK_SETUP_ORB_TARGET:
+		return false
+	if owned_orbs.is_empty():
+		return _gm.players.size() > 2 or posmod(_gm.turn - 1, 3) == 0
+	# Do not spend the opening two turns stacking setup while rivals attack. Keep
+	# plasma pressure between casts, then extend the field if the first orb lives.
+	return posmod(_gm.turn - 1, 4) == 0
+
+
+## In a duel this is simply the foe. In a crowded arena, seed the orb toward
+## the opponent with the most neighbours inside a future combo diameter so the
+## area-control kit actually plays area control instead of tunnelling on the
+## nearest body every turn.
+func _shock_setup_target() -> Vector2:
+	var best := _foe.position
+	var best_crowd := -1
+	var best_distance := INF
+	for candidate: Player in _gm.players:
+		if candidate.index == _idx or not candidate.alive:
+			continue
+		var crowd := 0
+		for other: Player in _gm.players:
+			if other.index in [_idx, candidate.index] or not other.alive:
+				continue
+			if _gm.wrap_delta(candidate.position, other.position).length() \
+					<= _gm.shock_combo_radius * 1.75:
+				crowd += 1
+		var distance: float = _gm.wrap_delta(_me.position, candidate.position).length()
+		if crowd > best_crowd or (crowd == best_crowd and distance < best_distance):
+			best = candidate.position
+			best_crowd = crowd
+			best_distance = distance
+	return best
+
+
+func _line_blocked(origin: Vector2, target: Vector2, radius: float, fire_tick: int) -> bool:
+	var endpoint: Vector2 = origin + _gm.wrap_delta(origin, target)
+	for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + 1):
+		var impact := Arrow.segment_rect_impact(origin, endpoint, solid.grow(radius))
+		if not impact.is_empty() and float(impact[0]) > 0.01 and float(impact[0]) < 0.99:
+			return true
+	return false
+
+
+## Grenadier candidates use their own slower ballistic model, including terrain
+## bounces and the selected timer. Player futures remain mutually exclusive, so
+## direct contacts are scored independently without one guess altering another.
+func _fire_grenade(origin: Vector2, side: int, elev: float, power: float,
+		fire_tick: int) -> Dictionary:
+	var ang: float = elev if side > 0 else 180.0 - elev
+	var direction: Vector2 = Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
+	var pos: Vector2 = origin + direction * 24.0
+	var vel: Vector2 = _gm.grenade_launch_velocity(direction, power)
+	var fuse: int = _choose_grenade_fuse(origin)
+	var fuse_ticks: int = fuse * Engine.physics_ticks_per_second
+	var covered := [false, false, false]
+	var closest: float = 1e9
+
+	for t in fuse_ticks:
+		vel.x *= maxf(0.0, 1.0 - _gm.grenade_drag * _dt)
+		vel.y = minf(vel.y + _gm.grenade_gravity * _dt, _gm.max_fall_speed)
+		var raw: Vector2 = pos + vel * _dt
+		var first_hit: Array = []
+		for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
+			var impact := Arrow.segment_rect_impact(pos, raw, solid.grow(Grenade.RADIUS))
+			if not impact.is_empty() and (first_hit.is_empty() or impact[0] < first_hit[0]):
+				first_hit = impact
+
+		var world_t: int = fire_tick + t
+		for h in _futures.size():
+			var future: PackedVector2Array = _futures[h]
+			var fi: int = clampi(world_t, 0, future.size() - 1)
+			if not covered[h] and _hits_body(pos, raw, future[fi]):
+				covered[h] = true
+			closest = minf(closest, _gm.wrap_delta(raw, future[fi]).length())
+
+		if not first_hit.is_empty():
+			var normal: Vector2 = first_hit[1]
+			if normal.is_zero_approx():
+				normal = -vel.normalized() if not vel.is_zero_approx() else Vector2.UP
+			pos = pos.lerp(raw, float(first_hit[0])) + normal * 1.5
+			vel = vel.bounce(normal) * _gm.grenade_bounce_retention
+		else:
+			pos = _gm.wrap_point(raw)
+		if not _gm.world_bounds.grow(Grenade.RADIUS * 2.0).has_point(pos):
+			break
+
+	for h in _futures.size():
+		var future: PackedVector2Array = _futures[h]
+		var fi: int = clampi(fire_tick + fuse_ticks, 0, future.size() - 1)
+		if _gm.wrap_delta(pos, future[fi]).length() <= _gm.grenade_blast_radius \
+				and _gm._grenade_blast_reaches(pos, future[fi]):
+			covered[h] = true
+
+	var hits: int = 0
+	for did_hit in covered:
+		if did_hit:
+			hits += 1
+	var setup_value: float = 85.0 if fuse == 3 \
+		and closest < _gm.grenade_blast_radius * 2.4 else 0.0
+	return {
+		"score": float(hits) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2 + setup_value,
+		"fuse": fuse,
+	}
+
+
+func _choose_grenade_fuse(origin: Vector2) -> int:
+	var distance: float = _gm.wrap_delta(origin, _foe.position).length()
+	var has_setup: bool = false
+	for grenade in _gm.grenades:
+		if grenade.shooter == _idx and _gm.wrap_delta(grenade.position, _foe.position).length() \
+				<= _gm.grenade_blast_radius * 1.7:
+			has_setup = true
+			break
+	var crowded: bool = false
+	for p: Player in _gm.players:
+		if p == _me or p == _foe or not p.alive:
+			continue
+		if _gm.wrap_delta(p.position, _foe.position).length() < 230.0:
+			crowded = true
+			break
+	return choose_grenade_fuse(distance, has_setup, crowded)
+
+
+static func choose_grenade_fuse(distance: float, has_live_setup: bool = false,
+		crowded_target: bool = false) -> int:
+	if has_live_setup or distance < 270.0:
+		return 1
+	if crowded_target or distance < 610.0:
+		return 2
+	return 3

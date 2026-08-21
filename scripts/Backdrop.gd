@@ -13,10 +13,13 @@ const HILL_FAR := Color(0.065, 0.045, 0.105)
 const HILL_NEAR := Color(0.095, 0.065, 0.14)
 
 const SKY_BOTTOMS := [
-	Color(0.12, 0.055, 0.17),  # Shattered Sanctum — royal violet
+	Color(0.10, 0.060, 0.15),  # Crosshair Court — neutral violet
 	Color(0.045, 0.085, 0.16), # Endless Descent — cold vertical void
 	Color(0.085, 0.055, 0.18), # Pendulum — observatory violet
+	Color(0.040, 0.115, 0.16), # Pulse Chamber — charged cyan
+	Color(0.12, 0.055, 0.17),  # Shattered Sanctum — royal violet
 	Color(0.17, 0.050, 0.075), # Foundry — banked furnace heat
+	Color(0.105, 0.045, 0.16), # Collision Course — deep clock violet
 ]
 
 var horizon: float = 620.0
@@ -72,13 +75,19 @@ func _draw() -> void:
 	_ridge(horizon, 95.0, 330.0, HILL_NEAR)
 	match level_theme:
 		0:
-			_draw_ruins()
+			_draw_crosshair_court()
 		1:
 			_draw_descent_towers()
 		2:
 			_draw_observatory()
 		3:
+			_draw_pulse_reactor()
+		4:
+			_draw_ruins()
+		5:
 			_draw_foundry()
+		6:
+			_draw_collision_works()
 
 	# glow along the horizon so the play area reads as the lit zone
 	for i in 10:
@@ -97,6 +106,55 @@ func _ridge(base: float, height: float, period: float, col: Color) -> void:
 		x += 20.0
 	pts.append(Vector2(W, base))
 	draw_colored_polygon(pts, col)
+
+
+func _draw_crosshair_court() -> void:
+	var ink := Color(0.025, 0.035, 0.065, 0.76)
+	var line := Color(0.96, 0.76, 0.30, 0.105)
+	# A measured range grid makes the first arena feel like the neutral training
+	# standard against which every later visual rule is compared.
+	for x in range(80, 1280, 80):
+		draw_line(Vector2(float(x), 220.0), Vector2(float(x), 620.0), line, 1.0)
+	for y in range(260, 621, 60):
+		draw_line(Vector2(0.0, float(y)), Vector2(1280.0, float(y)), line, 1.0)
+	var centre := Vector2(640.0, 430.0)
+	for radius in [70.0, 138.0, 210.0]:
+		draw_circle(centre, radius + 10.0, Color(ink, 0.12))
+		draw_arc(centre, radius, 0.0, TAU, 64, line, 2.0)
+	draw_line(Vector2(390.0, centre.y), Vector2(890.0, centre.y), line, 2.0)
+	draw_line(Vector2(centre.x, 235.0), Vector2(centre.x, 615.0), line, 2.0)
+
+
+func _draw_pulse_reactor() -> void:
+	var cyan := Color(0.30, 0.96, 1.0, 0.11)
+	var dark := Color(0.015, 0.055, 0.085, 0.72)
+	# Concentric capacitors echo the public blast radii without pretending to be
+	# live hazards; their broken arcs and cables distinguish this room at a glance.
+	for centre in [Vector2(260.0, 430.0), Vector2(640.0, 455.0), Vector2(1020.0, 430.0)]:
+		draw_circle(centre, 86.0, dark)
+		for radius in [38.0, 60.0, 84.0]:
+			draw_arc(centre, radius, -2.7, 2.35, 40, cyan, 2.0)
+		for spoke in 8:
+			var d := Vector2.from_angle(TAU * float(spoke) / 8.0)
+			draw_line(centre + d * 63.0, centre + d * 82.0, cyan, 2.0)
+	draw_line(Vector2(260.0, 430.0), Vector2(640.0, 455.0), cyan, 3.0)
+	draw_line(Vector2(640.0, 455.0), Vector2(1020.0, 430.0), cyan, 3.0)
+
+
+func _draw_collision_works() -> void:
+	var rail := Color(0.86, 0.47, 1.0, 0.11)
+	var node := Color(0.96, 0.72, 0.26, 0.10)
+	# Crossing rails and offset timing wheels create a denser final-arena
+	# silhouette while remaining behind all real mover rails and trajectories.
+	for y in [280.0, 380.0, 480.0, 580.0]:
+		draw_line(Vector2(120.0, y), Vector2(1160.0, 640.0 - y * 0.35), rail, 3.0)
+		draw_line(Vector2(1160.0, y), Vector2(120.0, 640.0 - y * 0.35), rail, 3.0)
+	for centre in [Vector2(360.0, 440.0), Vector2(640.0, 365.0), Vector2(920.0, 440.0)]:
+		draw_circle(centre, 72.0, Color(0.025, 0.02, 0.07, 0.58))
+		draw_arc(centre, 72.0, 0.0, TAU, 40, node, 2.0)
+		for tooth in 12:
+			var d := Vector2.from_angle(TAU * float(tooth) / 12.0)
+			draw_line(centre + d * 62.0, centre + d * 78.0, node, 2.0)
 
 
 func _draw_ruins() -> void:

@@ -10,7 +10,11 @@ const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
 const PANEL_MAX_H := 430.0
-const PORTRAIT := preload("res://assets/art/super-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
+const GRENADIER_PORTRAIT := preload("res://assets/art/portraits/grenadier-portrait-v2.png")
+const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
+const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
+const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
 
 
 class CutInArt:
@@ -21,6 +25,7 @@ class CutInArt:
 	var elapsed: float = 0.0
 	var duration: float = DURATION
 	var playing: bool = false
+	var portrait: Texture2D = DUELIST_PORTRAIT
 	var _tone_texture: ImageTexture
 
 	func _ready() -> void:
@@ -30,9 +35,15 @@ class CutInArt:
 		visible = false
 		set_process(true)
 
-	func begin(who: int, tint: Color) -> void:
+	func begin(who: int, tint: Color, fighter: Variant = 0) -> void:
 		owner_index = who
 		owner_color = tint
+		match int(fighter):
+			1: portrait = GRENADIER_PORTRAIT
+			2: portrait = DASHBLADE_PORTRAIT
+			3: portrait = CHAKRAM_PORTRAIT
+			4: portrait = SHOCK_PORTRAIT
+			_: portrait = DUELIST_PORTRAIT
 		elapsed = 0.0
 		playing = true
 		visible = true
@@ -152,15 +163,15 @@ class CutInArt:
 		# A short palette-coloured afterimage ties the neutral portrait to the
 		# active player's gold/violet panel as it slams into place.
 		if trail > 0.0:
-			draw_texture_rect(PORTRAIT,
+			draw_texture_rect(portrait,
 				Rect2(portrait_rect.position + Vector2(-26.0, 0.0), portrait_rect.size), false,
 				Color(accent.r, accent.g, accent.b, trail * 0.34 * alpha))
 		# Hard offset shadow keeps the detailed raster as graphic as the surrounding
 		# procedural ink work, then the clean alpha portrait sits on top.
-		draw_texture_rect(PORTRAIT,
+		draw_texture_rect(portrait,
 			Rect2(portrait_rect.position + Vector2(12.0, 14.0), portrait_rect.size), false,
 			Color(0.015, 0.008, 0.025, 0.78 * alpha))
-		draw_texture_rect(PORTRAIT, portrait_rect, false, Color(1.0, 1.0, 1.0, alpha))
+		draw_texture_rect(portrait, portrait_rect, false, Color(1.0, 1.0, 1.0, alpha))
 		draw_set_transform(Vector2.ZERO)
 
 
@@ -174,7 +185,7 @@ func _ready() -> void:
 	# texture-upload cost on the first SUPER. One almost-transparent pixel is
 	# rendered for two frames and is imperceptible behind the opening scene.
 	_portrait_warmup = TextureRect.new()
-	_portrait_warmup.texture = PORTRAIT
+	_portrait_warmup.texture = DUELIST_PORTRAIT
 	_portrait_warmup.position = Vector2.ZERO
 	_portrait_warmup.size = Vector2.ONE
 	_portrait_warmup.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -189,8 +200,8 @@ func _ready() -> void:
 	_portrait_warmup.call_deferred("queue_free")
 
 
-func play(who: int, tint: Color) -> void:
-	_art.begin(who, tint)
+func play(who: int, tint: Color, fighter: Variant = 0) -> void:
+	_art.begin(who, tint, fighter)
 
 
 func cancel() -> void:

@@ -25,7 +25,7 @@ class DummyCutIn:
 	var active: bool = false
 	var calls: int = 0
 
-	func play(_who: int, _tint: Color) -> void:
+	func play(_who: int, _tint: Color, _grenadier: bool = false) -> void:
 		active = true
 		calls += 1
 
@@ -39,6 +39,7 @@ func _init() -> void:
 	_test_secret_triple_fan()
 	_test_drag_collapses_the_arc()
 	_test_deflected_knives_fall_as_debris()
+	_test_preview_uses_platform_material_for_ricochet()
 	_test_volley_filter_and_manager_resolution()
 	_test_super_charge_requires_movement()
 	_test_super_toggle_controls_upgrade()
@@ -137,6 +138,25 @@ func _test_deflected_knives_fall_as_debris() -> void:
 		"a deflected knife must drop out of the air far sooner than a live shot")
 	_check(is_equal_approx(debris["pos"].x, aimed["pos"].x),
 		"the debris rule must change the fall only, leaving drag to handle the forward speed")
+	gm.free()
+
+
+func _test_preview_uses_platform_material_for_ricochet() -> void:
+	var gm = GAME_MANAGER.new()
+	gm.platforms = [{"rect": Rect2(100.0, 0.0, 20.0, 200.0), "hp": -1}]
+	gm._rebuild_solids()
+	var hard := PredictionSystem.predict_arrow(
+		Vector2(90.0, 40.0), Vector2(700.0, 0.0), gm, 0.25)
+	_check(not hard["blocked"] and hard["path"].size() > 3 \
+			and hard["path"][hard["path"].size() - 1].x < 100.0,
+		"known trajectory preview must draw a forceful bank from HARD terrain")
+
+	gm.platforms = [{"rect": Rect2(100.0, 0.0, 20.0, 200.0), "hp": 2}]
+	gm._rebuild_solids()
+	var breakable := PredictionSystem.predict_arrow(
+		Vector2(90.0, 40.0), Vector2(700.0, 0.0), gm, 0.25)
+	_check(breakable["blocked"],
+		"known trajectory preview must terminate the same throw on BREAK terrain")
 	gm.free()
 
 

@@ -49,6 +49,7 @@ static func predict_arrow(start_pos: Vector2, start_vel: Vector2, cfg, duration:
 	var pos: Vector2 = start_pos
 	var vel: Vector2 = start_vel
 	var path := PackedVector2Array()
+	var ricochets := 0
 	path.append(pos)
 
 	for i in steps:
@@ -56,14 +57,27 @@ static func predict_arrow(start_pos: Vector2, start_vel: Vector2, cfg, duration:
 		var next: Vector2 = st[0]
 		vel = st[1]
 		var raw: Vector2 = st[2]
-		var blocked := false
-		# tested unwrapped — the solid set carries seam copies for exactly this
-		var rects: Array[Rect2] = cfg.solid_rects if start_tick < 0 else cfg.solids_at(start_tick + i + 1)
-		for r in rects:
-			if Arrow.seg_hits_rect(pos, raw, r):
-				blocked = true
-				break
-		if blocked:
+		# Tested unwrapped — colliders carry seam copies. Material is retained so
+		# the preview banks from HARD exactly where runtime does, while breakable
+		# cover remains a terminal impact.
+		var at_tick: int = -1 if start_tick < 0 else start_tick + i + 1
+		var first_hit: Array = []
+		var first_platform: Dictionary = {}
+		for platform: Dictionary in cfg.platform_colliders_at(at_tick):
+			var impact := Arrow.segment_rect_impact(pos, raw, platform["rect"])
+			if not impact.is_empty() and (first_hit.is_empty() or impact[0] < first_hit[0]):
+				first_hit = impact
+				first_platform = platform
+		if not first_hit.is_empty():
+			var normal: Vector2 = first_hit[1]
+			var impact_at: Vector2 = pos.lerp(raw, first_hit[0])
+			path.append(impact_at)
+			if Arrow.can_ricochet_velocity(vel, normal, first_platform, cfg, ricochets):
+				vel = vel.bounce(normal) * cfg.knife_ricochet_retention
+				ricochets += 1
+				pos = impact_at + normal * 2.0
+				path.append(pos)
+				continue
 			return {"path": path, "blocked": true}
 		pos = next
 		path.append(pos)

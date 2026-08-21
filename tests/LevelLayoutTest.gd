@@ -22,7 +22,8 @@ func _init() -> void:
 
 
 func _test_level(index: int) -> void:
-	var level := Levels.build(index)
+	_test_player_scaling(index)
+	var level := Levels.build(index, 4)
 	var label: String = level["name"]
 	var rects: Array[Rect2] = []
 	for platform in level["platforms"]:
@@ -36,6 +37,16 @@ func _test_level(index: int) -> void:
 		_check(not _body_overlaps(spawn, rects),
 			"%s: P%d spawn must not begin inside terrain" % [label, spawn_index + 1])
 	_validate_four_corner_spawns(level)
+	var respawns: Array = level.get("respawn_points", [])
+	_check(respawns.size() >= 7, "%s: needs a varied authored respawn pool" % label)
+	for respawn: Vector2 in respawns:
+		_check(_spawn_is_supported(respawn, rects),
+			"%s: respawn socket %s needs support" % [label, respawn])
+		_check(not _body_overlaps(respawn, rects),
+			"%s: respawn socket %s overlaps terrain" % [label, respawn])
+		var support := _spawn_support(level["platforms"], respawn)
+		_check(not support.is_empty() and int(support["hp"]) < 0 and not support.has("motion"),
+			"%s: respawn socket %s must use permanent stationary support" % [label, respawn])
 	_check(_vertical_tier_count(level["platforms"]) >= 5,
 		"%s: four-player layout needs at least five useful vertical tiers" % label)
 
@@ -69,6 +80,33 @@ func _test_level(index: int) -> void:
 			"%s: authored passages need at least 55px of movement clearance" % label)
 		_check(_sanctum_has_high_side_gates(level, rects),
 			"%s: side seam must open high and remain blocked near the ground" % label)
+
+
+## Every extra simultaneous plan gets extra landing space. The variants remain
+## authored subsets of one arena rather than separate maps, so movement rules,
+## wrap and defining feature cannot drift between player counts.
+func _test_player_scaling(index: int) -> void:
+	var duel := Levels.build(index, 2)
+	var trio := Levels.build(index, 3)
+	var crowd := Levels.build(index, 4)
+	var label: String = crowd["name"]
+	_check(duel["platforms"].size() < trio["platforms"].size(),
+		"%s: 3P needs more platforms than 2P" % label)
+	_check(trio["platforms"].size() < crowd["platforms"].size(),
+		"%s: 4P needs more platforms than 3P" % label)
+	_check(duel.get("feature", "") == trio.get("feature", "") \
+			and trio.get("feature", "") == crowd.get("feature", ""),
+		"%s: player scaling must preserve the arena's defining feature" % label)
+	for variant in [duel, trio, crowd]:
+		var rects: Array[Rect2] = []
+		for platform: Dictionary in variant["platforms"]:
+			rects.append(platform["rect"])
+		for spawn_index in int(variant["player_count"]):
+			var spawn: Vector2 = variant["spawns"][spawn_index]
+			_check(_spawn_is_supported(spawn, rects),
+				"%s %dP: active spawn P%d needs support" % [label, variant["player_count"], spawn_index + 1])
+			_check(not _body_overlaps(spawn, rects),
+				"%s %dP: active spawn P%d overlaps terrain" % [label, variant["player_count"], spawn_index + 1])
 
 
 ## Absolute ticks worth checking. A static arena has exactly one configuration;

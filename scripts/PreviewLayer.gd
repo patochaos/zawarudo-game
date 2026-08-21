@@ -170,30 +170,54 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var live: bool = armed or charging
 	var shoulder: Vector2 = Player.shoulder_at(origin)
 	var power: float = clampf(p.plan.power, 0.0, 1.0)
-	var launches: Array[Vector2] = gm.knife_launch_velocities(p.aim_dir(), power)
-	var dir: Vector2 = launches[0].normalized()
+	if gm.uses_dashblade(p.index):
+		_draw_dash_preview(p, origin, col, armed, charging)
+		return
+	if gm.uses_shock(p.index):
+		_draw_shock_preview(p, origin, col, armed, charging)
+		return
+	var chakram_preview: bool = gm.uses_chakram(p.index)
+	var chakram_super: bool = chakram_preview and (p.plan.super_shot or (not armed \
+		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index]))
+	var grenade_preview: bool = gm.uses_grenade(p.index) and not p.plan.super_shot \
+		and not (not armed and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index])
+	var launches: Array[Vector2] = []
+	if grenade_preview:
+		launches.append(gm.grenade_launch_velocity(p.aim_dir(), power))
+	elif chakram_preview:
+		launches = gm.chakram_launch_velocities(p.aim_dir(), power, chakram_super)
+	else:
+		launches = gm.knife_launch_velocities(p.aim_dir(), power)
+	# Normal Chakram aim is the one direct launch; its SUPER still uses a spread.
+	var dir: Vector2 = p.aim_dir().normalized() if chakram_preview \
+		else launches[0].normalized()
 
 	var length: float = lerpf(AIM_LEN_MIN, AIM_LEN_MAX, power)
 	var tip: Vector2 = shoulder + dir * length
 	var body: Color = col.lightened(0.35) if live else Color(col.r, col.g, col.b, 0.5)
-	var knife_dirs: Array[Vector2] = []
+	var shot_dirs: Array[Vector2] = []
 	for launch in launches:
-		knife_dirs.append(launch.normalized())
+		shot_dirs.append(launch.normalized())
 
 	# The two rays expose the actual fan without solving the ballistic arc. A
 	# weak wedge makes the low-power coverage readable at a glance.
-	if knife_dirs.size() >= 2:
-		var left: Vector2 = knife_dirs[0]
-		var right: Vector2 = knife_dirs[knife_dirs.size() - 1]
+	if shot_dirs.size() >= 2:
+		var left: Vector2 = shot_dirs[0]
+		var right: Vector2 = shot_dirs[shot_dirs.size() - 1]
 		draw_colored_polygon(PackedVector2Array([
 			shoulder, shoulder + left * length, shoulder + right * length,
 		]), Color(col.r, col.g, col.b, 0.045 if live else 0.025))
-	for knife_dir in knife_dirs:
-		var knife_tip: Vector2 = shoulder + knife_dir * length
-		draw_line(shoulder, shoulder + knife_dir * AIM_LEN_MAX,
+	for shot_dir in shot_dirs:
+		var shot_tip: Vector2 = shoulder + shot_dir * length
+		draw_line(shoulder, shoulder + shot_dir * AIM_LEN_MAX,
 			Color(col.r, col.g, col.b, 0.12), 1.5)
-		draw_line(shoulder, knife_tip, body, 3.0 if live else 2.0)
-		_draw_knife_head(knife_tip, knife_dir, body)
+		draw_line(shoulder, shot_tip, body, 3.0 if live else 2.0)
+		if grenade_preview:
+			_draw_grenade_head(shot_tip, body)
+		elif chakram_preview:
+			_draw_chakram_head(shot_tip, shot_dir, body)
+		else:
+			_draw_knife_head(shot_tip, shot_dir, body)
 
 	# The centre spine carries the power notches; the fan carries direction.
 	draw_line(shoulder, tip, Color(body.r, body.g, body.b, body.a * 0.45), 1.0)
@@ -213,8 +237,13 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 
 	var actual_elevation: float = rad_to_deg(atan2(-dir.y, absf(dir.x)))
 	var tag := "%d° · %d%%" % [int(round(actual_elevation)), int(round(power * 100.0))]
+	if grenade_preview:
+		tag = "GRENADE · FUSE %ds · %s" % [p.plan.grenade_fuse_seconds, tag]
+	elif chakram_preview:
+		tag = ("TRIPLE CHAKRAM · " if chakram_super else \
+			"CHAKRAM · DIRECT · ") + tag
 	if armed:
-		tag = ("SUPER · " if p.plan.super_shot else "FIRED · ") + tag
+		tag = ("SUPER · " if p.plan.super_shot else "ARMED · ") + tag
 	elif charging:
 		if gm.super_meter[p.index] >= 1.0:
 			tag = ("SUPER ARMED · " if gm.super_armed[p.index] else "SUPER STANDBY · ") + tag
@@ -225,6 +254,122 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	_draw_power_bar(origin, p, charging)
 
 
+func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
+		armed: bool, charging: bool) -> void:
+	var shoulder := Player.shoulder_at(origin)
+	var dir := p.aim_dir().normalized()
+	var power := clampf(p.plan.power, 0.0, 1.0)
+	var live := armed or charging
+	var mode := p.plan.attack_mode
+	var weapon_col := Color(1.0, 0.28, 0.88) if mode == 1 else Color(0.28, 0.96, 1.0)
+	var body := weapon_col if live else Color(weapon_col.r, weapon_col.g, weapon_col.b, 0.55)
+	var length := lerpf(54.0, 145.0, power) if mode == 0 else lerpf(80.0, 220.0, power)
+	var tip := shoulder + dir * length
+	if mode == 0:
+		# A single rail and lightning diamond: unmistakably the fast straight shot.
+		draw_line(shoulder, shoulder + dir * AIM_LEN_MAX, Color(body.r, body.g, body.b, 0.16), 2.0)
+		draw_line(shoulder, tip, body, 4.0 if live else 2.5)
+		var side := dir.orthogonal()
+		draw_colored_polygon(PackedVector2Array([
+			tip + dir * 12.0, tip + side * 7.0, tip - dir * 7.0,
+			tip - side * 7.0,
+		]), Color(body.r, body.g, body.b, 0.92))
+		draw_line(tip - dir * 5.0 + side * 8.0, tip + dir * 7.0 - side * 8.0,
+			Color(0.96, 1.0, 1.0, body.a), 2.0)
+	else:
+		# A short rising curve communicates "lob" without solving its final landing.
+		var curve := PackedVector2Array()
+		for step in 17:
+			var t := float(step) / 16.0
+			curve.append(shoulder + dir * length * t + Vector2(0.0, 42.0 * t * t))
+		draw_polyline(curve, Color(body.r, body.g, body.b, body.a * 0.75), 3.0, true)
+		tip = curve[curve.size() - 1]
+		draw_circle(tip, 11.0, Color(body.r, body.g, body.b, 0.18))
+		draw_arc(tip, 9.0, 0.0, TAU, 24, body, 3.0)
+		draw_circle(tip, 3.5, Color(1.0, 0.78, 0.96, body.a))
+		for spoke in 4:
+			var a := TAU * float(spoke) / 4.0
+			draw_line(tip + Vector2.from_angle(a) * 11.0,
+				tip + Vector2.from_angle(a) * 16.0, body, 1.5)
+
+	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
+	var shot_time := float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
+	_launch_marker(shoulder, base, 1.0 if live else 0.55,
+		"FIRE %.2fs" % shot_time if live else "")
+	var tag := ("ORB FIELD · %d LIVE · RMB" % gm.shock_orb_count(p.index) \
+		if mode == 1 else "PLASMA · LMB") \
+		+ " · %d%%" % int(round(power * 100.0))
+	if armed:
+		tag = ("SUPER COMBO · " if p.plan.super_shot else "ARMED · ") + tag
+	elif charging:
+		tag = "CHARGING · " + tag
+	_shot_tag(p, tip, dir, tag, body.lightened(0.25), 14 if live else 12)
+	_draw_power_bar(origin, p, charging)
+
+
+func _draw_dash_preview(p: Player, origin: Vector2, base: Color,
+		armed: bool, charging: bool) -> void:
+	var dir := p.aim_dir().normalized()
+	var power := clampf(p.plan.power, 0.0, 1.0)
+	var empowered: bool = p.plan.super_shot or (not armed \
+		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index])
+	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
+	var lost_frames: int = gm.frame_debt_max_cells if empowered \
+		else gm.projected_frame_debt(p.index, shot_tick)
+	var params: Dictionary = gm.dash_parameters(power, empowered, lost_frames)
+	var path: PackedVector2Array = gm.dash_preview_path(
+		origin, dir, power, empowered, lost_frames)
+	var end: Vector2 = path[path.size() - 1]
+	var live := armed or charging
+	var aura := Color(0.22, 0.93, 1.0, 0.16 if live else 0.08)
+	if path.size() > 1:
+		draw_polyline(path, aura, 24.0, true)
+		draw_polyline(path, Color(base.r, base.g, base.b, 0.9 if live else 0.48), 3.0, true)
+		# Storyboard cells replace ordinary speed dots: the route reads as a
+		# sequence of authored cuts which will collapse during execution.
+		for i in range(2, path.size(), 3):
+			var tangent := (path[i] - path[maxi(0, i - 1)]).normalized()
+			if tangent.is_zero_approx():
+				tangent = dir
+			var side := tangent.orthogonal()
+			var panel := PackedVector2Array([
+				path[i] - tangent * 7.0 - side * 12.0,
+				path[i] + tangent * 7.0 - side * 12.0,
+				path[i] + tangent * 7.0 + side * 12.0,
+				path[i] - tangent * 7.0 + side * 12.0,
+			])
+			draw_polyline(panel + PackedVector2Array([panel[0]]),
+				Color(0.76, 1.0, 1.0, 0.62 if live else 0.34), 1.5, true)
+
+	# The extra body is the promised post-dash position—not a projectile head.
+	_draw_destination(end, p)
+	_draw_ghost_figure(end, p, 1.0 if live else 0.66)
+	draw_circle(end, 35.0, Color(0.18, 0.92, 1.0, 0.10 if live else 0.05))
+	var shield_center := end + dir * 24.0
+	draw_arc(shield_center, 29.0, dir.angle() - 1.05, dir.angle() + 1.05, 22,
+		Color(0.84, 1.0, 1.0, 0.96 if live else 0.62), 5.0)
+	draw_arc(shield_center, 23.0, dir.angle() - 0.95, dir.angle() + 0.95, 18,
+		Color(base.r, base.g, base.b, 0.42), 2.0)
+	for offset in [-16.0, 0.0, 16.0]:
+		draw_line(end - dir * 12.0 + dir.orthogonal() * offset,
+			end - dir * 34.0 + dir.orthogonal() * offset,
+			Color(0.30, 0.92, 1.0, 0.35), 2.0)
+
+	var shoulder := Player.shoulder_at(origin)
+	_launch_marker(shoulder, base, 1.0 if live else 0.55, "DASH RELEASE" if live else "")
+	var tag := "CUT TO END · %d/%d LOST FRAMES · GUARD %d · %d%%" % [
+		lost_frames, gm.frame_debt_max_cells, int(params["durability"]),
+		int(round(power * 100.0))]
+	if armed:
+		tag = ("SUPER · " if p.plan.super_shot else "ARMED · ") + tag
+	elif charging and power >= 0.995:
+		tag = "FULL · RELEASE TO COMMIT · " + tag
+	elif charging:
+		tag = "CHARGING · " + tag
+	_shot_tag(p, end, dir, tag, Color(0.76, 1.0, 1.0, 0.96), 14 if live else 12)
+	_draw_power_bar(origin, p, charging)
+
+
 func _draw_knife_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 	var side := dir.orthogonal()
 	draw_colored_polygon(PackedVector2Array([
@@ -232,6 +377,22 @@ func _draw_knife_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 		tip - dir * 6.0, tip - dir * 3.0 - side * 3.6,
 	]), col)
 	draw_line(tip - dir * 7.0 - side * 5.0, tip - dir * 7.0 + side * 5.0, col, 1.5)
+
+
+func _draw_chakram_head(tip: Vector2, dir: Vector2, col: Color) -> void:
+	var side := dir.orthogonal()
+	draw_circle(tip, 8.0, Color(0.02, 0.015, 0.035, col.a * 0.9))
+	draw_arc(tip, 7.0, 0.0, TAU, 20, col, 2.4, true)
+	draw_arc(tip, 3.5, 0.0, TAU, 16, Color(col.r, col.g, col.b, col.a * 0.65), 1.4, true)
+	draw_line(tip - side * 8.0, tip + side * 8.0, Color(col.r, col.g, col.b, col.a * 0.32), 1.0)
+
+
+func _draw_grenade_head(tip: Vector2, col: Color) -> void:
+	draw_circle(tip, Grenade.RADIUS, Color(0.025, 0.02, 0.035, col.a))
+	var shell_color := col.darkened(0.55)
+	draw_circle(tip, Grenade.RADIUS - 2.0, shell_color)
+	draw_line(tip + Vector2(3.0, -8.0), tip + Vector2(8.0, -15.0), col, 2.0)
+	draw_circle(tip + Vector2(9.0, -16.0), 2.6, col.lightened(0.55))
 
 
 ## Marks the point along the path where the bow releases.
