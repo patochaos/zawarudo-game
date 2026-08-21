@@ -5,19 +5,20 @@ class_name Effects
 ## Purely cosmetic — nothing here touches the simulation, and it is driven by
 ## real time so it does not consume execution ticks.
 
-enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH }
+enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION }
 
 const LIFE := {Kind.SPARK: 0.35, Kind.SHATTER: 0.55, Kind.KILL: 0.9,
-	Kind.CLASH: 0.42, Kind.AFTERMATH: 0.72}
+	Kind.CLASH: 0.42, Kind.AFTERMATH: 0.72, Kind.EXPLOSION: 0.68}
 
-var _fx: Array = []   # [{kind, pos, col, t, seed}]
+var _fx: Array = []   # [{kind, pos, col, t, seed, scale}]
 var _remembered: Array = []   # important execution events, revealed on refreeze
 var _seq: int = 0
 
 
-func add(kind: int, pos: Vector2, col: Color) -> void:
+func add(kind: int, pos: Vector2, col: Color, scale: float = 1.0) -> void:
 	_seq += 1
-	_fx.append({"kind": kind, "pos": pos, "col": col, "t": 0.0, "seed": _seq})
+	_fx.append({"kind": kind, "pos": pos, "col": col, "t": 0.0, "seed": _seq,
+		"scale": maxf(scale, 0.1)})
 
 
 func clear_all() -> void:
@@ -97,6 +98,15 @@ func _draw() -> void:
 				draw_string(ThemeDB.fallback_font, f["pos"] + Vector2(-30.0, -22.0),
 					f["label"], HORIZONTAL_ALIGNMENT_CENTER, 60.0, 11,
 					Color(c.r, c.g, c.b, alpha * 0.9))
+			Kind.EXPLOSION:
+				var c: Color = f["col"]
+				var hot: Color = c.lightened(0.55)
+				var scale: float = float(f.get("scale", 1.0))
+				_burst(f, u, 20, 112.0 * scale, 4.0 * sqrt(scale))
+				draw_circle(f["pos"], 34.0 * scale * pow(1.0 - u, 1.8),
+					Color(hot.r, hot.g, hot.b, (1.0 - u) * 0.70))
+				draw_arc(f["pos"], (12.0 + 96.0 * u) * scale, 0.0, TAU, 42,
+					Color(c.r, c.g, c.b, (1.0 - u) * 0.90), 5.0 * (1.0 - u) + 1.0)
 
 
 ## Deterministic radial scatter — the seed keeps each effect stable frame to

@@ -81,6 +81,7 @@ To play online:
 3. Both players use their own keyboard and mouse. Online, the controls on both
    computers are `A`/`D`, `W`, `S`, mouse aim, hold/release `LMB`, `Left Shift`
    to confirm, `R`/`RMB` to roll back, `F` to reset the path, and `T` for SUPER.
+   Static Witch reserves `RMB` for her orb, so use `R` to roll her shot back.
 
 Plans remain private until both players confirm. A disconnected client retries
 the room socket automatically; a detected state mismatch stops the match
@@ -115,18 +116,31 @@ npx wrangler deploy
 
 The title screen keeps six primary choices: **PLAY**, **TUTORIAL**, **ONLINE**,
 **CONTROLS**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
-navigation remains available (`W`/`S` select, `Enter` activate). Highlighting
-any row updates a compact footer that explains the choice before it is opened.
+navigation remains available (`W`/`S` select, `Enter` activate). The redesigned
+command-dossier layout keeps navigation on the left and explains the selected
+fate in a persistent field-note panel on the right.
 **CONTROLS** opens a full reference sheet for the local device split, SUPER
 activation, and playtest shortcuts.
 
 **PLAY** groups the local variants in a second page:
 
-* **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose one of
-  the authored arenas from its submenu.
-* **VS AI — CLOSE** — the close-camera ruleset on its fixed arena.
-* **VS HUMAN** — local, **open information**: both players see each other's
-  plans and compose them simultaneously on the same machine.
+* **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose an authored arena,
+  then configure both the human fighter and AI rival from the full roster.
+* **VS AI — GRENADIER** — Player 1 replaces the normal knife fan with one
+  bouncing timed grenade. The opponent remains the established knife-only AI.
+  Choose an authored arena from the same submenu.
+* **VS HUMAN** — opens character selection first. P1 and P2 independently pick
+  **Dagger Duelist**, **The Velocity** (Dashblade), **The Static Witch**
+  (Shock), or **Broodtail** (Chakram), then play with **open information**:
+  both players see each other's plans and compose them simultaneously on the
+  same machine.
+* **TEAM BATTLE — 2 VS 2** — opens a FIFA-style formation screen. Keyboard and
+  mouse plus up to three gamepads explicitly join, move to Team Crimson or Team
+  Azure, select an arena, and lock their fate. Empty positions become CPU
+  allies. Teams share the selected hit target; friendly fire still removes an
+  ally for the execution window but awards no point.
+* **3 PLAYERS** — Player 1 human against two independent AIs, using each
+  arena's intermediate platform layout.
 * **4 PLAYERS** — local free-for-all with Player 1 human and Players 2–4 driven
   by independent AIs. Each AI chooses a nearby living rival, so they fight one
   another as well as the human. The first player to reach the hit limit wins.
@@ -186,23 +200,33 @@ during its think delay — a full sweep costs ~35ms, which would otherwise be a
 visible hitch at the top of every planning phase. Measured over 5000 frames of
 live play: **worst frame 7.9ms, zero frames over budget.**
 
+Against Velocity, the AI remains blind to the committed plan but tests a small
+envelope of possible early/middle/late dash releases. Routes which escape that
+body line score higher. A close projectile fired directly into the possible
+front guard is treated as parry fuel, so the bot may reposition without firing
+or choose a real over/under angle instead.
+
 Difficulty knobs on the `Main` node: `ai_aim_jitter` (degrees of slop, default
 2.0), `ai_think_min` / `ai_think_max`, `ai_slice_usec`.
 
 ## The loop
 
 ```
-PLANNING (5s, frozen)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
+PLANNING (5s, frozen; shrinks after turn 3)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
 ```
 
 * Execution begins when both players confirm (after a 0.25s commit beat that
   absorbs late input) **or** when the timer hits zero.
+* Turns 1–3 retain the full 5-second planning window. Turns 4 and 5 fall to
+  4.5s and 4.0s; turn 6 onward uses the 3.5-second floor. AI searches are sliced
+  across frames and lock their best evaluated candidate if that clock expires.
 * Nothing is cleared at a phase boundary. Knives are only removed when they hit
   terrain, hit a player, or leave the world.
 
 ## Match structure
 
-**First to 3 hits takes the match.** A hit does not end the round — it costs a
+**First to 5 hits takes the default match.** Local setup can select 3, 5, or 7
+match lives before play. A hit does not end the round — it costs a
 point and takes the victim off the board for the remainder of that window only.
 Everything else carries on untouched: knives stay in flight, platform damage
 stands, the other player keeps their exact position and velocity.
@@ -239,7 +263,8 @@ turn cancels the incoming Core; once materialized, it persists for its full
 lifetime unless collected.
 
 Score pips sit under the timer. `F10` cycles levels and resets the score. The
-main menu exposes the close-camera prototype as **VS AI — CLOSE**.
+close-camera prototype remains available to internal tests but is hidden from
+the player-facing mode menu.
 
 ## Movement: pilot the ghost on a stamina budget
 
@@ -285,7 +310,7 @@ Key properties:
 
 ## Controls
 
-| | Player 1 — keyboard + mouse | Player 2 — gamepad |
+| | Keyboard + mouse fighter | Any joined gamepad fighter |
 |---|---|---|
 | Walk the ghost | hold `A` / `D` | Left stick / D-pad |
 | Jump / double jump (hold = higher) | `Space` | `A` |
@@ -293,9 +318,10 @@ Key properties:
 | Aim | **Mouse** — free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
+| Grenadier fuse | `1`, `2`, or `3` during planning | `L1` / `R1` |
 | Toggle SUPER | `T` | `Y` |
 | Confirm | `Left Shift` | `Start` |
-| Rollback shot | `R` or `RMB` | `B` or `Select` |
+| Rollback shot | `R`, or `RMB` except as Static Witch | `B` or `Select` |
 | Reset path | `F` | `X` |
 
 Playtest: `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
@@ -306,7 +332,64 @@ Global: `F9` restart · `F10` next level · `M` mute · `H` hide the control bar
 `R` watch replay · `C` copy the match report · `←`/`→` choose the rematch level
 · `Enter` rematch.
 
-In Vs AI the Player 2 column is inert — the AI ignores it.
+In local Vs Human, a Player 2 Grenadier cycles the 1/2/3-second fuse with
+`L1`/`R1`. In Vs AI the Player 2 column is inert — the AI ignores it.
+
+The Grenadier is retained only as its explicit **VS AI — GRENADIER** legacy
+playtest; it is no longer part of character selection. Each normal throw
+launches one grenade; its selected 1/2/3-second fuse
+counts execution time from launch and pauses whenever time is frozen. A dagger
+hit or a collision with another grenade detonates it immediately. Explosions
+damage fighters in the visible blast radius, consume nearby daggers, respect
+hard cover, and can chain into other grenades. A Grenadier SUPER still uses the
+existing knife barrage for this first balance slice.
+
+### Character prototype roster
+
+**The Velocity** deletes one frame from every four steps: her horizontal
+locomotion is 75% of the shared baseline, while the denied distance accumulates
+as up to three **LOST FRAME** cells. Standing still or pressing into a wall earns
+nothing. Her planned body dash—**CUT TO END**—automatically cashes the completed
+cells into one extra route tick each; committing all three also adds one point
+of front guard. The narrow blade remains a real moving collision surface which
+can deflect daggers or intercept plasma, while attacks reaching the body from
+above, below or behind still hit. The planning route is divided into manga
+panels and shows the exact endpoint, stored-cell count and resulting guard.
+A dash that meets a vertical border turns its remaining cut upward. Her SUPER
+performs a full three-frame cut before applying its greater speed, duration and
+guard life. Finishing a cut retains only 28% of its attack velocity, preventing
+an upward dash from donating near-projectile momentum to the next movement plan.
+Movement after CUT TO END cannot reload LOST FRAME cells until the next
+execution window.
+
+**The Static Witch** charges **PLASMA** with left mouse and **ORB** with right
+mouse. Her horizontal locomotion is 110% of the shared baseline. Plasma gains
+speed, range and visual weight with charge; partial shots fade before crossing
+the full screen, while only a completed draw spans the arena. It remains a very
+fast straight simulated projectile which can be
+intercepted and heavily attenuated by a spent dagger. Each cast adds another
+long-range, low-gravity persistent orb without dismissing her existing field. Orbs arm after a
+short delay and can rest on platforms. Ordinary weapons trigger a small,
+owner-safe pop, including when an orb's lifetime ends; plasma triggers the
+large, fully dangerous shock combo, whose lethal radius grows with plasma charge.
+Both blasts revector nearby weapons
+instead of erasing them. Her SUPER launches an armed orb ahead of a plasma shot,
+preserving an interceptible combo line.
+
+**Broodtail**, the fourth selectable fighter, throws one **LIVING CHAKRAM** at
+half the former launch speed. It follows the committed aim exactly. A wall or
+hard platform pins it in place without stopping its spin; at the end of its
+launch window, a midair chakram also holds at its exact position. It remains a
+stationary threat through the following turn and begins returning on its third
+turn. Chakrams launched on different turns recall independently. Any opposing
+projectile impact destroys one immediately. Its SUPER retains the three-disc
+forward spread under the same hold-and-return lifecycle.
+
+The separate **critter summoner** concept is reserved for a later character.
+Those summons would walk and climb platforms, acquire a fighter within a clear
+reach radius, telegraph briefly, then pounce. Keeping that territorial,
+delayed-pressure kit separate preserves Broodtail's returning-weapon identity
+and gives the summons room for their own counterplay and limits.
 
 In Online both computers use the **Player 1 — keyboard + mouse** column. The
 server-assigned P1/P2 side changes the fighter and HUD label, not the local
@@ -334,13 +417,15 @@ movement you piloted, so you can re-aim without rebuilding the run.
 **Reset path** throws the recording away and refills stamina (the shot goes with
 it, since its tick indexes into the path that just vanished).
 
-Rebind P1 by editing `K_P1` in `scripts/GameManager.gd`; local P2 is deliberately
-gamepad-only.
+Rebind the keyboard fighter by editing `K_P1` in `scripts/GameManager.gd`;
+other local human slots are deliberately gamepad-only.
 
 ### Gamepads
 
-In a local duel the first connected pad always goes to **Player 2**, giving the
-intended keyboard+mouse vs. gamepad setup. Online, the first pad controls the
+In a local duel the first connected pad goes to **Player 2**, giving the
+intended keyboard+mouse vs. gamepad setup. In Team Battle, each pad joins and
+chooses a side independently; its ownership follows that fighter through
+character selection and gameplay. Online, the first pad controls the
 server-assigned local fighter. Aim source follows the local device in use.
 
 ### Descending: down + jump
@@ -362,18 +447,23 @@ it is a deliberate human verb, and the search has no way to value it yet.
 
 ## Levels
 
-Four arenas, cycled with `F10`. Layouts live in `scripts/Levels.gd`, and the HUD
+Seven arenas, cycled with `F10`. Layouts live in `scripts/Levels.gd`, and the HUD
 names the wrap mode next to the level.
 
 | # | Name | Wrap | Character |
 |---|---|---|---|
-| 1 | **Shattered Sanctum** | ↔ upper gate | P1/P2 enter below and P3/P4 from permanent upper balconies; three side tiers wrap around a central shrine. |
+| 1 | **Crosshair Court** | walled | Static permanent cover: the clean baseline for reading knife collisions and delayed danger. |
 | 2 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
-| 3 | **Pendulum** | walled | Two wide lifts rise and fall in opposite phase either side of a permanent spine. Two pulse orbs drift over the top of each lift's travel. |
-| 4 | **Foundry** | ↔ | One long shutter slides the whole width of the mid-field, sealing one half at a time. Two orbs drift up the flanks as a launch. |
+| 3 | **Pendulum** | walled | Two wide lifts rise and fall in opposite phase either side of a permanent spine, with no second mechanic competing for attention. |
+| 4 | **Pulse Chamber** | ↔ | Triggerable orbs bend fighters and persistent knives, then advertise a safe cooldown. |
+| 5 | **Shattered Sanctum** | ↔ upper gate | Breakable stairs let players author the firing lanes of later turns. |
+| 6 | **Foundry** | ↔ | One long shutter slides the whole width of the mid-field, sealing one half at a time. |
+| 7 | **Collision Course** | walled | Converging ferries and a crossing pulse orb combine the earlier reads into one deterministic timing puzzle. |
 
-The layouts borrow TowerFall's readable side architecture, but are compressed
-for four-player free-for-all combat. P1/P2 start in the lower corners and P3/P4
+The layouts borrow TowerFall's readable side architecture. Each is authored in
+nested 2P, 3P and 4P variants: the trio adds one tactical shelf and the full
+crowd adds another, preserving the arena's thesis while increasing safe landing
+choices as simultaneous threats increase. P1/P2 start in the lower corners and P3/P4
 in opposite upper corners, with permanent routes joining every height. Obstacles
 shape player routes while broad air chambers let persistent knives accumulate.
 Breakable shortcuts progressively expose new diagonal shots without deleting
@@ -412,16 +502,15 @@ legal in every configuration it can actually reach.
 ### Pulse orbs
 
 Orbs drift on their own rails. They are inert until a knife reaches one: the
-knife is spent, and the orb detonates a radial forcefield that throws every
-fighter and every knife inside its radius outward, with a linear falloff so the
-rim can be judged by eye. The orb then goes dark for two execution windows,
-showing its recharge as pips.
+orb detonates a radial forcefield, preserves the triggering knife, and relaunches
+every knife inside its radius directly outward at full player-throw speed.
+Fighter push keeps a linear falloff so the rim can be judged by eye. The orb
+then goes dark for two execution windows, showing its recharge as pips.
 
 Nothing is damaged — knives remain the only source of damage — but position,
 momentum and every firing line inside the ring change, and the knives blown
-outward stay in the world afterwards. Trading a knife for a blast is therefore a
-real decision with a visible cost, and the blast footprint is drawn during
-planning because it is the whole thing being decided.
+outward stay in the world on ordinary throw gravity. Outward arrowheads and the
+`DAGGERS OUT` label make that consequence public during planning.
 
 ### Close Camera mode
 
@@ -436,8 +525,7 @@ Disposable. It tests one coherent variant:
 * a lower ~129px jump, retaining the authored speed, air control and double jump
 * a faster knife catching a slower one from behind transfers momentum into it
   and restores one spent ricochet
-* sufficiently fast grazing impacts ricochet; square impacts still embed or
-  damage cover, and every bounce sheds speed
+* the global HARD-surface ricochet rule remains active
 * a 3.5s planning window instead of 5s, with the AI's deliberation scaled to fit
 * **auto-ready**: finishing your action is the commitment, with no separate
   confirm press. A green `READY` badge appears over the fighter, drawn in world
@@ -476,7 +564,11 @@ the HUD. A `wrap_y` level therefore needs a solid ceiling with a gap in the
 middle third, and its floor gap must sit inside that ceiling gap.
 
 Flipping a level is one line: add `"wrap_x": true` to its dictionary. Side walls
-are omitted automatically.
+are omitted automatically. Open seams carry cyan `WRAP` chevrons only where
+collision is actually passable. Non-wrapping sides instead draw full-height
+striped `NO PASS // HARD WALL` bulkheads. A vertical portal is marked at both
+its ceiling and floor aperture; an unmarked open sky is not a portal, so knives
+simply rise and return under gravity.
 
 ### Destructible cover
 
@@ -484,9 +576,14 @@ Terrain **never damages a player** — only knives do.
 
 Platforms carry hit points and chip away as knives strike them, so cover is
 temporary and the arena reshapes over a match. Remaining hits show as pips above
-each piece, and it cracks and reddens as it takes damage. Indestructible
-geometry is cool grey-blue; breakable geometry is warm brown. That colour split
-is the only thing you have to learn to read an arena.
+each piece, and it cracks and reddens as it takes damage. HARD geometry is cold
+steel with rivets, a bright level accent and an explicit `HARD` label. BREAK
+geometry is orange, diagonally striped, labelled `BREAK`, and carries HP pips.
+
+A knife at or above `knife_ricochet_min_speed` bounces from HARD geometry at
+any impact angle, retaining a tunable fraction of its speed for at most two
+banks. The same knife embeds in BREAK geometry and damages it. The known-path
+preview uses the identical material and force rule, so planned banks are shown.
 
 | Piece | HP |
 |---|---|
@@ -542,17 +639,27 @@ All of it disappears during execution; you just watch.
 Exported on the `Main` node in `scenes/Main.tscn`:
 
 ```
-hits_to_win              3
+hits_to_win              5
 respawn_invuln_turns     1
 banner_duration          2.4
 
 planning_duration        5.0
+planning_shrink_after_rounds  3
+planning_shrink_per_round     0.5
+minimum_planning_duration    3.5
 execution_duration       0.75
 commit_delay             0.25
 
 movement_budget          0.50    seconds of piloted control per turn
 pilot_time_scale         0.5     ghost piloting runs at half real time
 player_move_speed        260
+velocity_move_speed_scale 0.75  horizontal target speed: 195 px/s
+dash_exit_momentum_retention 0.28 inherited speed after CUT TO END completes
+frame_debt_max_cells      3     completed LOST FRAME cells retained between turns
+frame_debt_distance_per_cell 8  denied horizontal pixels required per cell
+frame_debt_dash_ticks_per_cell 1 extra CUT TO END tick per committed cell
+frame_debt_full_guard_bonus 1  extra front guard when all cells are committed
+shock_move_speed_scale   1.10   horizontal target speed: 286 px/s
 player_acceleration      1800
 player_air_acceleration  900
 jump_impulse             780     full hold: 211px rise, 1.10s air
@@ -633,15 +740,16 @@ the thing this prototype exists to test.
 | `scripts/UI.gd` | Compact central match HUD, phase progress, portrait seals, banners, and the desktop result action panel. |
 | `scripts/Ai.gd` | The AI opponent. Ranks movements by safety, then searches shots coarse-to-fine against three hypotheses of what you might do. Sliced across frames. |
 | `scripts/MenuLayer.gd` | Title screen, local-mode/arena routing, controls reference, accessibility options, and contextual descriptions. |
+| `scripts/TeamSelectLayer.gd` | Local device joining, Crimson/Azure side assignment, CPU formation fill, and Team Battle arena selection. |
 | `scripts/OnlineLobby.gd` | Private-room create/join screen and room-code status. |
 | `scripts/OnlineClient.gd` | Cloudflare HTTP/WebSocket client, heartbeat, reconnect and lockstep messages. |
 | `backend/src/room.ts` | Hibernating Durable Object room: player slots, plan relay, state-hash barrier, rematches and expiry. |
-| `scripts/Levels.gd` | The four arena layouts, wrap rules, platform hit points, mover motion data, orb placements and authored Temporal Core sockets. |
+| `scripts/Levels.gd` | The seven arena layouts and their 2P/3P/4P platform variants, wrap rules, platform hit points, mover motion data, orb placements and authored Temporal Core sockets. |
 | `scripts/Mover.gd` | Tick-indexed motion for moving geometry and orbs. A pure triangle wave: position is a function of the absolute tick, never an accumulated velocity. |
 | `scripts/Hazard.gd` | The pulse orb — drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
 | `scripts/DuelCamera.gd` | PROTOTYPE. Pushes in during planning and pulls out for execution. Disposable with the rest of `prototype_mode`. |
 | `scripts/Arena.gd` | Platform rendering: gold caps for permanent, warm and cracked for breakable, violet caps and travel chevrons for moving. |
-| `scripts/Backdrop.gd` | Per-arena procedural scenery: sanctum ruins, descent shafts, pendulum observatory, and foundry heat stacks. Deliberately low-contrast beneath gameplay information. |
+| `scripts/Backdrop.gd` | Low-contrast procedural scenery families assigned across all seven arenas: ruins, descent shafts, clockwork observatory, pulse cyan and foundry heat stacks. |
 | `scripts/Effects.gd` | Impact sparks, platform shatters, hit bursts. Cosmetic only; runs on real time so it never consumes execution ticks. |
 | `scripts/Sfx.gd` | Procedurally synthesised 8-bit sound effects and the voice pool. |
 | `scripts/TimeStopLayer.gd` | Violet/gold frozen-world grade, clock motif, suspended motes, and freeze/release pulses. |

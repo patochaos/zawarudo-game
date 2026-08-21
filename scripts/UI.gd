@@ -3,38 +3,58 @@ extends CanvasLayer
 ## Compact match HUD. Detailed player-plan panels were deliberately removed so
 ## the arena, ghosts and world-space previews remain the focus.
 
-const FIGHTER_PORTRAIT := preload("res://assets/art/super-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
+const GRENADIER_PORTRAIT := preload("res://assets/art/portraits/grenadier-portrait-v2.png")
+const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
+const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
+const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
 
 
 class FighterSeal:
 	extends Control
 
-	const PANEL_INK := Color(0.025, 0.012, 0.045, 0.82)
 	const EMPTY_PIP := Color(0.14, 0.14, 0.20, 0.94)
 
 	var player_index: int = 0
 	var accent: Color = Color.WHITE
 	var mirrored: bool = false
 	var portrait: Texture2D
+	var fighter_name: String = "DUELIST"
+	var fuse_seconds: int = -1
 	var points: int = 0
 	var points_to_win: int = 3
 	var super_meter: float = 0.0
 	var super_armed: bool = false
+	var lost_frames: int = -1
+	var max_lost_frames: int = 3
 
-	func configure(index: int, color: Color, flip: bool, texture: Texture2D) -> void:
+	func configure(index: int, color: Color, flip: bool, name: String, texture: Texture2D) -> void:
 		player_index = index
 		accent = color
 		mirrored = flip
+		fighter_name = name
 		portrait = texture
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		size = Vector2(250.0, 84.0)
+		size = Vector2(430.0, 58.0)
 		queue_redraw()
 
-	func set_state(score_value: int, win_score: int, meter: float, armed: bool) -> void:
+	func set_identity(name: String, texture: Texture2D) -> void:
+		if fighter_name == name and portrait == texture:
+			return
+		fighter_name = name
+		portrait = texture
+		queue_redraw()
+
+	func set_state(score_value: int, win_score: int, meter: float, armed: bool,
+			selected_fuse: int = -1, debt_cells: int = -1,
+			debt_max: int = 3) -> void:
 		points = score_value
 		points_to_win = win_score
 		super_meter = clampf(meter, 0.0, 1.0)
 		super_armed = armed
+		fuse_seconds = selected_fuse
+		lost_frames = debt_cells
+		max_lost_frames = maxi(1, debt_max)
 		queue_redraw()
 
 	func _mirror_points(source: PackedVector2Array) -> PackedVector2Array:
@@ -46,20 +66,12 @@ class FighterSeal:
 		return result
 
 	func _draw() -> void:
-		var panel_shape := _mirror_points(PackedVector2Array([
-			Vector2(52.0, 8.0), Vector2(174.0, 8.0), Vector2(193.0, 25.0),
-			Vector2(217.0, 25.0), Vector2(248.0, 51.0), Vector2(248.0, 73.0),
-			Vector2(52.0, 73.0),
-		]))
-		draw_colored_polygon(panel_shape, PANEL_INK)
-		draw_polyline(panel_shape + PackedVector2Array([panel_shape[0]]),
-			Color(accent.r, accent.g, accent.b, 0.88), 1.25, true)
-
-		# The same authored portrait becomes a mirrored violet rival. Its high crop
-		# reads at thumbnail scale while preserving the angular manga silhouette.
-		var portrait_target := Rect2(2.0, 0.0, 74.0, 82.0)
+		# Portrait, score and meter share one uninterrupted rail. The narrow crop
+		# preserves fighter recognition without turning the identity into a card.
+		var portrait_target := Rect2(0.0, 1.0, 44.0, 55.0)
 		var portrait_source := Rect2(150.0, 0.0, 950.0, 950.0)
-		var portrait_tint := Color(0.88, 0.58, 1.0, 1.0) if mirrored else Color.WHITE
+		var portrait_tint := Color(0.88, 0.58, 1.0, 1.0) \
+			if mirrored and fighter_name == "DUELIST" else Color.WHITE
 		if mirrored:
 			draw_set_transform(Vector2(size.x, 0.0), 0.0, Vector2(-1.0, 1.0))
 		if portrait != null:
@@ -68,48 +80,63 @@ class FighterSeal:
 			draw_set_transform(Vector2.ZERO)
 
 		var portrait_frame := _mirror_points(PackedVector2Array([
-			Vector2(2.0, 0.0), Vector2(56.0, 0.0), Vector2(76.0, 18.0),
-			Vector2(76.0, 64.0), Vector2(58.0, 82.0), Vector2(2.0, 82.0),
+			Vector2(0.0, 1.0), Vector2(34.0, 1.0), Vector2(44.0, 11.0),
+			Vector2(44.0, 46.0), Vector2(34.0, 56.0), Vector2(0.0, 56.0),
 		]))
 		draw_polyline(portrait_frame + PackedVector2Array([portrait_frame[0]]),
-			accent.lightened(0.20), 1.5, true)
+			Color(accent.r, accent.g, accent.b, 0.72), 1.0, true)
 
 		var font := ThemeDB.fallback_font
-		var name_x := 80.0 if not mirrored else 12.0
-		var name_width := 140.0 if not mirrored else 145.0
+		var name_x := 52.0 if not mirrored else 270.0
+		var name_width := 110.0
 		var name_align := HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT
-		draw_string(font, Vector2(name_x, 29.0), "P%d" % (player_index + 1),
-			name_align, name_width, 16, accent.lightened(0.25))
+		draw_string(font, Vector2(name_x, 23.0), "P%d · %s" % [player_index + 1, fighter_name],
+			name_align, name_width, 11, accent.lightened(0.22))
+		if lost_frames >= 0:
+			var debt_label_x := 52.0 if not mirrored else 270.0
+			var debt_pip_x := 91.0 if not mirrored else 315.0
+			draw_string(font, Vector2(debt_label_x, 42.0), "FRAME",
+				HORIZONTAL_ALIGNMENT_LEFT, 36.0, 7, Color(0.52, 0.92, 1.0, 0.82))
+			for i in max_lost_frames:
+				var cell := Rect2(debt_pip_x + float(i) * 13.0, 34.0, 9.0, 7.0)
+				draw_rect(cell, Color(0.34, 0.96, 1.0, 0.88) if i < lost_frames \
+					else Color(0.10, 0.15, 0.20, 0.92))
+				draw_rect(cell, Color(0.72, 1.0, 1.0, 0.72), false, 1.0)
 
-		var first_pip_x := 105.0 if not mirrored else 82.0
+		var first_pip_x := 169.0
+		var pip_step := minf(16.0, 96.0 / float(maxi(1, points_to_win - 1)))
 		for i in points_to_win:
-			var centre := Vector2(first_pip_x + float(i) * 30.0, 44.0)
+			var centre := Vector2(first_pip_x + float(i) * pip_step, 20.0)
 			var diamond := PackedVector2Array([
-				centre + Vector2(0.0, -7.0), centre + Vector2(7.0, 0.0),
-				centre + Vector2(0.0, 7.0), centre + Vector2(-7.0, 0.0),
+				centre + Vector2(0.0, -4.0), centre + Vector2(4.0, 0.0),
+				centre + Vector2(0.0, 4.0), centre + Vector2(-4.0, 0.0),
 			])
 			if i < points:
 				draw_colored_polygon(diamond, accent.lightened(0.18))
 			else:
 				draw_colored_polygon(diamond, EMPTY_PIP)
-			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.2, true)
+			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.0, true)
 
-		var label_x := 80.0 if not mirrored else 26.0
-		var bar_x := 126.0 if not mirrored else 72.0
-		draw_string(font, Vector2(label_x, 69.0), "SUPER", HORIZONTAL_ALIGNMENT_LEFT,
-			44.0, 9, accent.lightened(0.10))
-		var bar_width := 105.0 if not mirrored else 92.0
-		var bar_rect := Rect2(bar_x, 62.0, bar_width, 5.0)
+		var label_x := 284.0 if not mirrored else 76.0
+		var bar_x := 306.0 if not mirrored else 14.0
+		var meter_label := "FUSE %ds" % fuse_seconds if fuse_seconds > 0 else "SUPER"
+		draw_string(font, Vector2(label_x, 45.0), meter_label,
+			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
+			48.0, 8, accent.lightened(0.08))
+		var bar_width := 110.0
+		var bar_rect := Rect2(bar_x, 39.0, bar_width, 4.0)
 		draw_rect(bar_rect, Color(0.10, 0.09, 0.14, 0.92))
-		draw_rect(bar_rect, Color(accent.r, accent.g, accent.b, 0.72), false, 1.0)
+		draw_rect(bar_rect, Color(accent.r, accent.g, accent.b, 0.62), false, 1.0)
 		if super_meter > 0.0:
 			var fill_color := Color(1.0, 0.94, 0.58) if super_meter >= 1.0 else accent
-			draw_rect(Rect2(bar_rect.position, Vector2(bar_rect.size.x * super_meter,
-				bar_rect.size.y)), fill_color)
+			var fill_width := bar_rect.size.x * super_meter
+			var fill_x := bar_rect.end.x - fill_width if mirrored else bar_rect.position.x
+			draw_rect(Rect2(Vector2(fill_x, bar_rect.position.y),
+				Vector2(fill_width, bar_rect.size.y)), fill_color)
 		if super_armed:
-			var armed_at := Vector2(bar_rect.end.x + 8.0 if not mirrored else bar_rect.position.x - 8.0,
+			var armed_at := Vector2(bar_rect.end.x + 6.0 if not mirrored else bar_rect.position.x - 6.0,
 				bar_rect.position.y + 2.5)
-			draw_circle(armed_at, 3.5, Color(1.0, 0.96, 0.66))
+			draw_circle(armed_at, 3.0, Color(1.0, 0.96, 0.66))
 
 
 class HudChrome:
@@ -120,12 +147,10 @@ class HudChrome:
 		queue_redraw()
 
 	func _draw() -> void:
-		var gold := Color(0.84, 0.60, 0.19, 0.68)
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(452.0, 0.0), Vector2(828.0, 0.0), Vector2(790.0, 190.0), Vector2(490.0, 190.0),
-		]), Color(0.035, 0.018, 0.065, 0.72))
-		draw_line(Vector2(490.0, 188.0), Vector2(790.0, 188.0), gold, 2.0)
-		draw_line(Vector2(0.0, 630.0), Vector2(1280.0, 630.0), gold, 2.0)
+		# A single leaded-glass rail is the only persistent match chrome.
+		draw_rect(Rect2(0.0, 0.0, 1280.0, 58.0), Color(0.025, 0.012, 0.045, 0.84))
+		draw_line(Vector2(0.0, 57.0), Vector2(1280.0, 57.0),
+			Color(0.84, 0.60, 0.19, 0.52), 1.0)
 
 
 class ResultChrome:
@@ -180,6 +205,7 @@ const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
 const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_RIVAL := "P%d  ONLINE · PLAN HIDDEN"
 const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
+const _HINT_PAD_GRENADIER := "PAD P%d GRENADIER · L-STICK MOVE · A JUMP · R-STICK AIM · R2 GRENADE · L1/R1 FUSE · START LOCK"
 var _banner_bg: ColorRect
 var _banner_rule: ColorRect
 var _banner: Label
@@ -211,18 +237,23 @@ func build(manager) -> void:
 	chrome.z_index = -1
 	add_child(chrome)
 
-	_level_label = _mk_label(Vector2(440.0, 8.0), 400.0, 15, HORIZONTAL_ALIGNMENT_CENTER)
+	# Secondary match metadata remains available to tests/debugging but is not
+	# persistent match chrome. Combat state alone occupies the top rail.
+	_level_label = _mk_label(Vector2(240.0, 682.0), 800.0, 11, HORIZONTAL_ALIGNMENT_CENTER)
 	_level_label.add_theme_color_override("font_color", Color(0.52, 0.58, 0.68))
-	_build_label = _mk_label(Vector2(1060.0, 642.0), 200.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
+	_level_label.visible = false
+	_build_label = _mk_label(Vector2(1060.0, 694.0), 200.0, 9, HORIZONTAL_ALIGNMENT_RIGHT)
 	_build_label.text = "PLAYTEST %s" % str(ProjectSettings.get_setting(
 		"application/config/version", "DEV"))
 	_build_label.add_theme_color_override("font_color", Color(0.38, 0.42, 0.50))
-	_turn_label = _mk_label(Vector2(540.0, 26.0), 200.0, 20, HORIZONTAL_ALIGNMENT_CENTER)
-	_timer_label = _mk_label(Vector2(490.0, 46.0), 300.0, 62, HORIZONTAL_ALIGNMENT_CENTER)
-	_phase_label = _mk_label(Vector2(490.0, 116.0), 300.0, 20, HORIZONTAL_ALIGNMENT_CENTER)
+	_build_label.visible = false
+	_turn_label = _mk_label(Vector2(438.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
+	_timer_label = _mk_label(Vector2(548.0, 2.0), 184.0, 34, HORIZONTAL_ALIGNMENT_CENTER)
+	_timer_label.size.y = 48.0
+	_phase_label = _mk_label(Vector2(750.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_LEFT)
 	_phase_track = ColorRect.new()
-	_phase_track.position = Vector2(516.0, 151.0)
-	_phase_track.size = Vector2(248.0, 5.0)
+	_phase_track.position = Vector2(480.0, 53.0)
+	_phase_track.size = Vector2(320.0, 3.0)
 	_phase_track.color = Color(0.12, 0.11, 0.17, 0.90)
 	add_child(_phase_track)
 	_phase_fill = ColorRect.new()
@@ -233,7 +264,7 @@ func build(manager) -> void:
 	# Build all four score rows up front; unused rows stay hidden in duel modes.
 	for i in gm.MAX_PLAYERS:
 		var row: Array[ColorRect] = []
-		for h in gm.hits_to_win:
+		for h in gm.MAX_HITS_TO_WIN:
 			var pip := ColorRect.new()
 			pip.position = Vector2.ZERO
 			pip.size = Vector2(11.0, 11.0)
@@ -241,16 +272,17 @@ func build(manager) -> void:
 			add_child(pip)
 			row.append(pip)
 		_pips.append(row)
-	_score_label = _mk_label(Vector2(490.0, 166.0), 300.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
+	_score_label = _mk_label(Vector2(440.0, 39.0), 400.0, 9, HORIZONTAL_ALIGNMENT_CENTER)
 	_score_label.add_theme_color_override("font_color", Color(0.45, 0.50, 0.60))
 	_score_label.text = "FIRST TO %d HITS" % gm.hits_to_win
+	_score_label.visible = false
 
 	# Mirrored 1v1 fighter seals. They replace the anonymous centre score pips in
 	# duels, but the existing scalable rows remain available for four-player mode.
 	for i in 2:
 		var seal := FighterSeal.new()
-		seal.position = Vector2(14.0, 24.0) if i == 0 else Vector2(1016.0, 24.0)
-		seal.configure(i, gm.PLAYER_COLORS[i], i == 1, FIGHTER_PORTRAIT)
+		seal.position = Vector2(8.0, 0.0) if i == 0 else Vector2(842.0, 0.0)
+		seal.configure(i, gm.PLAYER_COLORS[i], i == 1, "DUELIST", DUELIST_PORTRAIT)
 		add_child(seal)
 		_fighter_seals.append(seal)
 
@@ -272,23 +304,23 @@ func build(manager) -> void:
 	for item in _help:
 		item.visible = help_visible
 
-	# Hit banner — sits below the compact centre HUD without covering the arena's
-	# most important ground-level action.
+	# Hit notices are brief bottom toasts. They never add another layer above the
+	# action and their existing lifetime fades them away automatically.
 	_banner_bg = ColorRect.new()
-	_banner_bg.position = Vector2(340.0, 194.0)
-	_banner_bg.size = Vector2(600.0, 50.0)
-	_banner_bg.color = Color(0.08, 0.09, 0.13, 0.94)
+	_banner_bg.position = Vector2(400.0, 614.0)
+	_banner_bg.size = Vector2(480.0, 36.0)
+	_banner_bg.color = Color(0.08, 0.09, 0.13, 0.78)
 	_banner_bg.visible = false
 	add_child(_banner_bg)
 
 	_banner_rule = ColorRect.new()
-	_banner_rule.position = Vector2(340.0, 240.0)
-	_banner_rule.size = Vector2(600.0, 3.0)
+	_banner_rule.position = Vector2(400.0, 648.0)
+	_banner_rule.size = Vector2(480.0, 2.0)
 	_banner_rule.visible = false
 	add_child(_banner_rule)
 
-	_banner = _mk_label(Vector2(340.0, 201.0), 600.0, 30, HORIZONTAL_ALIGNMENT_CENTER)
-	_banner.size = Vector2(600.0, 40.0)
+	_banner = _mk_label(Vector2(400.0, 618.0), 480.0, 20, HORIZONTAL_ALIGNMENT_CENTER)
+	_banner.size = Vector2(480.0, 30.0)
 	_banner.visible = false
 
 	_over_bg = ColorRect.new()
@@ -424,8 +456,11 @@ func _mk_label(pos: Vector2, width: float, size: int, align: int) -> Label:
 
 
 func refresh() -> void:
-	_turn_label.text = "TURN %d" % gm.turn
-	var match_rule := "TRAINING · HORIZONTAL TUNNEL ↔" if gm.tutorial_mode else "FIRST TO %d HITS" % gm.hits_to_win
+	_turn_label.text = "T%d" % gm.turn
+	var match_rule := "TRAINING · HORIZONTAL TUNNEL ↔" if gm.tutorial_mode else \
+		("CRIMSON  %d   —   %d  AZURE     ·     FIRST TO %d" % [
+			gm.team_score[0], gm.team_score[1], gm.hits_to_win] if gm.team_mode else \
+		"FIRST TO %d HITS" % gm.hits_to_win)
 	if not gm.tutorial_mode and gm.core_active:
 		match_rule += "   ·   CORE: FULL SUPER (%d TURN%s LEFT)" % [
 			gm.core_turns_left, "" if gm.core_turns_left == 1 else "S"]
@@ -435,6 +470,7 @@ func refresh() -> void:
 		var remaining: int = maxi(0, gm.core_hitless_turns_to_announce - gm.hitless_execution_streak)
 		match_rule += "   ·   CORE IN %d HITLESS TURN%s" % [remaining, "" if remaining == 1 else "S"]
 	_score_label.text = match_rule
+	_score_label.visible = gm.team_mode
 	_level_label.text = ("CLOSE CAMERA — %s   ·   %s" % [gm.level_name, gm.level_wrap]) \
 		if gm.prototype_mode else \
 		("LEVEL %d/%d — %s   ·   %s" % [gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap])
@@ -450,29 +486,83 @@ func refresh() -> void:
 		_hint_p1.text = ""
 		_hint_p2.text = ""
 	else:
-		_hint_p1.text = \
-			"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
-		if gm.vs_ai:
-			_hint_p2.text = _HINT_AI_4P if gm.players.size() == 4 else _HINT_AI
+		if gm.team_mode:
+			_level_label.text += "   ·   2V2 TEAM BATTLE"
+			_hint_p1.text = "CRIMSON  P1 + P3  ·  COORDINATE PLANS  ·  FRIENDLY FIRE SCORES NO POINT"
+			_hint_p2.text = "AZURE  P2 + P4  ·  FIRST TEAM TO %d HITS" % gm.hits_to_win
 		else:
-			_hint_p2.text = (_HINT_PAD % 2) if gm._pads[1] >= 0 else _HINT_P2_MISSING
+			if gm.uses_grenade(0):
+				_hint_p1.text = \
+					"P1 GRENADIER  A/D MOVE · SPACE JUMP · LMB GRENADE · 1/2/3 FUSE · SHIFT LOCK · R UNDO"
+				_level_label.text += "   ·   P1 FUSE %ds" % gm.players[0].plan.grenade_fuse_seconds
+			elif gm.uses_dashblade(0):
+				_hint_p1.text = "P1 VELOCITY  MOVE TO BANK FRAMES · SPACE JUMP · LMB CUT TO END · T SUPER · SHIFT LOCK"
+			elif gm.uses_chakram(0):
+				_hint_p1.text = "P1 BROODTAIL  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
+			elif gm.uses_shock(0):
+				_hint_p1.text = "P1 STATIC WITCH  FAST MOVE · SPACE JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
+				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
+					if gm.players[0].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(0),
+					"" if gm.shock_orb_count(0) == 1 else "S"]
+			else:
+				_hint_p1.text = \
+					"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
+			if gm.vs_ai:
+				_hint_p2.text = _HINT_AI_4P if gm.players.size() == 4 else _HINT_AI
+			else:
+				if gm._pads[1] >= 0:
+					if gm.uses_grenade(1):
+						_hint_p2.text = _HINT_PAD_GRENADIER % 2
+					elif gm.uses_dashblade(1):
+						_hint_p2.text = "PAD P2 VELOCITY · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
+					elif gm.uses_chakram(1):
+						_hint_p2.text = "PAD P2 BROODTAIL · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
+					elif gm.uses_shock(1):
+						_hint_p2.text = "PAD P2 STATIC WITCH · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
+					else:
+						_hint_p2.text = _HINT_PAD % 2
+				else:
+					_hint_p2.text = _HINT_P2_MISSING
+				if gm.uses_grenade(1):
+					_level_label.text += "   ·   P2 FUSE %ds" % gm.players[1].plan.grenade_fuse_seconds
+				elif gm.uses_shock(1):
+					_level_label.text += "   ·   P2 %s · %d ORB%s LIVE" % ["PLASMA" \
+						if gm.players[1].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(1),
+						"" if gm.shock_orb_count(1) == 1 else "S"]
 
 	var active_players: int = gm.players.size()
-	var duel_hud: bool = not gm.tutorial_mode and active_players == 2
+	var duel_hud: bool = not gm.tutorial_mode and not gm.team_mode and active_players == 2
 	for i in _fighter_seals.size():
 		var seal: FighterSeal = _fighter_seals[i]
 		seal.visible = duel_hud
 		if duel_hud:
-			seal.set_state(gm.score[i], gm.hits_to_win, gm.super_meter[i], gm.super_armed[i])
+			var portrait: Texture2D = DUELIST_PORTRAIT
+			match gm.player_weapons[i]:
+				1: portrait = GRENADIER_PORTRAIT
+				2: portrait = DASHBLADE_PORTRAIT
+				3: portrait = CHAKRAM_PORTRAIT
+				4: portrait = SHOCK_PORTRAIT
+			seal.set_identity(gm.weapon_short_name(i), portrait)
+			seal.set_state(gm.score[i], gm.hits_to_win, gm.super_meter[i], gm.super_armed[i],
+				gm.players[i].plan.grenade_fuse_seconds if gm.uses_grenade(i) else -1,
+				gm.frame_debt_cells[i] if gm.uses_dashblade(i) else -1,
+				gm.frame_debt_max_cells)
 	for i in gm.MAX_PLAYERS:
 		for h in _pips[i].size():
 			var pip: ColorRect = _pips[i][h]
-			pip.visible = not gm.tutorial_mode and not duel_hud and i < active_players
-			if i < active_players:
-				var centre: float = lerpf(490.0, 790.0,
+			pip.visible = not gm.tutorial_mode and not duel_hud and \
+				((gm.team_mode and i < 2) or (not gm.team_mode and i < active_players)) \
+				and h < gm.hits_to_win
+			if gm.team_mode and i < 2:
+				var team_centre := 520.0 if i == 0 else 760.0
+				var team_row_width: float = float(gm.hits_to_win - 1) * 16.0
+				pip.position = Vector2(team_centre - team_row_width * 0.5 + float(h) * 16.0 - 5.0, 40.0)
+				pip.color = gm.TEAM_COLORS[i] if h < gm.team_score[i] else _PIP_EMPTY
+			elif i < active_players:
+				var centre: float = lerpf(280.0, 1000.0,
 					float(i) / float(maxi(active_players - 1, 1)))
-				var row_width: float = float(_pips[i].size() - 1) * 16.0
-				pip.position = Vector2(centre - row_width * 0.5 + float(h) * 16.0 - 5.0, 146.0)
+				var row_width: float = float(gm.hits_to_win - 1) * 16.0
+				pip.position = Vector2(centre - row_width * 0.5 + float(h) * 16.0 - 5.0, 40.0)
 				pip.color = gm.PLAYER_COLORS[i] if h < gm.score[i] else _PIP_EMPTY
 
 	# hit banner, fading out over its last half second
@@ -484,7 +574,7 @@ func refresh() -> void:
 		_banner.text = gm.banner_text
 		_banner.add_theme_color_override("font_color",
 			Color(gm.banner_color.r, gm.banner_color.g, gm.banner_color.b, a))
-		_banner_bg.color = Color(0.08, 0.09, 0.13, 0.94 * a)
+		_banner_bg.color = Color(0.08, 0.09, 0.13, 0.78 * a)
 		var edge := Color(gm.banner_color.r, gm.banner_color.g, gm.banner_color.b, 0.85 * a)
 		_banner_rule.color = edge
 		_banner_rule.visible = true
@@ -498,32 +588,32 @@ func refresh() -> void:
 		Phase.PLANNING:
 			var tutorial_waiting: bool = gm.tutorial_mode and gm._tutorial != null and not gm._tutorial.timed_turns_started
 			_timer_label.text = "" if tutorial_waiting else "%.1f" % maxf(gm.planning_time_left, 0.0)
-			var frac: float = gm.planning_time_left / maxf(gm.planning_duration, 0.001)
+			var frac: float = gm.planning_time_left / maxf(gm.planning_window_duration, 0.001)
 			phase_fraction = frac
 			phase_meter_visible = not tutorial_waiting
 			phase_color = Color(1.0, 0.30, 0.28) if frac < 0.25 else Color(0.72, 0.38, 0.95)
 			_timer_label.add_theme_color_override("font_color",
 				Color(1.0, 0.35, 0.3) if frac < 0.25 else Color(0.92, 0.95, 1.0))
-			_phase_label.text = "PRACTICE — NO TIMER" if tutorial_waiting else "TIME SUSPENDED — PLAN"
+			_phase_label.text = "PRACTICE" if tutorial_waiting else "PLAN"
 			_phase_label.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
 		Phase.COMMITTING:
 			_timer_label.text = "%.2f" % maxf(gm.commit_time_left, 0.0)
 			phase_fraction = gm.commit_time_left / maxf(gm.commit_delay, 0.001)
 			phase_color = Color(1.0, 0.78, 0.24)
 			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-			_phase_label.text = "FATE LOCKED"
+			_phase_label.text = "LOCKED"
 			_phase_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 		Phase.EXECUTING:
 			_timer_label.text = "%.2f" % gm.exec_time_left()
 			phase_fraction = gm.exec_time_left() / maxf(gm.execution_duration, 0.001)
 			phase_color = Color(0.35, 0.95, 0.55)
 			_timer_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.55))
-			_phase_label.text = "TIME FLOWS — EXECUTING"
+			_phase_label.text = "EXECUTE"
 			_phase_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.55))
 		Phase.REPLAY:
 			_timer_label.text = "%.1f" % gm.replay_time_left()
 			_timer_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.32))
-			_phase_label.text = "MATCH REPLAY — %.1f× — NO PAUSES" % gm.replay_speed
+			_phase_label.text = "REPLAY %.1f×" % gm.replay_speed
 			_phase_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.32))
 			phase_meter_visible = false
 		Phase.GAME_OVER:
@@ -534,14 +624,14 @@ func refresh() -> void:
 		Phase.ONLINE_WAIT:
 			_timer_label.text = "—"
 			_timer_label.add_theme_color_override("font_color", Color(0.72, 0.62, 0.92))
-			_phase_label.text = "WAITING FOR OPPONENT"
+			_phase_label.text = "WAITING"
 			_phase_label.add_theme_color_override("font_color", Color(0.72, 0.62, 0.92))
 			phase_meter_visible = false
 		_:
 			phase_meter_visible = false
 	_phase_track.visible = phase_meter_visible
 	_phase_fill.visible = phase_meter_visible
-	_phase_fill.size.x = 248.0 * clampf(phase_fraction, 0.0, 1.0)
+	_phase_fill.size.x = 320.0 * clampf(phase_fraction, 0.0, 1.0)
 	_phase_fill.color = phase_color
 
 	var pads := ""
@@ -593,7 +683,10 @@ func refresh() -> void:
 		_over_score.add_theme_color_override("font_color", Color(0.92, 0.93, 0.98))
 		_over_arena.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
 		_over_controls.add_theme_color_override("font_color", Color(0.68, 0.72, 0.82))
-		if gm.winner >= 0:
+		if gm.team_mode and gm.winning_team >= 0:
+			_over_label.text = "TEAM %s TAKES THE MATCH" % gm.TEAM_NAMES[gm.winning_team]
+			_over_label.add_theme_color_override("font_color", gm.TEAM_COLORS[gm.winning_team].lightened(0.18))
+		elif gm.winner >= 0:
 			_over_label.text = "PLAYER %d TAKES THE MATCH" % (gm.winner + 1)
 			_over_label.add_theme_color_override("font_color", gm.PLAYER_COLORS[gm.winner].lightened(0.2))
 		else:

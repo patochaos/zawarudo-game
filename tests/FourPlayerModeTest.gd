@@ -19,6 +19,14 @@ func _run() -> void:
 	_check(not game._online_state_digest().is_empty(),
 		"the deterministic state digest must serialize every live player field")
 	_check(game.players.size() == 4, "four-player mode must spawn four fighters")
+	_check(game.hits_to_win == 5, "new matches must default to five hits")
+	_check(is_equal_approx(game._planning_duration_for_turn(1), 5.0) \
+		and is_equal_approx(game._planning_duration_for_turn(3), 5.0) \
+		and is_equal_approx(game._planning_duration_for_turn(4), 4.5) \
+		and is_equal_approx(game._planning_duration_for_turn(5), 4.0) \
+		and is_equal_approx(game._planning_duration_for_turn(6), 3.5) \
+		and is_equal_approx(game._planning_duration_for_turn(20), 3.5),
+		"planning time must shrink after round three and stop at the AI-safe floor")
 	_check(not game._ui._fighter_seals[0].visible and not game._ui._fighter_seals[1].visible,
 		"the portrait fighter seals must remain exclusive to 1v1")
 	_check(game._ui._pips[3][0].visible,
@@ -33,10 +41,57 @@ func _run() -> void:
 		unique_spawns[player.position] = true
 	_check(unique_spawns.size() == 4, "all four fighters must start at distinct sockets")
 
+	# Respawning uses the socket whose nearest living player is farthest away,
+	# which is the relevant safety measure once three rivals occupy the map.
+	game.players[0].position = Vector2(100.0, 596.0)
+	game.players[1].position = Vector2(640.0, 596.0)
+	game.players[2].position = Vector2(1100.0, 596.0)
+	game.players[3].alive = false
+	var expected_respawn: Vector2 = game.respawn_points[0]
+	var expected_safety := -INF
+	for candidate: Vector2 in game.respawn_points:
+		var nearest := INF
+		for living in 3:
+			nearest = minf(nearest,
+				game.wrap_delta(candidate, game.players[living].position).length_squared())
+		if nearest > expected_safety:
+			expected_safety = nearest
+			expected_respawn = candidate
+	game._respawn(3)
+	_check(game.players[3].position == expected_respawn,
+		"a four-player respawn must maximize distance from its nearest living rival")
+	game.players[2].alive = false
+	game.players[3].alive = false
+	game._respawn(2)
+	game._respawn(3)
+	_check(game.players[2].position != game.players[3].position,
+		"two fighters respawning together must occupy different safe sockets")
+
 	# The nearest-target policy lets AI fighters attack each other instead of all
 	# three unfairly tunnelling Player 1.
 	_check(game._ai_target_for(1) != 1 and game._ai_target_for(1) > 0,
 		"an AI must be able to choose another AI as its rival")
+	# Equal-distance ties rotate with the turn instead of all collapsing onto the
+	# lowest player index (which made the human P1 slot an accidental dogpile).
+	game.players[0].position = Vector2(440.0, 360.0)
+	game.players[1].position = Vector2(640.0, 360.0)
+	game.players[2].position = Vector2(840.0, 360.0)
+	game.players[3].position = Vector2(640.0, 560.0)
+	game.players[2].alive = true
+	game.players[3].alive = true
+	game.turn = 1
+	var first_tie_target: int = game._ai_target_for(1)
+	game.turn = 2
+	var next_tie_target: int = game._ai_target_for(1)
+	_check(first_tie_target != next_tie_target,
+		"symmetric nearest-target ties must rotate across turns")
+	game.turn = 1
+	game.score[0] = 3
+	game.players[0].position = Vector2(340.0, 360.0)
+	game.players[2].position = Vector2(760.0, 360.0)
+	_check(game._ai_target_for(1) == 0,
+		"a nearby score leader must draw multi-player AI pressure before snowballing")
+	game.score[0] = 0
 
 	var cursors_before := []
 	for i in range(1, 4):
@@ -83,12 +138,27 @@ func _run() -> void:
 	_check(not game._hit_pause_used_this_execution and is_zero_approx(game._hit_pause_left),
 		"a new execution must restore one fresh hit-stop opportunity")
 
+	game._on_menu_start(true, 0, 3)
+	_check(game.players.size() == 3 and game.is_ai(1) and game.is_ai(2),
+		"three-player mode must spawn one human and two AI rivals")
+	_check(game.platforms.size() == Levels.build(0, 3)["platforms"].size(),
+		"three-player mode must load the arena's authored 3P platform variant")
+
+	game._menu.match_lives = 7
 	game._on_menu_start(false, 0, 2)
 	game._ui.refresh()
 	_check(game.players.size() == 2 and not game.is_ai(1),
 		"switching back to local duel must restore two human fighters")
+	_check(game.hits_to_win == 7 and game._ui._fighter_seals[0].points_to_win == 7,
+		"the pre-match lives choice must reach the match rules and duel HUD")
 	_check(game._ui._fighter_seals[0].visible and game._ui._fighter_seals[1].visible,
 		"the 1v1 HUD must show one mirrored fighter seal per player")
+	_check(game._ui._fighter_seals[0].size.y <= 58.0 \
+		and game._ui._fighter_seals[1].size.y <= 58.0 \
+		and game._ui._phase_track.position.y < 58.0,
+		"all persistent duel HUD elements must stay inside the single top rail")
+	_check(game._ui._banner_bg.position.y >= 600.0,
+		"transient hit feedback must stay at the bottom instead of covering high action")
 	_check(game._ui._fighter_seals[0].player_index == 0 \
 		and game._ui._fighter_seals[1].player_index == 1,
 		"the mirrored fighter seals must retain their P1/P2 identities")

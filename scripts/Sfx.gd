@@ -26,7 +26,8 @@ var _stop_at: Array[float] = []
 var _base_db: Array[float] = []
 var _pitch := {"title": 1.0}
 var _cutoff := {"title": 3.50, "muda": 1.38}
-var _gain_db := {"title": -4.0, "muda": -1.5, "freeze": -18.0, "resume": -20.0,
+var _gain_db := {"title": -4.0, "muda": -1.5, "explosion": -3.0,
+	"freeze": -18.0, "resume": -20.0,
 	"ui_move": -15.0, "ui_accept": -12.0}
 
 
@@ -37,6 +38,7 @@ func _ready() -> void:
 	_streams["thud"] = _thud()
 	_streams["break"] = _break()
 	_streams["clash"] = _clash()
+	_streams["explosion"] = _explosion()
 	_streams["freeze"] = _freeze()
 	_streams["resume"] = _resume()
 	_streams["ui_move"] = _ui_move()
@@ -166,6 +168,22 @@ func _break() -> AudioStreamWAV:
 		smooth = lerpf(smooth, _rng.randf_range(-1.0, 1.0), 0.35)
 		var tone: float = _square(t, lerpf(320.0, 60.0, u))
 		s[i] = clampf(smooth * 0.75 + tone * 0.35, -1.0, 1.0) * pow(1.0 - u, 1.9) * 0.8
+	return _wav(s)
+
+
+## Grenade blast: a hard transient over a low, rapidly falling pressure wave.
+func _explosion() -> AudioStreamWAV:
+	var n := int(RATE * 0.42)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var smooth := 0.0
+	for i in n:
+		var u: float = float(i) / float(n)
+		var t: float = float(i) / float(RATE)
+		smooth = lerpf(smooth, _rng.randf_range(-1.0, 1.0), 0.18)
+		var body := sin(TAU * lerpf(105.0, 38.0, u) * t) * pow(1.0 - u, 1.45)
+		var crack := smooth * pow(1.0 - u, 5.0)
+		s[i] = clampf(body * 0.78 + crack * 0.88, -1.0, 1.0) * 0.88
 	return _wav(s)
 
 

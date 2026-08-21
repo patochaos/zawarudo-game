@@ -2,7 +2,8 @@ extends Node2D
 class_name Arrow
 
 ## Persistent projectile — a thrown knife. Never destroyed at a phase boundary,
-## only when it hits terrain, hits a player, or leaves the world bounds.
+## only when it embeds in terrain, hits a player, or leaves the world bounds.
+## A forceful strike on HARD terrain ricochets and remains live.
 ##
 ## A knife that has been struck by another knife mid-air (see
 ## GameManager._resolve_clashes) is marked `clashed`: it keeps flying and stays
@@ -86,7 +87,7 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 	if not first_hit.is_empty():
 		var normal: Vector2 = first_hit[1]
 		var impact_at: Vector2 = from.lerp(raw, first_hit[0])
-		if _can_ricochet(normal):
+		if _can_ricochet(normal, cfg.platforms[first_platform]):
 			vel = vel.bounce(normal) * cfg.knife_ricochet_retention
 			ricochet_count += 1
 			position = impact_at + normal * 2.0
@@ -162,17 +163,37 @@ func boost(new_vel: Vector2, cooldown: int, other_id: int = -1) -> void:
 	queue_redraw()
 
 
-func _can_ricochet(normal: Vector2) -> bool:
-	if not cfg.prototype_mode or ricochet_count >= cfg.knife_ricochet_limit:
+func _can_ricochet(normal: Vector2, platform: Dictionary) -> bool:
+	return can_ricochet_velocity(vel, normal, platform, cfg, ricochet_count)
+
+
+## HARD terrain returns a sufficiently forceful knife at any readable impact
+## angle. Breakable cover absorbs that same energy and loses HP instead. Kept as
+## a pure helper so the planning preview can apply the exact runtime rule.
+static func can_ricochet_velocity(velocity: Vector2, normal: Vector2,
+		platform: Dictionary, config, used_ricochets: int) -> bool:
+	if int(platform.get("hp", -1)) != -1:
 		return false
-	if normal.is_zero_approx():
+	if used_ricochets >= config.knife_ricochet_limit or normal.is_zero_approx():
 		return false
-	var speed: float = vel.length()
-	if speed < cfg.knife_ricochet_min_speed or speed <= 0.001:
-		return false
-	# Only a grazing impact skips. A square hit still embeds or damages cover.
-	return absf(vel.normalized().dot(normal.normalized())) \
-		<= cfg.knife_ricochet_max_normal_ratio
+	return velocity.length() >= config.knife_ricochet_min_speed
+
+
+## A pulse does not turn a knife into falling clash debris: it throws it again.
+## Ownership stays unchanged, while its age and spent banks reset exactly like a
+## fresh player launch so the resulting danger has a full, predictable arc.
+func relaunch(new_vel: Vector2) -> void:
+	vel = new_vel
+	age_ticks = 0
+	clashed = false
+	spin = 0.0
+	ricochet_count = 0
+	clash_cooldown = 0
+	_clash_cooldowns.clear()
+	trail.clear()
+	prev_pos = position
+	rotation = vel.angle()
+	queue_redraw()
 
 
 func can_clash_with(other: Arrow) -> bool:

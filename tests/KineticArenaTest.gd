@@ -7,7 +7,7 @@ extends SceneTree
 
 const GAME_MANAGER := preload("res://scripts/GameManager.gd")
 const PENDULUM := 2
-const FOUNDRY := 3
+const PULSE_CHAMBER := 3
 
 var _failures: int = 0
 
@@ -149,8 +149,8 @@ func _test_lift_carries_its_rider() -> void:
 # -------------------------------------------------------------------- orbs ---
 
 func _test_orb_detonates_and_recharges() -> void:
-	var gm = await _fresh_game(FOUNDRY)
-	_check(not gm.hazards.is_empty(), "FOUNDRY must author pulse orbs")
+	var gm = await _fresh_game(PULSE_CHAMBER)
+	_check(not gm.hazards.is_empty(), "PULSE CHAMBER must author pulse orbs")
 	if gm.hazards.is_empty():
 		gm.free()
 		return
@@ -165,7 +165,10 @@ func _test_orb_detonates_and_recharges() -> void:
 			break
 
 	_check(not orb.charged, "a knife reaching a loaded orb must set it off")
-	_check(not gm.arrows.has(knife), "the triggering knife must be spent on the orb")
+	_check(gm.arrows.has(knife), "the triggering knife must survive and be relaunched by the orb")
+	_check(knife.vel.x < 0.0 and is_equal_approx(knife.vel.length(), orb.dagger_launch_speed),
+		"a triggering knife must fire back outward at full player-throw force")
+	_check(not knife.clashed, "a pulse-relaunched knife must fly like a throw, not heavy clash debris")
 	_check(orb.windows_left == orb.recharge_windows,
 		"a spent orb must start its full recharge")
 
@@ -177,7 +180,7 @@ func _test_orb_detonates_and_recharges() -> void:
 
 
 func _test_blast_pushes_bodies_outward() -> void:
-	var gm = await _fresh_game(FOUNDRY)
+	var gm = await _fresh_game(PULSE_CHAMBER)
 	if gm.hazards.is_empty():
 		gm.free()
 		return
@@ -200,12 +203,14 @@ func _test_blast_pushes_bodies_outward() -> void:
 	_check(p.vel.x < -1.0, "the blast must throw a fighter away from the orb, not toward it")
 	_check(not p.on_ground or p.vel.y >= 0.0,
 		"a fighter thrown upward must be released from the surface underneath")
-	_check(bystander.vel.y < -1.0, "a knife above the orb must be driven further up")
-	_check(bystander.clashed, "a knife shoved by a pulse must read as off its aimed line")
+	_check(bystander.vel.y < -1.0 and is_equal_approx(
+		bystander.vel.length(), orb.dagger_launch_speed),
+		"a knife above the orb must be relaunched upward at full throw force")
+	_check(not bystander.clashed, "pulse-launched knives must retain ordinary throw gravity")
 	_check(far_knife.vel.is_zero_approx(), "the blast must stop dead at its drawn radius")
 
 	# Determinism: the same blast on the same state must produce the same push.
-	var again = await _fresh_game(FOUNDRY)
+	var again = await _fresh_game(PULSE_CHAMBER)
 	again.state = Phase.EXECUTING
 	var q: Player = again.players[0]
 	q.position = again.hazards[0].position + Vector2(-40.0, 0.0)
