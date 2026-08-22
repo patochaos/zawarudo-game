@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 
 
 func _init() -> void:
@@ -12,14 +13,8 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._menu._activate(game._menu.ROW_CONTROLS)
-	await process_frame
-	await process_frame
+	await VisualCapture.await_transition(self, game)
 
-	var output := "res://previews/controls-menu.png"
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error == OK:
-		print("Controls menu preview saved: %s" % output)
-	else:
-		push_error("Could not save Controls menu preview (error %d)" % error)
+	var error := VisualCapture.save(self, "res://previews/controls-menu.png",
+		"Controls menu preview")
 	quit(error)

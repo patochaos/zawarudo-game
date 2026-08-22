@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 
 
 func _init() -> void:
@@ -70,16 +71,9 @@ func _sync_visuals(game) -> void:
 		if visual != null:
 			visual.sync_from_player()
 			visual.queue_redraw()
-	await process_frame
-	await process_frame
+	await VisualCapture.await_transition(self, game)
 
 
 func _save(output: String) -> Error:
-	await process_frame
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error == OK:
-		print("Executor prototype preview saved: %s" % output)
-	else:
-		push_error("Could not save Executor prototype preview (error %d)" % error)
-	return error
+	await VisualCapture.settle(self, 1)
+	return VisualCapture.save(self, output, "Executor prototype preview")

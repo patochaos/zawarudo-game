@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 
 
 func _init() -> void:
@@ -21,23 +22,24 @@ func _capture() -> void:
 	game._menu._select(game._menu.SETUP_FIRST_FIGHTER + 1)
 	game._menu.handle_key(KEY_RIGHT)
 	game._menu.handle_key(KEY_RIGHT)
-	await _save_frame("res://previews/menu-dossier-character.png", "Character dossier")
-	game._menu._select(game._menu.SETUP_MODE)
-	await _save_frame("res://previews/menu-dossier-mode.png", "Mode dossier")
-	game._menu._select(game._menu._setup_arena_row())
-	game._menu.handle_key(KEY_RIGHT)
-	await _save_frame("res://previews/menu-dossier-arena.png", "Arena dossier")
-	game._menu._select(game._menu._setup_lives_row())
-	await _save_frame("res://previews/menu-ruleset.png", "Rules dossier")
-	quit(OK)
-
-
-func _save_frame(output: String, label: String) -> void:
-	await process_frame
-	await process_frame
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
+	var error := await _save_frame(game,
+		"res://previews/menu-dossier-character.png", "Character dossier")
 	if error == OK:
-		print("%s preview saved: %s" % [label, output])
-	else:
-		push_error("Could not save %s preview (error %d)" % [label, error])
+		game._menu._select(game._menu.SETUP_MODE)
+		error = await _save_frame(game,
+			"res://previews/menu-dossier-mode.png", "Mode dossier")
+	if error == OK:
+		game._menu._select(game._menu._setup_arena_row())
+		game._menu.handle_key(KEY_RIGHT)
+		error = await _save_frame(game,
+			"res://previews/menu-dossier-arena.png", "Arena dossier")
+	if error == OK:
+		game._menu._select(game._menu._setup_lives_row())
+		error = await _save_frame(game,
+			"res://previews/menu-ruleset.png", "Rules dossier")
+	quit(error)
+
+
+func _save_frame(game, output: String, label: String) -> Error:
+	await VisualCapture.await_transition(self, game)
+	return VisualCapture.save(self, output, "%s preview" % label)

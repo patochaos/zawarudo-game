@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 const EXECUTOR_IDLE := preload("res://assets/art/fighters/gilded-executor-idle-v1.png")
 const TARGET_HEIGHT := 128.0
 
@@ -41,16 +42,10 @@ func _capture() -> void:
 	game.banner_color = Color(1.0, 0.82, 0.34)
 	game.banner_time = 4.0
 	game._ui.refresh()
-	for i in 5:
-		await process_frame
+	await VisualCapture.await_transition(self, game, 5)
 
-	var output := "res://previews/executor-idle-pose-v1.png"
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error == OK:
-		print("Executor idle preview saved: %s" % output)
-	else:
-		push_error("Could not save Executor idle preview (error %d)" % error)
+	var error := VisualCapture.save(self, "res://previews/executor-idle-pose-v1.png",
+		"Executor idle preview")
 	root.remove_child(game)
 	game.free()
 	await process_frame

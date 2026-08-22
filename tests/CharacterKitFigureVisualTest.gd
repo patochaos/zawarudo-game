@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 
 
 func _init() -> void:
@@ -33,10 +34,13 @@ func _capture() -> void:
 	game.frame_debt_cells[0] = game.frame_debt_max_cells
 	velocity.queue_redraw()
 	shock.queue_redraw()
-	await process_frame
-	await process_frame
-	var idle_error := root.get_texture().get_image().save_png(
-		ProjectSettings.globalize_path("res://previews/character-figures-velocity-shock.png"))
+	await VisualCapture.await_transition(self, game)
+	var idle_error := VisualCapture.save(self,
+		"res://previews/character-figures-velocity-shock.png",
+		"Character figure preview")
+	if idle_error != OK:
+		quit(idle_error)
+		return
 
 	velocity.plan.power = 0.75
 	game._spawn_player_attack(velocity)
@@ -44,10 +48,10 @@ func _capture() -> void:
 	# visual QA a deterministic look at the authored charge silhouette.
 	game.state = Phase.PLANNING
 	velocity.queue_redraw()
-	await process_frame
-	await process_frame
-	var dash_error := root.get_texture().get_image().save_png(
-		ProjectSettings.globalize_path("res://previews/velocity-shield-lance-dash.png"))
+	await VisualCapture.settle(self)
+	var dash_error := VisualCapture.save(self,
+		"res://previews/velocity-shield-lance-dash.png",
+		"Velocity dash preview")
 
 	if idle_error == OK and dash_error == OK:
 		print("Character figure and Velocity dash previews saved")
