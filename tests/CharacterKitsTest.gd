@@ -25,16 +25,16 @@ func _run() -> void:
 			and velocity_plan.recorded_ticks() == 1 \
 			and not velocity_plan.jump_at(0) \
 			and game.stamina[0] < velocity_stamina,
-		"Velocity must record ground movement while rejecting ordinary jumps")
+		"The Rook must record ground movement while rejecting ordinary jumps")
 	_check(is_equal_approx(game.movement_speed_scale(0), 0.90) \
 			and is_equal_approx(game.movement_speed_scale(1), 0.90),
-		"Velocity and Static Witch must use the authored 90% walk profile")
+		"Rook and Pulse must use the authored 90% walk profile")
 	_test_class_movement_profiles(game)
 	var debt_threshold: int = game._frame_debt_threshold_units()
 	game.frame_debt_units[0] = debt_threshold - 1000
 	game._accrue_frame_debt(0, Vector2.ZERO, Vector2(9.0, 0.0), 1)
 	_check(game.frame_debt_cells[0] == 1 and game.frame_debt_units[0] == 0,
-		"Velocity must turn her denied horizontal movement into a completed Lost Frame")
+		"The Rook must turn her denied horizontal movement into a completed Lost Frame")
 	game._accrue_frame_debt(0, Vector2.ZERO, Vector2.ZERO, 1)
 	_check(game.frame_debt_cells[0] == 1,
 		"pressing into a wall without displacement must not manufacture Frame Debt")
@@ -239,7 +239,7 @@ func _run() -> void:
 		game.players[1].position, Vector2.LEFT, game.arrow_speed_max, 0,
 		{"path": hold_path})
 	_check(counter_ai._velocity_dash_danger(hold_path) > 0.0,
-		"AI safety must recognize a plausible hidden Velocity dash as a body threat")
+		"AI safety must recognize a plausible hidden Rook dash as a body threat")
 	_check(frontal_risk > 0.8 and counter_ai._best.get("withheld_for_velocity", false),
 		"AI must treat a close frontal shot as parry fuel and retain a movement-only plan")
 	counter_ai.finish()
@@ -352,12 +352,12 @@ func _test_class_movement_profiles(game) -> void:
 	var denied := Player.apply_jump(Vector2.ZERO, true, game.air_jumps_for(0), true,
 		game.jump_impulse_for(0), game.air_jump_impulse_for(0), game.air_jumps_for(0))
 	_check(not denied[3] and denied[0] == Vector2.ZERO,
-		"Velocity must have no ground jump, not merely a very short one")
+		"The Rook must have no ground jump, not merely a very short one")
 
 	game.player_weapons[0] = game.Weapon.CHAKRAM
 	_check(game.jump_impulse_for(0) > game.jump_impulse \
 			and game.air_jump_impulse_for(0) < game.jump_impulse_for(0),
-		"Broodtail must have the highest takeoff and a weaker second jump")
+		"Eclipse must have the highest takeoff and a weaker second jump")
 	game.player_weapons = original_weapons
 
 
@@ -407,7 +407,7 @@ func _test_velocity_dash_time_stop_preview(game) -> void:
 	for i in mini(promised.size(), actual.size()):
 		worst = maxf(worst, promised[i].distance_to(actual[i]))
 	_check(promised.size() == actual.size() and worst < 0.001,
-		"a Velocity dash crossing time stop must execute exactly where its ghost promised (drift %.4fpx)" % worst)
+		"a Rook dash crossing time stop must execute exactly where its ghost promised (drift %.4fpx)" % worst)
 
 	game._clear_character_projectiles()
 	game.platforms = saved_platforms

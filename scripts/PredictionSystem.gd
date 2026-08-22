@@ -38,7 +38,7 @@ static func coast(pos: Vector2, vel: Vector2, on_ground: bool, steps: int, cfg,
 	return {"path": path, "end": pos}
 
 
-## Predicts the Static Witch's lance, which is ballistic and also expires at a
+## Predicts The Pulse's lance, which is ballistic and also expires at a
 ## charge-dependent distance. Stops on terrain, on that distance, or at the world
 ## edge. Returns { "path": PackedVector2Array, "blocked": bool }.
 static func predict_plasma(start_pos: Vector2, start_vel: Vector2, cfg,

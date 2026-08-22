@@ -251,10 +251,10 @@ func _set_choices_visible(can_edit: bool) -> void:
 
 func _fighter_name(value: int) -> String:
 	match value:
-		2: return "THE VELOCITY"
-		3: return "BROODTAIL"
-		4: return "THE STATIC WITCH"
-		_: return "DAGGER DUELIST"
+		2: return "THE ROOK"
+		3: return "THE ECLIPSE"
+		4: return "THE PULSE"
+		_: return "THE DUELIST"
 
 
 func _sanitize_code(value: String) -> void:

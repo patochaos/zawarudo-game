@@ -24,9 +24,14 @@ const AFTERIMAGE_MIN_DISTANCE := 10.0
 const VELOCITY_ORANGE := Color(0.94, 0.37, 0.10, 0.98)
 const VELOCITY_CYAN := Color(0.24, 0.96, 1.0, 0.98)
 const VELOCITY_GOLD := Color(1.0, 0.76, 0.22, 0.98)
-const SHOCK_PINK := Color(1.0, 0.22, 0.76, 0.98)
-const SHOCK_VIOLET := Color(0.48, 0.18, 0.78, 0.98)
-const SHOCK_CYAN := Color(0.24, 0.96, 1.0, 0.98)
+const ECLIPSE_WINE := Color(0.33, 0.11, 0.21, 0.98)
+const ECLIPSE_PEARL := Color(0.91, 0.88, 0.82, 0.98)
+const ECLIPSE_ROSE := Color(0.72, 0.48, 0.38, 0.98)
+const PULSE_CHERRY := Color(0.23, 0.06, 0.16, 0.98)
+const PULSE_VIOLET := Color(0.43, 0.24, 0.60, 0.92)
+const PULSE_ACID := Color(0.78, 0.95, 0.36, 0.98)
+const PULSE_BONE := Color(0.92, 0.89, 0.84, 0.98)
+const PULSE_CHROME := Color(0.75, 0.78, 0.81, 0.98)
 
 ## Down + jump drops the body through the ledge it is standing on, so descending
 ## a level is a deliberate move rather than a walk to the nearest edge.
@@ -546,74 +551,53 @@ func _draw_dashblade_kit(pose: Dictionary) -> void:
 
 
 func _draw_chakram_kit(pose: Dictionary) -> void:
-	var head: Vector2 = pose["head"]
-	# Long ears, glider membrane and a huge curled tail make the fighter read as
-	# Broodtail even when the portrait is nowhere near the action.
-	for offset in [-3.0, 3.0]:
+	# The Eclipse manufactures a separate twelve-bladed corona at the open hand;
+	# the smooth permanent aureole is drawn by his costume and never leaves him.
+	var d := aim_dir().normalized()
+	if d.is_zero_approx():
+		d = Vector2(float(facing), 0.0)
+	var center: Vector2 = pose["grip"] + d * 8.0
+	draw_circle(pose["grip"], 3.7, ECLIPSE_PEARL)
+	draw_arc(center, 8.0, 0.0, TAU, 24, Color(0.04, 0.03, 0.05), 4.0, true)
+	draw_arc(center, 7.2, 0.0, TAU, 24, ECLIPSE_WINE.lightened(0.12), 1.2, true)
+	for i in 12:
+		var a := TAU * float(i) / 12.0
+		var outward := Vector2(cos(a), sin(a))
+		var side := outward.orthogonal()
+		var root := center + outward * 8.0
 		draw_colored_polygon(PackedVector2Array([
-			head + Vector2(offset, -4.0), head + Vector2(offset * 1.5, -15.0),
-			head + Vector2(offset + signf(offset) * 4.0, -5.0),
-		]), color.darkened(0.18))
-	var shoulder: Vector2 = pose["shoulder"]
-	var hip: Vector2 = pose["hip"]
-	draw_colored_polygon(PackedVector2Array([
-		shoulder, pose["free_shoulder"], pose["free_elbow"], hip,
-	]), Color(color.r, color.g, color.b, 0.28))
-	draw_arc(hip + Vector2(-11.0 * facing, -2.0), 18.0, -2.2, 2.3, 24,
-		Color(0.45, 0.22, 0.62, 0.94), 6.0, true)
-	# The companion in hand is already curled into its living ring.
-	draw_arc(pose["grip"], 9.0, 0.0, TAU, 20, Color(0.48, 1.0, 0.92), 3.0, true)
-	draw_circle(pose["grip"] + Vector2(6.0 * facing, -2.0), 2.4, color.lightened(0.3))
+			root - side * 1.5, root + outward * 4.5, root + side * 1.5,
+		]), ECLIPSE_ROSE)
 
 
 func _draw_shock_kit(pose: Dictionary) -> void:
-	var head: Vector2 = pose["head"]
-	# Two dense hair masses plus jagged static tails retain the magical-girl read
-	# at match scale. The asymmetry keeps her separate from a generic twin-tail.
-	var back := -float(facing)
-	var pink_mass := head + Vector2(8.0 * back, -5.0)
-	var violet_mass := head + Vector2(4.0 * back, 6.0)
-	draw_circle(pink_mass, 5.7, Color(0.025, 0.02, 0.045, 0.98))
-	draw_circle(pink_mass, 4.4, SHOCK_PINK)
-	draw_circle(violet_mass, 5.3, Color(0.025, 0.02, 0.045, 0.98))
-	draw_circle(violet_mass, 4.0, SHOCK_VIOLET)
-	draw_polyline(PackedVector2Array([
-		head + Vector2(-3.0 * facing, -3.0), head + Vector2(-15.0 * facing, -10.0),
-		head + Vector2(-23.0 * facing, -3.0), head + Vector2(-17.0 * facing, 4.0),
-	]), SHOCK_PINK, 4.0, true)
-	draw_polyline(PackedVector2Array([
-		head + Vector2(-2.0 * facing, 1.0), head + Vector2(-13.0 * facing, 7.0),
-		head + Vector2(-21.0 * facing, 13.0),
-	]), SHOCK_CYAN, 3.5, true)
-	# Four points are enough to read as the star clips from her portrait.
-	for clip_center in [pink_mass + Vector2(0.0, -4.0), violet_mass + Vector2(-2.0, 3.0)]:
-		var star := PackedVector2Array([
-			clip_center + Vector2(0.0, -3.2), clip_center + Vector2(1.2, -1.1),
-			clip_center + Vector2(3.2, 0.0), clip_center + Vector2(1.2, 1.1),
-			clip_center + Vector2(0.0, 3.2), clip_center + Vector2(-1.2, 1.1),
-			clip_center + Vector2(-3.2, 0.0), clip_center + Vector2(-1.2, -1.1),
-		])
-		draw_colored_polygon(star, VELOCITY_GOLD)
+	# The Pulse conducts through one open tuning-fork baton. It must never read as
+	# the old firearm: a straight shaft, two clean prongs and one floating crystal.
 	var d := aim_dir().normalized()
 	if d.is_zero_approx():
 		d = Vector2(float(facing), 0.0)
 	var side := d.orthogonal()
 	var grip: Vector2 = pose["grip"]
-	var muzzle := grip + d * 28.0
-	draw_line(grip - d * 8.0, muzzle, Color(0.055, 0.025, 0.09), 7.0, true)
-	draw_line(grip, muzzle, SHOCK_CYAN, 2.2, true)
-	draw_circle(grip - d * 3.0 + side * 4.0, 3.0, SHOCK_PINK)
+	var fork_base := grip + d * 18.0
+	var fork_tip := grip + d * 29.0
+	draw_line(grip - d * 9.0, fork_base, Color(0.055, 0.04, 0.07), 5.0, true)
+	draw_line(grip - d * 8.0, fork_base, PULSE_CHROME, 1.6, true)
+	draw_line(fork_base, fork_tip + side * 4.0, PULSE_CHROME, 2.4, true)
+	draw_line(fork_base, fork_tip - side * 4.0, PULSE_CHROME, 2.4, true)
 	if plan.attack_mode == 1:
-		draw_circle(muzzle, 6.2, Color(0.08, 0.02, 0.12, 0.98))
-		draw_arc(muzzle, 5.0, 0.0, TAU, 14, SHOCK_PINK, 2.0, true)
-		draw_circle(muzzle, 2.2, SHOCK_CYAN)
+		var orb_center := fork_tip + d * 7.0
+		draw_circle(orb_center, 6.2, Color(0.08, 0.04, 0.11, 0.98))
+		draw_arc(orb_center, 5.0, 0.0, TAU, 16, PULSE_CHROME, 1.2, true)
+		draw_circle(orb_center, 2.4, PULSE_ACID)
+		for tab_dir in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
+			draw_circle(orb_center + tab_dir * 7.0, 1.2, PULSE_CHROME)
 	else:
-		var prong := PackedVector2Array([
-			muzzle + d * 4.0, muzzle - d * 2.0 + side * 3.5,
-			muzzle, muzzle - d * 2.0 - side * 3.5,
+		var crystal_center := fork_tip + d * 1.5
+		var crystal := PackedVector2Array([
+			crystal_center + d * 3.0, crystal_center + side * 2.2,
+			crystal_center - d * 3.0, crystal_center - side * 2.2,
 		])
-		draw_colored_polygon(prong, SHOCK_PINK)
-	draw_circle(head + Vector2(3.0 * facing, -0.8), 0.7, SHOCK_CYAN)
+		draw_colored_polygon(crystal, PULSE_ACID)
 
 
 func _draw_default_costume(pose: Dictionary, head: Vector2, f: float) -> void:
@@ -694,38 +678,87 @@ func _draw_velocity_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
 	draw_arc(pose["shoulder"], 3.5, 0.0, TAU, 10, VELOCITY_GOLD, 1.3, true)
 
 
-func _draw_shock_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
-	var ink := Color(0.035, 0.015, 0.055, 0.99)
-	# A tiny star skirt, cropped jacket and oversized sleeve circles establish the
-	# magical-girl silhouette before the hair tails and plasma prop are added.
-	var skirt := PackedVector2Array([
-		pose["hip"] + Vector2(-4.0, -1.0),
-		pose["hip"] + Vector2(4.0, -1.0),
-		pose["hip"] + Vector2(10.0, 5.0),
-		pose["hip"] + Vector2(2.0, 4.0),
-		pose["hip"] + Vector2(0.0, 8.0),
-		pose["hip"] + Vector2(-3.0, 4.0),
-		pose["hip"] + Vector2(-10.0, 5.0),
+func _draw_eclipse_fashion(pose: Dictionary, head: Vector2, _f: float) -> void:
+	var ink := Color(0.035, 0.025, 0.04, 0.99)
+	# One smooth permanent aureole anchors the identity. It is intentionally
+	# unbladed and stays attached even while a weapon corona is in flight.
+	draw_arc(head, 15.5, 0.0, TAU, 30, ink, 3.2, true)
+	draw_arc(head, 14.3, 0.0, TAU, 30, ECLIPSE_WINE.lightened(0.16), 1.0, true)
+	for cardinal in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
+		draw_circle(head + cardinal * 15.0, 1.5, ECLIPSE_ROSE)
+	# The pearl crescent mantle frames the head without becoming horns or armor.
+	var mantle := PackedVector2Array([
+		pose["free_shoulder"] + Vector2(-5.0, -4.0),
+		pose["neck"] + Vector2(-7.0, -1.0),
+		pose["neck"] + Vector2(0.0, 5.0),
+		pose["neck"] + Vector2(7.0, -1.0),
+		pose["shoulder"] + Vector2(5.0, -4.0),
+		pose["chest"] + Vector2(6.0, 5.0),
+		pose["chest"] + Vector2(-6.0, 5.0),
 	])
-	draw_colored_polygon(skirt, SHOCK_VIOLET)
-	draw_polyline(skirt + PackedVector2Array([skirt[0]]), SHOCK_PINK, 1.3, true)
-	var jacket := PackedVector2Array([
-		pose["free_shoulder"] + Vector2(-3.0 * f, -2.0),
-		pose["shoulder"] + Vector2(4.0 * f, -2.0),
-		pose["chest"] + Vector2(5.0 * f, 5.0),
-		pose["chest"] + Vector2(-5.0 * f, 5.0),
+	draw_colored_polygon(mantle, ECLIPSE_PEARL)
+	draw_polyline(mantle + PackedVector2Array([mantle[0]]), ECLIPSE_ROSE, 1.2, true)
+	var vest := PackedVector2Array([
+		pose["chest"] + Vector2(-4.0, 0.0), pose["chest"] + Vector2(4.0, 0.0),
+		pose["hip"] + Vector2(5.0, 5.0), pose["hip"] + Vector2(-5.0, 5.0),
 	])
-	draw_colored_polygon(jacket, ink)
-	draw_polyline(jacket + PackedVector2Array([jacket[0]]), SHOCK_PINK, 1.2, true)
+	draw_colored_polygon(vest, ECLIPSE_WINE)
 	for shoulder in [pose["free_shoulder"], pose["shoulder"]]:
-		draw_circle(shoulder, 4.1, ink)
-		draw_arc(shoulder, 3.2, 0.0, TAU, 10, SHOCK_CYAN, 1.1, true)
-	var bangs := PackedVector2Array([
-		head + Vector2(-5.0 * f, -4.0), head + Vector2(-1.0 * f, -9.0),
-		head + Vector2(1.0 * f, -4.0), head + Vector2(5.0 * f, -7.0),
-		head + Vector2(4.0 * f, 1.0),
+		draw_line(shoulder, pose["hip"] + Vector2(signf(shoulder.x - pose["hip"].x) * 8.0, 13.0),
+			ECLIPSE_PEARL, 2.2, true)
+
+
+func _draw_pulse_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
+	var ink := Color(0.035, 0.015, 0.055, 0.99)
+	# Exactly four hard stained-glass moth panels form the serrated X behind her.
+	var wing_root: Vector2 = pose["chest"] + Vector2(-2.0 * f, 2.0)
+	for tip_offset: Vector2 in [Vector2(-18.0, -24.0), Vector2(18.0, -24.0),
+			Vector2(-16.0, 20.0), Vector2(16.0, 20.0)]:
+		var tip: Vector2 = wing_root + tip_offset
+		var axis: Vector2 = (tip - wing_root).normalized()
+		var side: Vector2 = axis.orthogonal()
+		var wing := PackedVector2Array([
+			wing_root - side * 2.2, tip, wing_root + side * 4.0,
+		])
+		draw_colored_polygon(wing, Color(PULSE_VIOLET.r, PULSE_VIOLET.g, PULSE_VIOLET.b, 0.46))
+		draw_polyline(wing + PackedVector2Array([wing[0]]), PULSE_ACID, 1.2, true)
+	var bodice := PackedVector2Array([
+		pose["neck"] + Vector2(-3.0, 1.0), pose["neck"] + Vector2(3.0, 1.0),
+		pose["hip"] + Vector2(4.0, 2.0), pose["hip"] + Vector2(-4.0, 2.0),
 	])
-	draw_colored_polygon(bangs, SHOCK_VIOLET)
+	draw_colored_polygon(bodice, PULSE_BONE)
+	draw_polyline(bodice + PackedVector2Array([bodice[0]]), PULSE_CHROME, 1.0, true)
+	# Two simple panels keep the hem sharply pointed without creating the
+	# self-intersecting six-point polygon that failed triangulation in mirrored
+	# and movement poses.
+	var jacket_left := PackedVector2Array([
+		pose["chest"] + Vector2(-7.0, -3.0),
+		pose["chest"] + Vector2(0.0, -2.0),
+		pose["hip"] + Vector2(0.0, 3.0),
+		pose["hip"] + Vector2(-6.0, 7.0),
+	])
+	var jacket_right := PackedVector2Array([
+		pose["chest"] + Vector2(0.0, -2.0),
+		pose["chest"] + Vector2(7.0, -3.0),
+		pose["hip"] + Vector2(6.0, 7.0),
+		pose["hip"] + Vector2(0.0, 3.0),
+	])
+	for panel: PackedVector2Array in [jacket_left, jacket_right]:
+		draw_colored_polygon(panel, PULSE_CHERRY)
+		draw_polyline(panel + PackedVector2Array([panel[0]]), PULSE_ACID, 1.2, true)
+	draw_circle(pose["chest"], 2.2, PULSE_ACID)
+	# Compact black-violet bob plus one acid lightning forelock; no twin tails.
+	draw_circle(head + Vector2(-1.5 * f, -1.0), 8.2, ink)
+	var bob := PackedVector2Array([
+		head + Vector2(-7.0 * f, -5.0), head + Vector2(-2.0 * f, -9.0),
+		head + Vector2(5.0 * f, -6.0), head + Vector2(7.0 * f, 2.0),
+		head + Vector2(-4.0 * f, 6.0),
+	])
+	draw_colored_polygon(bob, Color(0.14, 0.09, 0.18, 0.99))
+	draw_polyline(PackedVector2Array([
+		head + Vector2(1.0 * f, -7.0), head + Vector2(4.0 * f, -3.0),
+		head + Vector2(2.0 * f, -1.0), head + Vector2(5.0 * f, 2.0),
+	]), PULSE_ACID, 2.0, true)
 
 
 func _draw_pose_shadow(pose: Dictionary) -> void:
@@ -868,8 +901,10 @@ func _draw() -> void:
 	match fighter_style:
 		2:
 			_draw_velocity_fashion(pose, head, f)
+		3:
+			_draw_eclipse_fashion(pose, head, f)
 		4:
-			_draw_shock_fashion(pose, head, f)
+			_draw_pulse_fashion(pose, head, f)
 		_:
 			# The dagger fallback keeps the aristocratic swept collar.
 			_draw_default_costume(pose, head, f)

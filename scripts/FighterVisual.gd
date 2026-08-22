@@ -14,6 +14,7 @@ const FALL: StringName = &"FALL"
 const SHOT: StringName = &"SHOT"
 const LOCK: StringName = &"LOCK"
 const DEFEAT: StringName = &"DEFEAT"
+const RUN_SPEED_THRESHOLD := 360.0
 
 var skin: FighterSkin
 var body_state: StringName = IDLE
@@ -99,6 +100,8 @@ func _derive_state() -> StringName:
 		return LOCK
 	if not _fighter.on_ground:
 		return RISE if _fighter.vel.y < 0.0 else FALL
+	if absf(_fighter.vel.x) >= RUN_SPEED_THRESHOLD and skin.has_sprite(RUN):
+		return RUN
 	if absf(_fighter.vel.x) > 24.0:
 		return WALK if skin.has_sprite(WALK) else RUN
 	return IDLE

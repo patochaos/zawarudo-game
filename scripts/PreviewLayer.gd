@@ -184,6 +184,9 @@ func _ghost_sprite_pose(p: Player, skin: FighterSkin, tick: int) -> Dictionary:
 
 	if not grounded:
 		state = FighterVisual.RISE if velocity.y < 0.0 else FighterVisual.FALL
+	elif absf(velocity.x) >= FighterVisual.RUN_SPEED_THRESHOLD \
+			and skin.has_sprite(FighterVisual.RUN):
+		state = FighterVisual.RUN
 	elif absf(velocity.x) > 24.0:
 		state = FighterVisual.WALK if skin.has_sprite(FighterVisual.WALK) \
 			else FighterVisual.RUN

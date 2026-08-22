@@ -296,11 +296,12 @@ Before accepting a Duelist asset, answer yes to all of these:
 ## Canonical and supporting files
 
 - Master sheet: `docs/concepts/duelist-master-sheet-v2.png`
+- Runtime portrait: `assets/art/portraits/duelist-portrait-v1.png`
 - Earlier costume construction sheet: `docs/concepts/gilded-executor-model-sheet-v1.png`
 - Broad visual direction (male design only): `docs/concepts/duelist-visual-direction-v1.png`
 - Tiny arena proof: `previews/gilded-executor-simplified-arena-proof-v1.png`
 - Simplified sprite source notes: `art_source/sprites/gilded-executor-proof-v1/README.md`
 
 Superseded for identity: `assets/art/portraits/duelist-portrait-intense-v2.png`.
-It may remain wired as a temporary runtime asset, but its giant radial hair and
-manic expression must not guide future art.
+It is retained only as historical exploration; its giant radial hair and manic
+expression must not guide future art or return to runtime wiring.

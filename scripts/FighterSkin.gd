@@ -88,6 +88,39 @@ const ANIMATED_EXECUTOR_GHOST_PATHS := {
 	&"DEFEAT": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-defeat.png",
 }
 
+const ROOK_ATLAS_PATHS := {
+	&"IDLE": "res://assets/art/fighters/rook-animated-v1/idle.png",
+	&"WALK": "res://assets/art/fighters/rook-animated-v1/walk.png",
+	&"RUN": "res://assets/art/fighters/rook-animated-v1/run.png",
+	&"RISE": "res://assets/art/fighters/rook-animated-v1/rise.png",
+	&"FALL": "res://assets/art/fighters/rook-animated-v1/fall.png",
+	&"SHOT": "res://assets/art/fighters/rook-animated-v1/shot.png",
+	&"LOCK": "res://assets/art/fighters/rook-animated-v1/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/rook-animated-v1/defeat.png",
+}
+
+const ROOK_COUNTS := {
+	&"IDLE": 4,
+	&"WALK": 6,
+	&"RUN": 6,
+	&"RISE": 2,
+	&"FALL": 2,
+	&"SHOT": 4,
+	&"LOCK": 2,
+	&"DEFEAT": 4,
+}
+
+const ROOK_GHOST_PATHS := {
+	&"IDLE": "res://assets/art/fighters/rook-animated-v1/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/rook-animated-v1/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/rook-animated-v1/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/rook-animated-v1/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/rook-animated-v1/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/rook-animated-v1/ghost-shot.png",
+	&"LOCK": "res://assets/art/fighters/rook-animated-v1/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/rook-animated-v1/ghost-defeat.png",
+}
+
 
 func frame_count(state: StringName) -> int:
 	if sprite_counts.has(state):
@@ -176,6 +209,49 @@ static func animated_executor_proof() -> FighterSkin:
 		var texture := load(ANIMATED_EXECUTOR_GHOST_PATHS[state]) as Texture2D
 		if texture != null:
 			skin.ghost_atlases[state] = texture
+	skin.ticks_per_frame = 5
+	skin.state_ticks_per_frame = {
+		&"IDLE": 12,
+		&"WALK": 6,
+		&"RUN": 4,
+		&"RISE": 6,
+		&"FALL": 6,
+		&"SHOT": 3,
+		&"LOCK": 8,
+		&"DEFEAT": 5,
+	}
+	skin.procedural_aim_arm_enabled = false
+	return skin
+
+
+static func animated_rook() -> FighterSkin:
+	var skin := FighterSkin.new()
+	skin.skin_id = &"rook_animated_v1"
+	skin.display_name = "The Rook — animated arena fighter"
+	skin.sprite_atlases = {}
+	for state: StringName in ROOK_ATLAS_PATHS:
+		var texture := load(ROOK_ATLAS_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = ROOK_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(384, 256)
+	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
+	skin.sprite_tint = Color.WHITE
+	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	skin.ghost_texture = load(
+		"res://assets/art/fighters/rook-animated-v1/ghost.png"
+	) as Texture2D
+	skin.ghost_atlases = {}
+	for state: StringName in ROOK_GHOST_PATHS:
+		var texture := load(ROOK_GHOST_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.ghost_atlases[state] = texture
+	skin.palette = {
+		&"body": Color("101b3d"),
+		&"secondary": Color("c45128"),
+		&"ink": Color("111117"),
+		&"defeat": Color(0.18, 0.19, 0.26, 0.82),
+	}
 	skin.ticks_per_frame = 5
 	skin.state_ticks_per_frame = {
 		&"IDLE": 12,

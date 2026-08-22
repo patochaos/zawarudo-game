@@ -8,7 +8,7 @@
     "deploy": "wrangler deploy",
     "cf-typegen": "wrangler types",
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run test/protocol.test.ts && vitest run test/worker.test.ts && vitest run test/room.test.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.21.0",

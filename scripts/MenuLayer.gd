@@ -42,7 +42,7 @@ const SETUP_MODE := 0
 const SETUP_PLAYERS := 1
 const SETUP_FIRST_FIGHTER := 2
 ## Stable ids are not presentation order: Chakram remains id 3 but is appended
-## after Static Witch so it appears as the fourth roster character.
+## after The Pulse so it appears as the fourth roster character.
 const WEAPON_ROSTER := [0, 2, 4, 3]
 
 ## This is the remembered local choice. The online lobby starts from it, then
@@ -52,10 +52,10 @@ const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
 const GOLD := Color(0.91, 0.66, 0.22)
 const VIOLET := Color(0.45, 0.16, 0.67)
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
-const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
-const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
-const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
+const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
+const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
+const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
 
 
 class MangaMenuArt:
@@ -812,18 +812,18 @@ func _refresh_context_dossier(names: Array[String]) -> void:
 
 func _fighter_portrait(value: int) -> Texture2D:
 	match value:
-		2: return DASHBLADE_PORTRAIT
-		3: return CHAKRAM_PORTRAIT
-		4: return SHOCK_PORTRAIT
+		2: return ROOK_PORTRAIT
+		3: return ECLIPSE_PORTRAIT
+		4: return PULSE_PORTRAIT
 		_: return DUELIST_PORTRAIT
 
 
 func _fighter_title(value: int) -> String:
 	match value:
-		2: return "THE VELOCITY"
-		3: return "BROODTAIL"
-		4: return "THE STATIC WITCH"
-		_: return "DAGGER DUELIST"
+		2: return "THE ROOK"
+		3: return "THE ECLIPSE"
+		4: return "THE PULSE"
+		_: return "THE DUELIST"
 
 
 func _fighter_abilities(value: int) -> String:
@@ -831,9 +831,9 @@ func _fighter_abilities(value: int) -> String:
 		2:
 			return "ABILITIES\nCUT TO END\nDash through the planned line.\nLOST FRAMES\nSlow movement banks dash distance.\nFRONT GUARD\nParry shots during the dash."
 		3:
-			return "ABILITIES\nCHAKRAM\nOne throw follows the exact aim.\nHOLD\nWalls pin it; a midair throw also waits.\nRECALL\nIt returns on its third turn."
+			return "ABILITIES\nDECREE\nOne corona follows the exact aim.\nCONSECRATION\nWalls hold it; a midair cast also waits.\nABSOLUTION\nIt returns on its third turn."
 		4:
-			return "ABILITIES\nPLASMA LANCE\nFast, direct pressure.\nSHOCK ORB\nPlace persistent field traps.\nDETONATION\nPlasma + orb redirects weapons."
+			return "ABILITIES\nNEEDLE NOTE\nFast, direct pressure.\nBACKBEAT\nPlace persistent field traps.\nFEEDBACK\nPlasma + orb redirects weapons."
 		_:
 			return "ABILITIES\nTWIN DAGGERS\nReliable direct volleys.\nFAN THROW\nPressure several routes.\nHARD RICOCHET\nBank steel off arena cover."
 
@@ -843,9 +843,9 @@ func _fighter_lore(value: int) -> String:
 		2:
 			return "She surrenders every fourth step to time, then spends the stolen distance in one impossible cut."
 		3:
-			return "A feral arena hunter whose curled companion leaves the hand as a living blade, banks through danger, and always finds the way home."
+			return "A perfectly mannered false saint who consecrates the arena with counterfeit halos, then calmly recalls every decree."
 		4:
-			return "A storm-reader who leaves charged moments hanging in the arena, waiting for one spark to rewrite every trajectory."
+			return "A resonance punk who seeds suspended beats, then drives one razor-straight note through them to rewrite every trajectory."
 		_:
 			return "A disciplined survivor of frozen duels who trusts geometry, timing, and two blades more than prophecy."
 
@@ -869,9 +869,9 @@ func _mode_name() -> String:
 
 func _weapon_name(value: int) -> String:
 	match value:
-		2: return "VELOCITY"
-		3: return "BROODTAIL"
-		4: return "STATIC WITCH"
+		2: return "ROOK"
+		3: return "ECLIPSE"
+		4: return "PULSE"
 		_: return "DUELIST"
 
 

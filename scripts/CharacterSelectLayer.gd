@@ -15,14 +15,14 @@ const DUELIST := 0
 const DASHBLADE := 2
 const CHAKRAM := 3
 const SHOCK := 4
-## Append-only presentation order: Broodtail is the fourth selectable fighter
-## even though its stable weapon id predates the Static Witch.
+## Append-only presentation order: The Eclipse is the fourth selectable fighter
+## even though its stable weapon id predates The Pulse.
 const ROSTER := [DUELIST, DASHBLADE, SHOCK, CHAKRAM]
 const MAX_SLOTS := 4
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
-const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
-const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
-const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
+const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
+const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
+const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 const ACCENTS := [
 	Color(0.96, 0.69, 0.18),
 	Color(0.76, 0.30, 1.0),
@@ -152,17 +152,17 @@ class CharacterCard:
 
 	func _portrait_for(value: int) -> Texture2D:
 		match value:
-			DASHBLADE: return DASHBLADE_PORTRAIT
-			CHAKRAM: return CHAKRAM_PORTRAIT
-			SHOCK: return SHOCK_PORTRAIT
+			DASHBLADE: return ROOK_PORTRAIT
+			CHAKRAM: return ECLIPSE_PORTRAIT
+			SHOCK: return PULSE_PORTRAIT
 			_: return DUELIST_PORTRAIT
 
 	func _name_for(value: int) -> String:
 		match value:
-			DASHBLADE: return "THE VELOCITY"
-			CHAKRAM: return "BROODTAIL"
-			SHOCK: return "THE STATIC WITCH"
-			_: return "DAGGER DUELIST"
+			DASHBLADE: return "THE ROOK"
+			CHAKRAM: return "THE ECLIPSE"
+			SHOCK: return "THE PULSE"
+			_: return "THE DUELIST"
 
 	func _attack_for(value: int) -> String:
 		match value:

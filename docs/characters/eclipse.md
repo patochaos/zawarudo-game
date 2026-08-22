@@ -418,6 +418,7 @@ Before accepting an Eclipse asset, answer yes to all of these:
 ## Canonical and supporting files
 
 - Master sheet: `docs/concepts/chakram-rework/eclipse-master-sheet-v1.png`
+- Runtime portrait: `assets/art/portraits/eclipse-portrait-v1.png`
 - Approved personality/costume mockup: `docs/concepts/chakram-rework/eclipse-false-saint-mockup-v1.png`
 - Mechanics implementation: `scripts/Chakram.gd`
 - Roster mechanics summary: `README.md`
@@ -425,5 +426,5 @@ Before accepting an Eclipse asset, answer yes to all of these:
 The first mockup's halo-less side vignette is superseded and must not guide
 future weapon-state art. The main costume and personality remain supporting
 reference. The old `broodtail-portrait-v1.png`, giant-squirrel silhouette and
-glider-companion fiction are superseded for visual identity; they may remain as
-temporary runtime wiring or historical prototype notes only.
+glider-companion fiction are superseded for visual identity and remain as
+historical prototype material only.

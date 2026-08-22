@@ -3,10 +3,10 @@ extends CanvasLayer
 ## Compact match HUD. Detailed player-plan panels were deliberately removed so
 ## the arena, ghosts and world-space previews remain the focus.
 
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
-const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
-const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
-const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
+const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
+const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
+const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 
 
 class FighterSeal:
@@ -498,11 +498,11 @@ func refresh() -> void:
 			_hint_p2.text = "AZURE  P2 + P4  ·  FIRST TEAM TO %d HITS" % gm.hits_to_win
 		else:
 			if gm.uses_dashblade(0):
-				_hint_p1.text = "P1 VELOCITY  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
+				_hint_p1.text = "P1 ROOK  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
 			elif gm.uses_chakram(0):
-				_hint_p1.text = "P1 BROODTAIL  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
+				_hint_p1.text = "P1 ECLIPSE  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
 			elif gm.uses_shock(0):
-				_hint_p1.text = "P1 STATIC WITCH  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
+				_hint_p1.text = "P1 PULSE  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
 				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
 					if gm.players[0].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(0),
 					"" if gm.shock_orb_count(0) == 1 else "S"]
@@ -514,11 +514,11 @@ func refresh() -> void:
 			else:
 				if gm._pads[1] >= 0:
 					if gm.uses_dashblade(1):
-						_hint_p2.text = "PAD P2 VELOCITY · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
+						_hint_p2.text = "PAD P2 ROOK · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
 					elif gm.uses_chakram(1):
-						_hint_p2.text = "PAD P2 BROODTAIL · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
+						_hint_p2.text = "PAD P2 ECLIPSE · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
 					elif gm.uses_shock(1):
-						_hint_p2.text = "PAD P2 STATIC WITCH · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
+						_hint_p2.text = "PAD P2 PULSE · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
 					else:
 						_hint_p2.text = _HINT_PAD % 2
 				else:
@@ -536,9 +536,9 @@ func refresh() -> void:
 		if duel_hud:
 			var portrait: Texture2D = DUELIST_PORTRAIT
 			match gm.player_weapons[i]:
-				2: portrait = DASHBLADE_PORTRAIT
-				3: portrait = CHAKRAM_PORTRAIT
-				4: portrait = SHOCK_PORTRAIT
+				2: portrait = ROOK_PORTRAIT
+				3: portrait = ECLIPSE_PORTRAIT
+				4: portrait = PULSE_PORTRAIT
 			seal.set_identity(gm.weapon_short_name(i), portrait)
 			seal.set_state(gm.score[i], gm.hits_to_win, gm.super_meter[i], gm.super_armed[i],
 				gm.frame_debt_cells[i] if gm.uses_dashblade(i) else -1,

@@ -20,41 +20,41 @@ func _capture() -> void:
 	game._preview.visible = false
 	game.state = Phase.PLANNING
 
-	var velocity: Player = game.players[0]
+	var rook: Player = game.players[0]
 	var shock: Player = game.players[1]
-	velocity.position = Vector2(420.0, 560.0)
+	rook.position = Vector2(420.0, 560.0)
 	shock.position = Vector2(860.0, 560.0)
-	velocity.on_ground = true
+	rook.on_ground = true
 	shock.on_ground = true
-	velocity.plan.set_aim_from_vector(Vector2.RIGHT,
+	rook.plan.set_aim_from_vector(Vector2.RIGHT,
 		game.aim_min_angle, game.aim_max_angle)
 	shock.plan.set_aim_from_vector(Vector2.LEFT,
 		game.aim_min_angle, game.aim_max_angle)
 	shock.plan.attack_mode = 1
 	game.frame_debt_cells[0] = game.frame_debt_max_cells
-	velocity.queue_redraw()
+	rook.queue_redraw()
 	shock.queue_redraw()
 	await VisualCapture.await_transition(self, game)
 	var idle_error := VisualCapture.save(self,
-		"res://previews/character-figures-velocity-shock.png",
+		"res://previews/character-figures-rook-pulse.png",
 		"Character figure preview")
 	if idle_error != OK:
 		quit(idle_error)
 		return
 
-	velocity.plan.power = 0.75
-	game._spawn_player_attack(velocity)
+	rook.plan.power = 0.75
+	game._spawn_player_attack(rook)
 	# Planning freezes the fresh action before simulation can advance it, giving
 	# visual QA a deterministic look at the authored charge silhouette.
 	game.state = Phase.PLANNING
-	velocity.queue_redraw()
+	rook.queue_redraw()
 	await VisualCapture.settle(self)
 	var dash_error := VisualCapture.save(self,
-		"res://previews/velocity-shield-lance-dash.png",
-		"Velocity dash preview")
+		"res://previews/rook-shield-lance-dash.png",
+		"Rook dash preview")
 
 	if idle_error == OK and dash_error == OK:
-		print("Character figure and Velocity dash previews saved")
+		print("Character figure and Rook dash previews saved")
 	else:
 		push_error("Could not save character figure previews (%d, %d)" % [
 			idle_error, dash_error])

@@ -212,10 +212,10 @@ func _empty_kit_stats() -> Dictionary:
 
 func _kit_name(game, weapon: int) -> String:
 	match weapon:
-		game.Weapon.KNIVES: return "DAGGER"
-		game.Weapon.DASHBLADE: return "VELOCITY"
-		game.Weapon.CHAKRAM: return "BROODTAIL"
-		game.Weapon.SHOCK: return "STATIC_WITCH"
+		game.Weapon.KNIVES: return "DUELIST"
+		game.Weapon.DASHBLADE: return "ROOK"
+		game.Weapon.CHAKRAM: return "ECLIPSE"
+		game.Weapon.SHOCK: return "PULSE"
 		_: return "UNKNOWN_%d" % weapon
 
 

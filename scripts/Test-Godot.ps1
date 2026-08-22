@@ -37,9 +37,9 @@ $tests = @(
 	"ShockWeaponTest",
 	"CharacterKitsTest",
 	"CharacterSelectTest",
+	"RookAnimatedPlayableTest",
 	"TeamBattleTest",
 	"MatchReplayTest",
-    "CloseCameraTest",
     "LevelLayoutTest",
     "UserJourneyTest"
 )

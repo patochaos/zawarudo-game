@@ -82,7 +82,7 @@ To play online:
 3. Both players use their own keyboard and mouse. Online, the controls on both
    computers are `A`/`D`, `W`, `S`, mouse aim, hold/release `LMB`, `Left Shift`
    to confirm, `R`/`RMB` to roll back, `F` to reset the path, and `T` for SUPER.
-   Static Witch reserves `RMB` for her orb, so use `R` to roll her shot back.
+   The Pulse reserves `RMB` for her orb, so use `R` to roll her shot back.
 
 Plans remain private until both players confirm. A disconnected client retries
 the room socket automatically; a detected state mismatch stops the match
@@ -128,8 +128,8 @@ activation, and playtest shortcuts.
 * **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose an authored arena,
   then configure both the human fighter and AI rival from the full roster.
 * **VS HUMAN** — opens character selection first. P1 and P2 independently pick
-  **Dagger Duelist**, **The Velocity** (Dashblade), **The Static Witch**
-  (Shock), or **Broodtail** (Chakram), then play with **open information**:
+  **The Duelist**, **The Rook** (Dashblade), **The Pulse** (Shock), or
+  **The Eclipse** (Chakram), then play with **open information**:
   both players see each other's plans and compose them simultaneously on the
   same machine.
 * **TEAM BATTLE — 2 VS 2** — opens a FIFA-style formation screen. Keyboard and
@@ -200,7 +200,7 @@ during its think delay — a full sweep costs ~35ms, which would otherwise be a
 visible hitch at the top of every planning phase. Measured over 5000 frames of
 live play: **worst frame 7.9ms, zero frames over budget.**
 
-Against Velocity, the AI remains blind to the committed plan but tests a small
+Against The Rook, the AI remains blind to the committed plan but tests a small
 envelope of possible early/middle/late dash releases. Routes which escape that
 body line score higher. A close projectile fired directly into the possible
 front guard is treated as parry fuel, so the bot may reposition without firing
@@ -331,10 +331,10 @@ Key properties:
 | Aim | **Mouse** — free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
-| Static Witch plasma / orb | `1` / `2` during planning | `L1` / `R1` |
+| The Pulse plasma / orb | `1` / `2` during planning | `L1` / `R1` |
 | Toggle SUPER | `T` | `Y` |
 | Confirm | `Left Shift` | `Start` |
-| Rollback shot | `R`, or `RMB` except as Static Witch | `B` or `Select` |
+| Rollback shot | `R`, or `RMB` except as The Pulse | `B` or `Select` |
 | Reset path | `F` | `X` |
 
 Playtest: `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
@@ -349,7 +349,7 @@ In Vs AI the Player 2 column is inert — the AI ignores it.
 
 ### Character prototype roster
 
-**The Velocity** deletes one frame from every four steps: her horizontal
+**The Rook** deletes one frame from every four steps: her horizontal
 locomotion is 75% of the shared baseline, while the denied distance accumulates
 as up to three **LOST FRAME** cells. Standing still or pressing into a wall earns
 nothing. Her planned body dash—**CUT TO END**—automatically cashes the completed
@@ -365,7 +365,7 @@ an upward dash from donating near-projectile momentum to the next movement plan.
 Movement after CUT TO END cannot reload LOST FRAME cells until the next
 execution window.
 
-**The Static Witch** charges **PLASMA** with left mouse and **ORB** with right
+**The Pulse** charges **PLASMA** with left mouse and **ORB** with right
 mouse. Her horizontal locomotion is 110% of the shared baseline.
 
 **The lance falls.** It is fast, but it is ballistic like every other projectile
@@ -391,7 +391,7 @@ that asked no prediction of its owner in a game built on prediction, and it read
 in the balance matrix as a kit that beat every other kit. Giving it an arc put
 her back inside the game's own rule rather than nerfing a number.
 
-**Broodtail**, the fourth selectable fighter, throws one **LIVING CHAKRAM** at
+**The Eclipse**, the fourth selectable fighter, throws one **CORONA** at
 half the former launch speed. It follows the committed aim exactly. A wall or
 hard platform pins it in place without stopping its spin; at the end of its
 launch window, a midair chakram also holds at its exact position. It remains a
@@ -403,7 +403,7 @@ forward spread under the same hold-and-return lifecycle.
 The separate **critter summoner** concept is reserved for a later character.
 Those summons would walk and climb platforms, acquire a fighter within a clear
 reach radius, telegraph briefly, then pounce. Keeping that territorial,
-delayed-pressure kit separate preserves Broodtail's returning-weapon identity
+delayed-pressure kit separate preserves The Eclipse's returning-weapon identity
 and gives the summons room for their own counterplay and limits.
 
 In Online both computers use the **Player 1 — keyboard + mouse** column. The

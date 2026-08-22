@@ -119,7 +119,7 @@ func _test_tutorial_launch() -> void:
 		and game._online_lobby.weapon == game._online_lobby.FIGHTER_ROSTER[1],
 		"the online lobby must expose every arena and roster fighter before room creation")
 	_check("HOST ARENA" in game._online_lobby._level_label.text \
-		and "VELOCITY" in game._online_lobby._fighter_label.text,
+		and "ROOK" in game._online_lobby._fighter_label.text,
 		"the online lobby must explain which room settings the player is choosing")
 	game._online_lobby._sanitize_code("abci12z9")
 	_check(game._online_lobby._code_input.text == "ABC2Z9",

@@ -45,11 +45,11 @@ func _run() -> void:
 		"the local duel must independently select Dashblade and Shock fighters")
 
 	game._ui.refresh()
-	_check(game._ui._fighter_seals[0].fighter_name == "VELOCITY" \
-			and game._ui._fighter_seals[1].fighter_name == "STATIC WITCH",
+	_check(game._ui._fighter_seals[0].fighter_name == "ROOK" \
+			and game._ui._fighter_seals[1].fighter_name == "PULSE",
 		"the duel HUD must identify both selected character kits")
-	_check(game._ui._fighter_seals[0].portrait == game._ui.DASHBLADE_PORTRAIT \
-			and game._ui._fighter_seals[1].portrait == game._ui.SHOCK_PORTRAIT,
+	_check(game._ui._fighter_seals[0].portrait == game._ui.ROOK_PORTRAIT \
+			and game._ui._fighter_seals[1].portrait == game._ui.PULSE_PORTRAIT,
 		"each new fighter must use its own HUD portrait")
 
 	game._set_shock_attack_mode(1, 1)

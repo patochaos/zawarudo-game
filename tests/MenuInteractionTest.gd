@@ -64,22 +64,22 @@ func _run() -> void:
 		"extra prototype slots must remain CPU-controlled")
 	menu._select(menu.SETUP_FIRST_FIGHTER)
 	menu.handle_key(KEY_RIGHT)
-	_check(menu._portrait_preview.visible and menu._portrait_preview.texture == menu.DASHBLADE_PORTRAIT \
+	_check(menu._portrait_preview.visible and menu._portrait_preview.texture == menu.ROOK_PORTRAIT \
 		and "LOST FRAMES" in menu._context_meta.text and "LORE" in menu._footer.text,
 		"fighter focus must show the selected portrait, abilities and lore")
 	menu._select(menu.SETUP_FIRST_FIGHTER + 1)
 	menu.handle_key(KEY_RIGHT)
 	menu.handle_key(KEY_RIGHT)
 	_check(menu.battle_weapons.slice(0, 2) == [2, 4] \
-			and "VELOCITY" in menu._page_names()[2] \
-			and "STATIC WITCH" in menu._page_names()[3],
+			and "ROOK" in menu._page_names()[2] \
+			and "PULSE" in menu._page_names()[3],
 		"human and CPU classes must be editable inline")
 	menu._select(menu.SETUP_FIRST_FIGHTER + 2)
 	menu.handle_key(KEY_LEFT)
-	_check(menu.battle_weapons[2] == 3 and "BROODTAIL" in menu._page_names()[4] \
-			and menu._portrait_preview.texture == menu.CHAKRAM_PORTRAIT \
-			and "RECALL" in menu._context_meta.text,
-		"Broodtail must be the fourth roster choice with a complete dossier")
+	_check(menu.battle_weapons[2] == 3 and "ECLIPSE" in menu._page_names()[4] \
+			and menu._portrait_preview.texture == menu.ECLIPSE_PORTRAIT \
+			and "ABSOLUTION" in menu._context_meta.text,
+		"The Eclipse must be the fourth roster choice with a complete dossier")
 	menu._select(menu._setup_arena_row())
 	menu.handle_key(KEY_RIGHT)
 	menu.handle_key(KEY_RIGHT)

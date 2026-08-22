@@ -134,32 +134,32 @@ var simplified_fighter_proto_enabled: bool = false
 ## fighters.
 ##
 ## Approximate full-jump rises at the default 780 impulse / 1400 gravity:
-## Dagger 217px, Velocity 0px, Static Witch 176px, Broodtail 263px.
+## Duelist 217px, Rook 0px, Pulse 176px, Eclipse 263px.
 @export_group("Class Movement")
-@export_subgroup("Dagger Duelist")
+@export_subgroup("The Duelist")
 @export_range(0.1, 2.0, 0.05) var dagger_move_speed_scale: float = 1.0
 @export_range(0.0, 2.0, 0.05) var dagger_jump_impulse_scale: float = 1.0
 @export_range(0.0, 2.0, 0.05) var dagger_air_jump_impulse_scale: float = 0.82
 @export_range(0, 2, 1) var dagger_air_jumps: int = 1
 @export_range(0.1, 2.0, 0.05) var dagger_fall_speed_scale: float = 1.0
 
-@export_subgroup("The Velocity")
+@export_subgroup("The Rook")
 @export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.90
-## Velocity has no ordinary jump. Her freely aimed CUT TO END is her vertical
+## The Rook has no ordinary jump. Her freely aimed CUT TO END is her vertical
 ## traversal verb, and the faster fall keeps a missed aerial cut committal.
 @export_range(0.0, 2.0, 0.05) var velocity_jump_impulse_scale: float = 0.0
 @export_range(0.0, 2.0, 0.05) var velocity_air_jump_impulse_scale: float = 0.0
 @export_range(0, 2, 1) var velocity_air_jumps: int = 0
 @export_range(0.1, 2.0, 0.05) var velocity_fall_speed_scale: float = 1.10
 
-@export_subgroup("The Static Witch")
+@export_subgroup("The Pulse")
 @export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 0.90
 @export_range(0.0, 2.0, 0.05) var shock_jump_impulse_scale: float = 0.90
 @export_range(0.0, 2.0, 0.05) var shock_air_jump_impulse_scale: float = 0.0
 @export_range(0, 2, 1) var shock_air_jumps: int = 0
 @export_range(0.1, 2.0, 0.05) var shock_fall_speed_scale: float = 0.85
 
-@export_subgroup("Broodtail")
+@export_subgroup("The Eclipse")
 @export_range(0.1, 2.0, 0.05) var chakram_move_speed_scale: float = 1.05
 @export_range(0.0, 2.0, 0.05) var chakram_jump_impulse_scale: float = 1.10
 @export_range(0.0, 2.0, 0.05) var chakram_air_jump_impulse_scale: float = 0.72
@@ -207,7 +207,7 @@ var simplified_fighter_proto_enabled: bool = false
 @export var dash_duration_ticks_max: int = 15
 @export var dash_guard_durability: int = 2
 @export_range(0.0, 1.0, 0.01) var dash_exit_momentum_retention: float = 0.28
-## Velocity moves at nine tenths of the shared pace. The horizontal distance
+## The Rook moves at nine tenths of the shared pace. The horizontal distance
 ## denied by that ratio becomes Frame Debt: every completed cell adds one dash
 ## tick, and a full three-cell cut adds one front-parry point.
 @export_range(1, 6, 1) var frame_debt_max_cells: int = 3
@@ -478,7 +478,7 @@ var ghost_dash: Array = [null, null, null, null]
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
 ]
-## Velocity and grounded samples parallel ghost_path, used only to select the
+## Velocity vectors and grounded samples parallel ghost_path, used only to select the
 ## correct visual pose for each planning ghost. Simulation still owns the data.
 var ghost_velocity_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
@@ -540,9 +540,12 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
-	if "--simplified-fighter-proto" in OS.get_cmdline_user_args():
+	var user_args := OS.get_cmdline_user_args()
+	if "--simplified-fighter-proto" in user_args:
 		simplified_fighter_proto_enabled = true
 		fighter_visuals_enabled = true
+	if "--rook-proto" in user_args:
+		local_weapon_choices[0] = Weapon.DASHBLADE
 	_backdrop = BACKDROP_SCRIPT.new()
 	add_child(_backdrop)
 
@@ -1217,6 +1220,7 @@ func _reset_freeplay() -> void:
 	for i in players.size():
 		var p: Player = players[i]
 		p.fighter_style = player_weapons[i]
+		_sync_fighter_visual(p, i)
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
@@ -1472,15 +1476,41 @@ func _add_player(i: int) -> void:
 	p.plan.set_aim_from_vector(_default_aim_vector(i), aim_min_angle, aim_max_angle)
 	p.plan.power = 0.55
 	_player_layer.add_child(p)
-	if fighter_visuals_enabled and (not simplified_fighter_proto_enabled or i == 0):
-		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
-		fighter_visual.name = "FighterVisual"
-		var fighter_skin = FIGHTER_SKIN_SCRIPT.animated_executor_proof() \
-			if simplified_fighter_proto_enabled else FIGHTER_SKIN_SCRIPT.executor_prototype(i)
-		fighter_visual.configure(p, fighter_skin)
-		p.add_child(fighter_visual)
-		p.draw_legacy_visual = false
+	_sync_fighter_visual(p, i)
 	players.append(p)
+
+
+func _fighter_skin_for(i: int):
+	if not fighter_visuals_enabled:
+		return null
+	if not simplified_fighter_proto_enabled:
+		return FIGHTER_SKIN_SCRIPT.executor_prototype(i)
+	if player_weapons[i] == Weapon.DASHBLADE:
+		return FIGHTER_SKIN_SCRIPT.animated_rook()
+	if i == 0 and player_weapons[i] == Weapon.KNIVES:
+		# Preserve the isolated Duelist prototype without applying it to roster
+		# members that still use their distinct legacy figures.
+		return FIGHTER_SKIN_SCRIPT.animated_executor_proof()
+	return null
+
+
+func _sync_fighter_visual(p: Player, i: int) -> void:
+	var fighter_skin = _fighter_skin_for(i)
+	var visual := p.get_node_or_null("FighterVisual") as FighterVisual
+	if fighter_skin == null:
+		p.draw_legacy_visual = true
+		if visual != null:
+			p.remove_child(visual)
+			visual.free()
+		return
+	if visual == null:
+		visual = FIGHTER_VISUAL_SCRIPT.new()
+		visual.name = "FighterVisual"
+		visual.configure(p, fighter_skin)
+		p.add_child(visual)
+	else:
+		visual.configure(p, fighter_skin)
+	p.draw_legacy_visual = false
 
 
 ## Local matches can switch between the one-player tutorial, the duel roster,
@@ -1606,7 +1636,7 @@ func _frame_debt_threshold_units() -> int:
 	return maxi(1, roundi(maxf(0.001, frame_debt_distance_per_cell) * 1000.0))
 
 
-## Convert real horizontal displacement into the distance Velocity was denied
+## Convert real horizontal displacement into the distance The Rook was denied
 ## by her class multiplier. At 90%, every nine travelled pixels represent one
 ## deleted pixel. Pressing into a wall earns nothing because no movement exists
 ## to edit out of the sequence.
@@ -1688,18 +1718,18 @@ func _roster_weapon_or_default(value: int) -> int:
 
 func weapon_short_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.DASHBLADE: return "VELOCITY"
-		Weapon.CHAKRAM: return "BROODTAIL"
-		Weapon.SHOCK: return "STATIC WITCH"
+		Weapon.DASHBLADE: return "ROOK"
+		Weapon.CHAKRAM: return "ECLIPSE"
+		Weapon.SHOCK: return "PULSE"
 		_: return "DUELIST"
 
 
 func character_display_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.DASHBLADE: return "THE VELOCITY"
-		Weapon.CHAKRAM: return "BROODTAIL"
-		Weapon.SHOCK: return "THE STATIC WITCH"
-		_: return "DAGGER DUELIST"
+		Weapon.DASHBLADE: return "THE ROOK"
+		Weapon.CHAKRAM: return "THE ECLIPSE"
+		Weapon.SHOCK: return "THE PULSE"
+		_: return "THE DUELIST"
 
 
 func chakram_launch_velocities(aim: Vector2, power: float,
@@ -3553,6 +3583,7 @@ func restart() -> void:
 	for i in players.size():
 		var p: Player = players[i]
 		p.fighter_style = player_weapons[i]
+		_sync_fighter_visual(p, i)
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
@@ -4156,7 +4187,7 @@ func _set_shock_attack_mode(i: int, mode: int) -> void:
 	if not p.alive or p.plan.confirmed:
 		return
 	p.plan.attack_mode = clampi(mode, 0, 1)
-	banner_text = "P%d SHOCK — %s" % [i + 1,
+	banner_text = "P%d PULSE — %s" % [i + 1,
 		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
 	banner_color = p.color
 	banner_time = 1.1
@@ -4351,7 +4382,7 @@ func _pad_edge(i: int, pad: int, btn: int) -> bool:
 
 
 ## The shoulder buttons cycle whichever secondary choice the kit owns. Only
-## the Static Witch has one, so for every other fighter this is inert.
+## The Pulse has one, so for every other fighter this is inert.
 func _cycle_attack_mode(i: int, direction: int) -> void:
 	if direction == 0 or not uses_shock(i):
 		return

@@ -112,7 +112,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		var safety: float = 0.0
 		if not _me.is_invulnerable():
 			safety = -600.0 * _danger(path, threats)
-			# A rival Velocity is a potential body projectile even though its plan
+			# A rival Rook is a potential body projectile even though its plan
 			# remains private. Test a small envelope of plausible release moments and
 			# reward routes which leave the committed line before it arrives.
 			if _gm.uses_dashblade(_foe.index):
@@ -134,7 +134,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 			"base": safety + core_value + variety + engage_value + toss})
 	scored.sort_custom(func(a, b): return a["base"] > b["base"])
 	# Not attacking is a legal tactical answer. Seed the search with the safest
-	# movement-only plan against Velocity; a projectile plan must beat this after
+	# movement-only plan against The Rook; a projectile plan must beat this after
 	# accounting for the chance that a frontal shot is simply parried back.
 	if _gm.uses_dashblade(_foe.index) and not scored.is_empty():
 		_best_cand = scored[0]
@@ -474,7 +474,7 @@ func _velocity_dash_danger(path: PackedVector2Array) -> float:
 
 
 ## A projectile launched directly down the line of a plausible incoming dash is
-## not pressure—it is ammunition for Velocity's moving guard. Range includes
+## not pressure—it is ammunition for The Rook's moving guard. Range includes
 ## both bodies closing during the dash, and angular risk falls to zero for real
 ## over/under shots which can bypass the narrow front surface.
 func _velocity_front_parry_risk(origin: Vector2, projectile_direction: Vector2,
@@ -499,7 +499,7 @@ func _velocity_front_parry_risk(origin: Vector2, projectile_direction: Vector2,
 		if alignment <= VELOCITY_PARRY_ALIGNMENT:
 			continue
 		# If the candidate already escaped far from its launch point, reduce the
-		# likelihood that Velocity would choose this frontal line in the first place.
+		# likelihood that The Rook would choose this frontal line in the first place.
 		var escape_scale: float = 1.0
 		if not route.is_empty():
 			var later: Vector2 = route[clampi(
@@ -669,7 +669,7 @@ func _fire_dashblade(origin: Vector2, power: float, fire_tick: int,
 	return best
 
 
-## Static Witch decisions are direct lines (plasma or plasma-to-orb), while the
+## Pulse decisions are direct lines (plasma or plasma-to-orb), while the
 ## orb lob is deliberately established by `_aim_shock`. Score the tactical line
 ## instead of paying for a ballistic knife simulation that this kit never uses.
 func _fire_shock(origin: Vector2, fire_tick: int,
@@ -859,5 +859,3 @@ func _line_blocked(origin: Vector2, target: Vector2, radius: float, fire_tick: i
 		if not impact.is_empty() and float(impact[0]) > 0.01 and float(impact[0]) < 0.99:
 			return true
 	return false
-
-
