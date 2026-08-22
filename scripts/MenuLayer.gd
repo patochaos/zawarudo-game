@@ -25,6 +25,7 @@ const ROW_QUIT := 5
 const ROWS := 9
 
 const MATCH_LIFE_OPTIONS := [3, 5, 7]
+const DIFFICULTY_NAMES := ["NOVICE", "STANDARD", "RUTHLESS"]
 
 const OPTION_SOUND := 0
 const OPTION_HIT_FREEZE := 1
@@ -320,6 +321,7 @@ class ControlsSheet:
 
 var level: int = 0
 var match_lives: int = 5
+var difficulty: int = 1
 var battle_mode: int = BattleMode.VS
 var battle_player_count: int = 2
 var battle_roles: Array[String] = ["HUMAN", "AI"]
@@ -627,6 +629,8 @@ func _page_names() -> Array[String]:
 		setup_rows.append("ARENA  ‹  %s  ›" % str(Levels.build(level)["name"]))
 		setup_rows.append("MATCH LIVES  —  OFF" if battle_mode == BattleMode.FREE_PLAY else \
 			"MATCH LIVES  ‹  %d  ›" % match_lives)
+		setup_rows.append("OPPONENT  —  NO AI" if not battle_roles.has("AI") else \
+			"OPPONENT  ‹  %s  ›" % DIFFICULTY_NAMES[difficulty])
 		setup_rows.append("START FREE PLAY" if battle_mode == BattleMode.FREE_PLAY else "START MATCH")
 		return setup_rows
 	if _page == MenuPage.OPTIONS:
@@ -679,6 +683,10 @@ func _page_description() -> String:
 			if _cursor == _setup_lives_row():
 				return "Free Play has no score or win condition." if battle_mode == BattleMode.FREE_PLAY else \
 					"First fighter—or team—to land this many scoring hits wins."
+			if _cursor == _setup_difficulty_row():
+				return "Every slot is human, so nothing here is driven by the AI." \
+					if not battle_roles.has("AI") else \
+					"How much of its search each CPU rival spends, and how precisely it aims."
 			return "The complete match is visible now. Enter the arena when everyone is ready."
 		MenuPage.OPTIONS:
 			return [
@@ -785,6 +793,16 @@ func _refresh_context_dossier(names: Array[String]) -> void:
 				_match_card.text = _match_card_text() + ("\n\nFREE PLAY\nLives are disabled; practice continues until you leave." \
 					if battle_mode == BattleMode.FREE_PLAY else \
 					"\n\n3 LIVES  //  quick set\n5 LIVES  //  standard set\n7 LIVES  //  longer adaptation set")
+			elif _cursor == _setup_difficulty_row():
+				_footer_kicker.text = "RULE DOSSIER // OPPONENT"
+				_context_title.text = "NO CPU RIVAL" if not battle_roles.has("AI") else \
+					"%s OPPONENT" % DIFFICULTY_NAMES[difficulty]
+				# The preset names alone cannot say what actually changes, and what
+				# changes is unusual enough to be worth stating: the opponent never
+				# gains information, only search and precision.
+				_match_card.text = "Every preset plans blind. None of them can read your plan; they differ only in how hard they look and how straight they throw.\n\nNOVICE\nCommits to one route and aims loosely.\n\nSTANDARD\nThe balance baseline.\n\nRUTHLESS\nSearches five routes, barely misses, commits fast." \
+					if battle_roles.has("AI") else \
+					_match_card_text() + "\n\nEvery slot is human, so no CPU rival is in this match."
 			else:
 				_footer_kicker.text = "MATCH DOSSIER // READY"
 				_context_title.text = "ENTER THE ARENA"
@@ -909,8 +927,12 @@ func _setup_lives_row() -> int:
 	return _setup_arena_row() + 1
 
 
-func _setup_start_row() -> int:
+func _setup_difficulty_row() -> int:
 	return _setup_arena_row() + 2
+
+
+func _setup_start_row() -> int:
+	return _setup_arena_row() + 3
 
 
 func _change_setup_value(row: int, direction: int) -> void:
@@ -931,6 +953,8 @@ func _change_setup_value(row: int, direction: int) -> void:
 	elif row == _setup_lives_row() and battle_mode != BattleMode.FREE_PLAY:
 		var current_lives := MATCH_LIFE_OPTIONS.find(match_lives)
 		match_lives = MATCH_LIFE_OPTIONS[posmod(current_lives + direction, MATCH_LIFE_OPTIONS.size())]
+	elif row == _setup_difficulty_row() and battle_roles.has("AI"):
+		difficulty = posmod(difficulty + direction, DIFFICULTY_NAMES.size())
 	else:
 		return
 	ui_navigated.emit()
@@ -968,6 +992,7 @@ func _build_setup_config() -> Dictionary:
 		"weapons": battle_weapons.slice(0, battle_player_count),
 		"level": level,
 		"match_lives": match_lives,
+		"difficulty": difficulty,
 	}
 
 

@@ -33,7 +33,6 @@ const REFINE_SPAN := 8.0
 const REFINE_STEP := 2.0
 const COARSE_POWERS := [0.4, 0.7, 1.0]
 const REFINE_POWERS := [-0.12, -0.06, 0.0, 0.06, 0.12]
-const MOVES_SEARCHED := 2        # movement candidates that get a shot search
 const SHOCK_SETUP_ORB_TARGET := 2
 const FLIGHT_CAP := 110          # ticks of arrow flight to look ahead
 const HYPOTHESES := [-1, 0, 1]   # what the opponent might do with their feet
@@ -142,8 +141,9 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		_best = {"score": VELOCITY_WITHHOLD_SCORE, "withheld_for_velocity": true}
 		_best_total = float(scored[0]["base"]) + VELOCITY_WITHHOLD_SCORE
 
+	# A body-dash kit has to search every route, since the route is the attack.
 	var searched: int = scored.size() if gm.uses_dashblade(idx) \
-		else mini(MOVES_SEARCHED, scored.size())
+		else mini(gm.ai_moves_searched, scored.size())
 	for i in searched:
 		_cands.append(scored[i])
 	_build_coarse_queue()

@@ -37,11 +37,12 @@ func _run() -> void:
 	_check(menu._page == menu.MenuPage.SETUP,
 		"Play must open the single local-match setup screen")
 	var setup_names := menu._page_names()
-	_check(setup_names.size() == 7 and "MODE" in setup_names[0] \
+	_check(setup_names.size() == 8 and "MODE" in setup_names[0] \
 		and "FIGHTERS" in setup_names[1] and "P1" in setup_names[2] \
 		and "P2" in setup_names[3] and "ARENA" in setup_names[4] \
-		and "MATCH LIVES" in setup_names[5] and setup_names[6] == "START MATCH",
-		"mode, count, roster classes, arena, lives and Start must coexist on one screen")
+		and "MATCH LIVES" in setup_names[5] and "OPPONENT" in setup_names[6] \
+		and setup_names[7] == "START MATCH",
+		"mode, count, classes, arena, lives, opponent skill and Start must coexist")
 	_check(not "GRENADIER" in " ".join(menu._page_names()) \
 		and not "WIDE" in " ".join(menu._page_names()),
 		"the retired Grenadier shortcut and Wide suffix must be absent")
@@ -50,7 +51,7 @@ func _run() -> void:
 	menu.handle_key(KEY_RIGHT)
 	menu.handle_key(KEY_RIGHT)
 	_check(menu._page == menu.MenuPage.SETUP and menu.battle_player_count == 4 \
-		and menu._page_names().size() == 9,
+		and menu._page_names().size() == 10,
 		"changing fighter count must expand the roster without opening another page")
 	_check(menu.battle_roles[0] == "HUMAN" and menu.battle_devices[0] == -2,
 		"P1 must always be keyboard-controlled")
@@ -94,6 +95,19 @@ func _run() -> void:
 	_check("P1" in menu._match_card.text and "FIRST TO 7 HITS" in menu._match_card.text,
 		"the live match card must update without a separate review page")
 
+	# Opponent skill is a match rule, so it sits beside lives and arena rather
+	# than in global options. It only means anything when a slot is CPU-driven.
+	menu._select(menu._setup_difficulty_row())
+	_check("STANDARD" in menu._page_names()[menu._setup_difficulty_row()],
+		"the opponent row must start on the standard preset")
+	menu.handle_key(KEY_RIGHT)
+	_check(menu.difficulty == 2 and "RUTHLESS" in menu._page_names()[menu._setup_difficulty_row()],
+		"opponent skill must be adjustable beside the rest of the configuration")
+	menu.handle_key(KEY_RIGHT)
+	_check(menu.difficulty == 0 and "NOVICE" in menu._page_names()[menu._setup_difficulty_row()],
+		"the opponent presets must wrap round rather than clamp")
+	menu.handle_key(KEY_LEFT)
+
 	var final_config := [{}]
 	menu.configured_match_requested.connect(func(config: Dictionary): final_config[0] = config)
 	menu._activate(menu._setup_start_row())
@@ -101,7 +115,8 @@ func _run() -> void:
 		and final_config[0]["player_count"] == 4 \
 		and final_config[0]["weapons"] == [2, 4, 3, 0] \
 		and final_config[0]["level"] == 2 \
-		and final_config[0]["match_lives"] == 7,
+		and final_config[0]["match_lives"] == 7 \
+		and final_config[0]["difficulty"] == 2,
 		"Start Match must emit one complete source of truth")
 
 	menu.open()

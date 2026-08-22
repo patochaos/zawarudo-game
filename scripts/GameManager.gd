@@ -71,9 +71,19 @@ enum Weapon { KNIVES = 0, DASHBLADE = 2, CHAKRAM = 3, SHOCK = 4 }
 ## preview stays hidden — it cannot see your plan, so showing it would be a
 ## one-way giveaway.
 @export var vs_ai: bool = true
+## Opponent skill. Every level plans by the same rules and still cannot see
+## your plan — what changes is how much of the search it spends and how
+## precisely it aims, so a lower level is a rival you can read rather than a
+## different game. Set from the match setup screen; the fields below are what
+## it writes, and stay editable for tuning.
+enum Difficulty { NOVICE, STANDARD, RUTHLESS }
+@export var difficulty: int = Difficulty.STANDARD
 @export var ai_aim_jitter: float = 2.0        # degrees of slop on the AI's aim
 @export var ai_think_min: float = 0.8         # it takes a beat before confirming
 @export var ai_think_max: float = 2.2
+## Movement candidates that get a full shot search, out of the eleven the AI
+## ranks for safety. The rest are still ranked, just never shot from.
+@export_range(1, 11, 1) var ai_moves_searched: int = 2
 ## Soft budget for the one AI search advanced each frame. A single candidate
 ## cannot be pre-empted, so keeping this low avoids visible planning hitches.
 @export var ai_slice_usec: int = 1200
@@ -649,6 +659,37 @@ func _ready() -> void:
 	_open_menu()
 
 
+## One knob for three, so a preset cannot be half-applied. NOVICE searches a
+## single movement candidate and aims loosely enough to be dodged on read;
+## RUTHLESS searches half the candidate set and barely misses. The think
+## delay moves with them so a weaker opponent also feels less certain.
+func set_difficulty(level: int) -> void:
+	difficulty = clampi(level, Difficulty.NOVICE, Difficulty.RUTHLESS)
+	match difficulty:
+		Difficulty.NOVICE:
+			ai_aim_jitter = 7.0
+			ai_moves_searched = 1
+			ai_think_min = 1.4
+			ai_think_max = 3.0
+		Difficulty.RUTHLESS:
+			ai_aim_jitter = 0.6
+			ai_moves_searched = 5
+			ai_think_min = 0.5
+			ai_think_max = 1.2
+		_:
+			ai_aim_jitter = 2.0
+			ai_moves_searched = 2
+			ai_think_min = 0.8
+			ai_think_max = 2.2
+
+
+func difficulty_name() -> String:
+	match difficulty:
+		Difficulty.NOVICE: return "NOVICE"
+		Difficulty.RUTHLESS: return "RUTHLESS"
+		_: return "STANDARD"
+
+
 func is_ai(i: int) -> bool:
 	return not online_mode and i >= 0 and i < players.size() \
 		and i < player_roles.size() and player_roles[i] == "AI"
@@ -805,6 +846,9 @@ func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Arr
 	online_mode = false
 	online_player = -1
 	hits_to_win = clampi(_menu.match_lives, 3, MAX_HITS_TO_WIN)
+	# Read off the menu the same way the hit target is, so both entry points
+	# into a local match agree on the rules the player just set.
+	set_difficulty(_menu.difficulty)
 	if not setup.is_empty():
 		var configured_roles: Array = setup.get("roles", [])
 		var configured_devices: Array = setup.get("devices", [])

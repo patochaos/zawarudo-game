@@ -206,8 +206,22 @@ body line score higher. A close projectile fired directly into the possible
 front guard is treated as parry fuel, so the bot may reposition without firing
 or choose a real over/under angle instead.
 
-Difficulty knobs on the `Main` node: `ai_aim_jitter` (degrees of slop, default
-2.0), `ai_think_min` / `ai_think_max`, `ai_slice_usec`.
+The **OPPONENT** row on the match setup screen picks how hard it plays. Every
+preset plans blind by the same rules — none of them ever sees your plan. What
+changes is how much of the search it spends and how straight it throws:
+
+| Preset | Aim slop | Routes shot-searched | Deliberation |
+|---|---:|---:|---|
+| **NOVICE** | 7.0° | 1 of 11 | 1.4–3.0s |
+| **STANDARD** | 2.0° | 2 of 11 | 0.8–2.2s |
+| **RUTHLESS** | 0.6° | 5 of 11 | 0.5–1.2s |
+
+STANDARD is the baseline every balance pass was tuned at. All eleven movement
+candidates are still ranked for safety at every preset; the number above is how
+many of them get a full shot search on top. Setting the preset writes
+`ai_aim_jitter`, `ai_moves_searched` and `ai_think_min` / `ai_think_max` on the
+`Main` node, which stay individually editable for tuning alongside
+`ai_slice_usec`.
 
 ## The loop
 
@@ -226,7 +240,7 @@ PLANNING (5s, frozen; shrinks after turn 3)  ->  COMMITTING (0.25s, locked)  -> 
 ## Match structure
 
 **First to 5 hits takes the default match.** Local setup can select 3, 5, or 7
-match lives before play. A hit does not end the round — it costs a
+match lives before play, and the opponent skill preset alongside them. A hit does not end the round — it costs a
 point and takes the victim off the board for the remainder of that window only.
 Everything else carries on untouched: knives stay in flight, platform damage
 stands, the other player keeps their exact position and velocity.
