@@ -67,13 +67,13 @@ func _test_plan_legality() -> void:
 	var gm = GAME_MANAGER.new()
 	var legal := PlayerPlan.new().to_network_dict()
 	_check(gm._online_plan_is_legal(0, legal), "an empty legal plan must be accepted")
-	var legacy := legal.duplicate(true)
-	legacy.erase("drops")
-	legacy["dirs"] = [1]
-	legacy["jumps"] = [0]
-	legacy["holds"] = [0]
-	_check(gm._online_plan_is_legal(0, legacy),
-		"a plan stripped by the legacy server must remain playable")
+	var without_drops := legal.duplicate(true)
+	without_drops.erase("drops")
+	without_drops["dirs"] = [1]
+	without_drops["jumps"] = [0]
+	without_drops["holds"] = [0]
+	_check(not gm._online_plan_is_legal(0, without_drops),
+		"drops is a required channel and a plan without it must be rejected")
 	var budget: int = gm.movement_tick_budget()
 	_check(budget == 30, "the default 0.5 second movement budget must be exactly 30 ticks")
 	var full_budget: Dictionary = legal.duplicate(true)
@@ -84,13 +84,13 @@ func _test_plan_legality() -> void:
 		full_budget["drops"].append(0)
 	_check(gm._online_plan_is_legal(0, full_budget),
 		"a plan that consumes the full movement budget must be accepted")
-	var legacy_float_tick: Dictionary = full_budget.duplicate(true)
-	legacy_float_tick["dirs"].append(1)
-	legacy_float_tick["jumps"].append(0)
-	legacy_float_tick["holds"].append(0)
-	legacy_float_tick["drops"].append(0)
-	_check(gm._online_plan_is_legal(0, legacy_float_tick),
-		"one float-residue tick from the previous web build must remain compatible")
+	var one_over: Dictionary = full_budget.duplicate(true)
+	one_over["dirs"].append(1)
+	one_over["jumps"].append(0)
+	one_over["holds"].append(0)
+	one_over["drops"].append(0)
+	_check(not gm._online_plan_is_legal(0, one_over),
+		"a single tick over the movement budget must be rejected, as the server does")
 	var impossible: Dictionary = legal.duplicate(true)
 	for i in budget + 2:
 		impossible["dirs"].append(1)

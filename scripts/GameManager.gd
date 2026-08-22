@@ -1023,15 +1023,11 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	var jumps: Array = data.get("jumps", [])
 	var holds: Array = data.get("holds", [])
 	var drops: Array = data.get("drops", [])
-	if not data.has("drops"):
-		drops.resize(dirs.size())
-		drops.fill(0)
 	if dirs.size() != jumps.size() or dirs.size() != holds.size() or dirs.size() != drops.size():
 		return "recording arrays have different lengths"
-	# Builds published before the integer cap could emit one extra tick when
-	# stamina reached a tiny positive float residue. Accept that single legacy
-	# tick so a stale browser can finish a match with a freshly loaded one.
-	var max_recorded := mini(exec_ticks(), movement_tick_budget() + 1)
+	# The same cap the room service enforces. Both ends derive it from the
+	# movement budget, so neither can accept a recording the other rejects.
+	var max_recorded := mini(exec_ticks(), movement_tick_budget())
 	if dirs.size() > max_recorded:
 		return "movement has %d ticks; maximum is %d" % [dirs.size(), max_recorded]
 	var shot_tick := int(data.get("shot_tick", -1))
