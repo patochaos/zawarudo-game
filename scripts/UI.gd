@@ -471,9 +471,9 @@ func refresh() -> void:
 		match_rule += "   ·   CORE IN %d HITLESS TURN%s" % [remaining, "" if remaining == 1 else "S"]
 	_score_label.text = match_rule
 	_score_label.visible = gm.team_mode
-	_level_label.text = ("CLOSE CAMERA — %s   ·   %s" % [gm.level_name, gm.level_wrap]) \
-		if gm.prototype_mode else \
-		("LEVEL %d/%d — %s   ·   %s" % [gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap])
+	_level_label.text = "LEVEL %d/%d — %s   ·   %s" % [
+		gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap,
+	]
 	if gm.tutorial_mode:
 		_level_label.text = "TUTORIAL — %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	if gm.online_mode:

@@ -34,7 +34,6 @@ const OPTION_TELEMETRY := 4
 const OPTION_BACK := 5
 const SOUND_LEVELS := [0, 25, 50, 75, 100]
 
-enum Ruleset { ORIGINAL, CAMERA_PROTOTYPE }
 enum BattleMode { VS, TEAM_BATTLE, FREE_PLAY }
 enum MenuPage { MAIN, SETUP, CONTROLS, OPTIONS }
 
@@ -100,10 +99,8 @@ class LevelMistPreview:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	func show_level(index: int, ruleset: int = 0) -> void:
-		match ruleset:
-			1: _level_data = Levels.build_prototype()
-			_: _level_data = Levels.build(index, 2)
+	func show_level(index: int) -> void:
+		_level_data = Levels.build(index, 2)
 		queue_redraw()
 
 	func _draw() -> void:
@@ -323,7 +320,6 @@ class ControlsSheet:
 		draw_rect(Rect2(0.0, 318.0, 814.0, 36.0), Color(0.45, 0.16, 0.67, 0.78))
 
 var level: int = 0
-var ruleset: int = Ruleset.ORIGINAL
 var match_lives: int = 5
 var battle_mode: int = BattleMode.VS
 var battle_player_count: int = 2
@@ -544,7 +540,7 @@ func _refresh() -> void:
 	var names := _page_names()
 	var controls_open := _page == MenuPage.CONTROLS
 	var visible_rows := 0 if controls_open else names.size()
-	_level_preview.show_level(level, Ruleset.ORIGINAL)
+	_level_preview.show_level(level)
 	match _page:
 		MenuPage.SETUP:
 			_blurb.text = "LOCAL MATCH · BUILD THE WHOLE FIGHT WITHOUT LEAVING THIS SCREEN"

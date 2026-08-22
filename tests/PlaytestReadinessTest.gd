@@ -23,7 +23,7 @@ func _run() -> void:
 func _test_telemetry_report() -> void:
 	var telemetry = TELEMETRY.new()
 	root.add_child(telemetry)
-	telemetry.begin_match("tutorial", "TEST ARENA", "wide", "keyboard_mouse")
+	telemetry.begin_match("tutorial", "TEST ARENA", "keyboard_mouse")
 	telemetry.record("plan_locked", 1, {"movement_ticks": 12, "power": 0.5})
 	var scores: Array[int] = [3, 1, 0, 0]
 	telemetry.finish_match(0, scores, 4, "digest")

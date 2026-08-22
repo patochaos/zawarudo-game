@@ -60,12 +60,6 @@ static func build(index: int, player_count: int = 4) -> Dictionary:
 	return _finish(_layout(index), clampi(player_count, 2, 4))
 
 
-## PROTOTYPE. Reached only through the prototype ruleset, never through the level
-## cycle, so it cannot drift into being real content by accident.
-static func build_prototype() -> Dictionary:
-	return _finish(_proving_ground(), 4)
-
-
 ## A quiet room for learning the three basic verbs. The open horizontal seam
 ## lets the player test wrapping in either direction without enemies, hazards,
 ## moving pieces, or breakable geometry competing for attention.
@@ -548,55 +542,5 @@ static func _collision_course() -> Dictionary:
 				"blast_radius": 145.0,
 				"min_players": 4,
 			},
-		],
-	}
-
-
-# ------------------------------------------------------------- prototype ----
-
-## KNIFE COURT V3. The climb begins on raised shelves at the sides, keeping the
-## lower middle readable. A narrow centre plinth denies the flat opening shot
-## without sealing traversal, while a high shuttle joins the two upper shelves
-## only while execution time advances. Low visible seam gates replace invisible
-## walls: fighters and knives can jump/arc above them and wrap in either
-## direction.
-##
-## Consecutive surfaces rise by 100–120px; the 600 impulse reaches ~129px under
-## normal gravity, so every tier and the centre plinth remain reachable without
-## spending the air jump.
-static func _proving_ground() -> Dictionary:
-	return {
-		"name": "KNIFE COURT",
-		"wrap_x": true,
-		"spawns": [
-			Vector2(400.0, 596.0), Vector2(880.0, 596.0),
-			Vector2(380.0, 371.0), Vector2(900.0, 371.0),
-		],
-		"respawn_points": [
-			Vector2(160.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(180.0, 481.0), Vector2(1100.0, 481.0),
-		],
-		"core_spawns": [Vector2(220.0, 460.0), Vector2(640.0, 445.0), Vector2(1060.0, 460.0)],
-		"platforms": [
-			# Physical seam gates are only 80px high. They read as arena edges at
-			# ground level, but their open sky lets bodies and knives wrap both ways.
-			{"rect": Rect2(0, 540, 56, 80), "hp": -1},
-			{"rect": Rect2(1224, 540, 56, 80), "hp": -1},
-			# Raised first steps live entirely on the flanks, 115px above the floor.
-			{"rect": Rect2(100, 505, 260, 18), "hp": -1},
-			{"rect": Rect2(920, 505, 260, 18), "hp": -1},
-			# A second side tier rises another 110px while preserving the centre air.
-			{"rect": Rect2(260, 395, 240, 18), "hp": 3},
-			{"rect": Rect2(780, 395, 240, 18), "hp": 3},
-			# The high shuttle is the only horizontal bridge across the middle. Its
-			# tick-indexed motion freezes in planning and advances during execution.
-			{
-				"rect": Rect2(460, 285, 160, 16), "hp": -1,
-				"motion": {"axis": Vector2.RIGHT, "travel": 200.0, "period": 240, "phase": 0.0},
-			},
-			# Just low enough to jump onto, this plinth blocks a straight opening
-			# volley while still allowing players to cross through the lower middle.
-			{"rect": Rect2(604, 500, 72, 120), "hp": -1},
 		],
 	}

@@ -25,7 +25,6 @@ const ONLINE_CLIENT_SCRIPT := preload("res://scripts/OnlineClient.gd")
 const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
 const TOUCH_CONTROLS_SCRIPT := preload("res://scripts/TouchControls.gd")
 const HAZARD_SCRIPT := preload("res://scripts/Hazard.gd")
-const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
 const TUTORIAL_SCRIPT := preload("res://scripts/TutorialLayer.gd")
 const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
@@ -299,46 +298,6 @@ var simplified_fighter_proto_enabled: bool = false
 @export_group("Preview")
 @export var trajectory_preview_time: float = 4.5
 
-@export_group("Prototype")
-## PROTOTYPE — selectable as a ruleset from the main menu, disposable as a whole.
-##
-## Three changes tested together, because the question is about the FEEL of a
-## duel and they only answer it as a set:
-##   * a camera that pushes in while time is stopped and pulls out when it runs
-##   * Knife Court V3: raised side shelves, a timed high shuttle, low wrap gates
-##     and a jumpable centre plinth that breaks the flat opening shot
-##   * a fixed pair: one knife follows the aim, one leaves slightly upward
-##
-## Delete `prototype_mode`, DuelCamera.gd and Levels._proving_ground() together
-## once it has answered its question, whichever way it answers.
-@export var prototype_mode: bool = false
-@export var prototype_knives_per_shot: int = 2
-@export_range(2.0, 20.0, 1.0) var prototype_secondary_lob_angle: float = 10.0
-## Lower than the authored 780 impulse: ~129px of rise under normal gravity.
-## Every step in the prototype arena stays at or below 110px.
-@export var prototype_jump_impulse: float = 600.0
-## Short turns. The full 5s window is built for reading a sixteen-platform board;
-## this fixed arena can be read in a fraction of that, and the loop gains far more
-## from cycling quickly than from time nobody is using.
-@export var prototype_planning_duration: float = 3.5
-## The commit beat is now the only pause between deciding and watching, so it
-## stays long enough to register as a transition rather than a hitch.
-@export var prototype_commit_delay: float = 0.20
-## Finishing your action IS the commitment — no separate confirm press. Rollback
-## still un-readies, because rolling back un-fires the shot that made you ready.
-@export var prototype_auto_ready: bool = true
-## How long a player must have stopped acting before finishing counts as being
-## done. Throwing is not the end of a turn — piloting after the shot is a real
-## and useful move — so readiness waits for the hands to come off, not for the
-## knife to leave.
-@export var prototype_ready_grace: float = 0.6
-
-## Close Camera keeps the experimental trailing-boost vocabulary. Terrain
-## ricochet below is global: every ruleset reads HARD and breakable the same way.
-@export var knife_boost_alignment: float = 0.82
-@export var knife_boost_min_closing_speed: float = 80.0
-@export var knife_boost_transfer: float = 0.72
-@export var knife_boost_speed_cap: float = 1.35
 @export_group("Knife Terrain Ricochet")
 @export var knife_ricochet_min_speed: float = 560.0
 @export_range(0.1, 1.0, 0.05) var knife_ricochet_retention: float = 0.72
@@ -524,14 +483,6 @@ var _player_layer: Node2D
 var _preview: Node2D
 var _temporal_core: TemporalCore
 var _hazard_layer: Node2D
-var _camera: DuelCamera
-## Loop timings as authored, so prototype mode can be turned off cleanly.
-var _authored_timings: Dictionary = {}
-var _authored_jump_impulse: float = -1.0
-## Seconds each player has gone without driving their ghost, and the recording
-## length that judgement was made against. Prototype auto-ready only.
-var _plan_idle: Array[float] = [0.0, 0.0, 0.0, 0.0]
-var _plan_ticks_seen: Array[int] = [0, 0, 0, 0]
 var _effects
 var _sfx
 var _time_stop
@@ -684,14 +635,6 @@ func _ready() -> void:
 
 	_tuning = TUNING_SCRIPT.new()
 	add_child(_tuning)
-
-	# PROTOTYPE. The camera is inert until prototype mode turns it on, so the
-	# shipping build renders through the plain viewport exactly as before.
-	_camera = CAMERA_SCRIPT.new()
-	_camera.gm = self
-	add_child(_camera)
-	_sync_prototype_camera()
-	_sync_prototype_timings()
 
 	_load_level(0)
 	_spawn_players()
@@ -866,7 +809,6 @@ func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Arr
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
-	_apply_ruleset(_menu.ruleset)
 	hits_to_win = clampi(_menu.match_lives, 3, MAX_HITS_TO_WIN)
 	if not setup.is_empty():
 		var configured_roles: Array = setup.get("roles", [])
@@ -906,7 +848,7 @@ func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Arr
 	]
 	var telemetry_mode := "local_team_%s" % team_shape if team_mode else \
 		("ai_grenadier_wide" if uses_grenade(0) else \
-		("ai_%s" % ("close" if prototype_mode else "wide")) if ai else \
+		"ai_wide" if ai else \
 		("local_2p_%s_%s" % [weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower()] \
 		if requested_players == 2 else "local_%dp" % requested_players))
 	_begin_match_telemetry(telemetry_mode)
@@ -934,7 +876,6 @@ func _on_menu_tutorial() -> void:
 func _on_menu_online(lvl: int) -> void:
 	team_mode = false
 	tutorial_mode = false
-	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = false
@@ -1157,7 +1098,6 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 	player_weapons.fill(Weapon.KNIVES)
 	for i in mini(requested_players, weapons.size()):
 		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = true
@@ -1413,8 +1353,8 @@ func _apply_movers(abs_tick: int) -> void:
 
 func _load_level(index: int) -> void:
 	level_index = posmod(index, Levels.count())
-	var lv := Levels.build_tutorial() if tutorial_mode else \
-		(Levels.build_prototype() if prototype_mode else Levels.build(level_index, player_count))
+	var lv := Levels.build_tutorial() if tutorial_mode \
+		else Levels.build(level_index, player_count)
 	level_name = lv["name"]
 	_backdrop.show_level(level_index)
 	level_wrap = Levels.wrap_label(lv)
@@ -1461,89 +1401,6 @@ func _load_hazards(specs: Array) -> void:
 func next_level() -> void:
 	_load_level(level_index + 1)
 	restart()   # also zeroes the score
-
-
-# ------------------------------------------------------------- prototype -----
-
-## Menu-owned ruleset selection. 0 = authored game, 1 = close-camera test.
-## Applying it before level load keeps every match isolated
-## from whichever experiment was played previously.
-func _apply_ruleset(selected: int) -> void:
-	prototype_mode = selected == 1
-	_sync_prototype_tuning()
-	_sync_prototype_camera()
-	_sync_prototype_timings()
-
-## Captured once so switching rulesets cannot drift tuning.
-func _sync_prototype_tuning() -> void:
-	if _authored_jump_impulse < 0.0:
-		_authored_jump_impulse = jump_impulse
-	jump_impulse = prototype_jump_impulse if prototype_mode else _authored_jump_impulse
-
-
-## The authored timings are captured once, on the first call, so toggling back
-## and forth cannot drift them.
-func _sync_prototype_timings() -> void:
-	if _authored_timings.is_empty():
-		_authored_timings = {
-			"planning_duration": planning_duration,
-			"commit_delay": commit_delay,
-			"ai_think_min": ai_think_min,
-			"ai_think_max": ai_think_max,
-		}
-	if prototype_mode:
-		planning_duration = prototype_planning_duration
-		commit_delay = prototype_commit_delay
-		# An opponent that deliberates for two seconds would eat the whole short
-		# window and make auto-ready pointless, so the AI's beat scales with it.
-		ai_think_min = minf(_authored_timings["ai_think_min"], prototype_planning_duration * 0.25)
-		ai_think_max = minf(_authored_timings["ai_think_max"], prototype_planning_duration * 0.60)
-	else:
-		for key in _authored_timings:
-			set(key, _authored_timings[key])
-	_clamp_planning_timer()
-
-
-## PROTOTYPE. Finishing your action readies you. There is no separate confirm
-## press to remember, which is what makes a two-and-a-half second turn workable.
-##
-## "Finished" is deliberately NOT "has thrown". Piloting after the shot — firing
-## early, then running for cover behind your own knife — is one of the better
-## moves in the game, and readying on the throw would silently delete it, since
-## a confirmed plan stops accepting pilot input. So the rule is: the shot is
-## placed, and the player has stopped driving for a moment.
-##
-## Rollback is untouched — it un-fires the shot, so the plan stops being finished
-## and the ready state falls away with it.
-func _auto_ready_finished_plans(delta: float) -> void:
-	if not prototype_mode or not prototype_auto_ready:
-		return
-	for i in players.size():
-		if not _is_locally_controlled(i) or is_ai(i):
-			continue
-		var p: Player = players[i]
-		if not p.alive or p.plan.confirmed:
-			continue
-		# A ghost that advanced this frame, or a draw still being held, is a
-		# player still acting. Comparing the recording length is enough to see
-		# it, and keeps this rule out of the piloting code entirely.
-		var recorded: int = p.plan.recorded_ticks()
-		if charging[i] or recorded != _plan_ticks_seen[i] or not p.plan.has_shot():
-			_plan_ticks_seen[i] = recorded
-			_plan_idle[i] = 0.0
-			continue
-		_plan_idle[i] += delta
-		if _plan_idle[i] >= prototype_ready_grace:
-			_confirm(i)
-
-
-func _sync_prototype_camera() -> void:
-	if _camera == null:
-		return
-	_camera.enabled = prototype_mode
-	if not prototype_mode:
-		_camera.position = Vector2(ARENA_W, ARENA_H) * 0.5
-		_camera.zoom = Vector2.ONE
 
 
 func _spawn_players() -> void:
@@ -1841,19 +1698,13 @@ func knife_launch_velocities(aim: Vector2, power: float, secret_triple: bool = f
 	var offsets: PackedFloat32Array = knife_offsets(power)
 	if secret_triple:
 		offsets.clear()
-		if prototype_mode:
-			offsets.append(-prototype_secondary_lob_angle)
-			offsets.append(0.0)
-			offsets.append(prototype_secondary_lob_angle)
-		else:
-			var half_spread := knife_spread_for(power) * 0.5
-			offsets.append(-half_spread)
-			offsets.append(0.0)
-			offsets.append(half_spread)
+		var half_spread := knife_spread_for(power) * 0.5
+		offsets.append(-half_spread)
+		offsets.append(0.0)
+		offsets.append(half_spread)
 	var out: Array[Vector2] = []
 	for off in offsets:
-		var signed_offset: float = -side * off if prototype_mode else off
-		out.append(base.rotated(deg_to_rad(signed_offset)))
+		out.append(base.rotated(deg_to_rad(off)))
 	return out
 
 
@@ -1867,19 +1718,8 @@ func knife_spread_for(power: float) -> float:
 ## preview, the throw and the AI all read the fan from here so they cannot drift
 ## apart.
 func knife_offsets(power: float) -> PackedFloat32Array:
-	var n: int = maxi(1, prototype_knives_per_shot if prototype_mode else knives_per_shot)
+	var n: int = maxi(1, knives_per_shot)
 	var out := PackedFloat32Array()
-	if prototype_mode:
-		if n == 1:
-			out.append(0.0)
-		elif n == 2:
-			out.append(0.0)
-			out.append(prototype_secondary_lob_angle)
-		else:
-			for i in n:
-				out.append((float(i) / float(n - 1) - 0.5) \
-					* prototype_secondary_lob_angle * 2.0)
-		return out
 	if n == 1:
 		out.append(0.0)
 		return out
@@ -1961,7 +1801,6 @@ func _physics_process(delta: float) -> void:
 			if tutorial_waiting and _tutorial.observe_planning():
 				_ui.refresh()
 				return
-			_auto_ready_finished_plans(delta)
 			_tick_ai(delta)
 			_update_facing()
 			_refresh_dirty_ghost_paths()
@@ -2793,9 +2632,6 @@ func _resolve_clashes(live: Array) -> void:
 				continue
 
 			var at: Vector2 = (hit[1] + hit[2]) * 0.5
-			if prototype_mode and _try_trailing_boost(a, b, at):
-				break
-
 			var prior_hits: int = maxi(a.clash_count, b.clash_count)
 			var damping: float = minf(knife_reclash_damping_cap,
 				knife_clash_damping + float(prior_hits) * knife_reclash_damping_bonus)
@@ -2823,39 +2659,6 @@ func _resolve_clashes(live: Array) -> void:
 				_award_super_charge(a.shooter)
 				_award_super_charge(b.shooter)
 			break
-
-
-## Same-direction contact is not a clash in Close Camera: if the
-## faster knife genuinely approached from behind, it spends itself to relay
-## momentum into the leading knife. Ownership of the leader never changes.
-func _try_trailing_boost(a: Arrow, b: Arrow, at: Vector2) -> bool:
-	var sa: float = a.vel.length()
-	var sb: float = b.vel.length()
-	if sa <= 0.001 or sb <= 0.001:
-		return false
-	if a.vel.normalized().dot(b.vel.normalized()) < knife_boost_alignment:
-		return false
-	var chaser: Arrow = a if sa > sb else b
-	var leader: Arrow = b if chaser == a else a
-	if chaser.vel.length() - leader.vel.length() < knife_boost_min_closing_speed:
-		return false
-	var travel: Vector2 = chaser.vel.normalized()
-	if (leader.prev_pos - chaser.prev_pos).dot(travel) < -knife_clash_radius * 0.25:
-		return false
-
-	var relayed: Vector2 = leader.vel + chaser.vel * knife_boost_transfer
-	var cap: float = arrow_speed_max * knife_boost_speed_cap
-	if relayed.length() > cap:
-		relayed = relayed.normalized() * cap
-	leader.boost(relayed, knife_clash_cooldown, chaser.stable_id())
-	# A clean relay re-energises one spent bank, keeping a successful chain live.
-	leader.ricochet_count = maxi(0, leader.ricochet_count - 1)
-	chaser.deflect(chaser.vel * 0.18, knife_clash_spin, knife_clash_cooldown,
-		leader.stable_id())
-	_effects.add(Effects.Kind.CLASH, at, Color(1.0, 0.72, 0.18))
-	_remember_aftermath("BOOST", at, Color(1.0, 0.72, 0.18))
-	_sfx.play("clash")
-	return true
 
 
 func _award_super_charge(shooter: int) -> void:
@@ -3992,8 +3795,6 @@ func _reset_pilot(i: int) -> void:
 	_pilot_accum[i] = 0.0
 	charging[i] = false
 	_charge_t[i] = 0.0
-	_plan_idle[i] = 0.0
-	_plan_ticks_seen[i] = 0
 	# Planning may resume long after the previous input poll. Sampling the actual
 	# button prevents a stale edge from swallowing an airborne jump.
 	_jump_prev[i] = _jump_input_held(i)
@@ -4247,7 +4048,7 @@ func _request_rematch() -> void:
 		_load_level(rematch_level_index)
 		restart()
 		_begin_match_telemetry("tutorial" if tutorial_mode else \
-			("ai_%s" % ("close" if prototype_mode else "wide") if vs_ai else "local_2p"))
+			("ai_wide" if vs_ai else "local_2p"))
 
 
 func _cycle_rematch_level(direction: int) -> void:
@@ -4994,8 +4795,7 @@ func _begin_match_telemetry(mode: String) -> void:
 		return
 	var input_name := "touch" if _touch_controls.enabled else \
 		("gamepad" if not _pads.is_empty() and _pads[0] >= 0 else "keyboard_mouse")
-	_telemetry.begin_match(mode, level_name,
-		"close" if prototype_mode else "wide", input_name)
+	_telemetry.begin_match(mode, level_name, input_name)
 	_telemetry_finished = false
 
 

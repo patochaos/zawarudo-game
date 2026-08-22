@@ -19,7 +19,7 @@ func _ready() -> void:
 	session_id = "%x-%04x" % [Time.get_unix_time_from_system(), rng.randi_range(0, 65535)]
 
 
-func begin_match(mode: String, arena: String, ruleset: String, input_name: String) -> void:
+func begin_match(mode: String, arena: String, input_name: String) -> void:
 	if not enabled:
 		_match.clear()
 		_events.clear()
@@ -36,7 +36,6 @@ func begin_match(mode: String, arena: String, ruleset: String, input_name: Strin
 		"locale": OS.get_locale_language(),
 		"mode": mode,
 		"arena": arena,
-		"ruleset": ruleset,
 		"input": input_name,
 	}
 	_events.clear()
