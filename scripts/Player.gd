@@ -439,16 +439,6 @@ func _draw_knife_fan(grip: Vector2, d: Vector2) -> void:
 		draw_line(base - side * 3.2, base + side * 3.2, color.lightened(0.5), 1.4, true)
 
 
-func _draw_grenade(grip: Vector2) -> void:
-	draw_circle(grip + Vector2(2.0 * facing, -1.0), 8.0, Color(0.025, 0.02, 0.035, 0.96))
-	var shell_color := color.darkened(0.55)
-	shell_color.a = 0.98
-	draw_circle(grip, 6.7, shell_color)
-	draw_line(grip + Vector2(2.0 * facing, -5.0), grip + Vector2(7.0 * facing, -11.0),
-		color.lightened(0.45), 1.8, true)
-	draw_circle(grip + Vector2(8.0 * facing, -12.0), 2.2, color.lightened(0.55))
-
-
 func _is_dashblading() -> bool:
 	return fighter_style == 2 and cfg != null and cfg.has_method("_player_is_dashing") \
 		and cfg._player_is_dashing(index)
@@ -663,20 +653,29 @@ func _draw_velocity_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
 	draw_colored_polygon(flare, Color(0.035, 0.08, 0.22, 0.98))
 	draw_polyline(flare + PackedVector2Array([flare[0]]), color.lightened(0.12), 1.2, true)
 	# Cropped cavalry jacket and the single huge orange lapel carry most of the
-	# fashion read; the body underneath remains the shared puppet.
+	# fashion read; the body underneath remains the shared puppet. Both are cut
+	# in the torso's own basis, the same way the flare follows the shin above.
+	# The dash pose swings hip/chest/neck around the aim vector, so world-space
+	# x/y offsets fold these quads onto themselves at most angles, and Godot's
+	# triangulator drops a non-simple polygon instead of drawing it.
+	var hip: Vector2 = pose["hip"]
+	var chest: Vector2 = pose["chest"]
+	var neck: Vector2 = pose["neck"]
+	var torso_axis := (neck - hip).normalized()
+	var torso_side := torso_axis.orthogonal() * f
 	var jacket := PackedVector2Array([
-		pose["chest"] + Vector2(-6.0 * f, -4.0),
-		pose["shoulder"] + Vector2(5.0 * f, -3.0),
-		pose["hip"] + Vector2(5.0 * f, -1.0),
-		pose["hip"] + Vector2(-4.0 * f, 1.0),
+		chest + torso_axis * 6.2 + torso_side * 3.7,
+		chest - torso_axis * 0.5 - torso_side * 8.1,
+		hip - torso_axis * 1.2 - torso_side * 4.9,
+		hip + torso_axis * 0.8 + torso_side * 4.0,
 	])
 	draw_colored_polygon(jacket, Color(0.03, 0.07, 0.18, 0.98))
 	draw_polyline(jacket + PackedVector2Array([jacket[0]]), VELOCITY_GOLD, 1.2, true)
 	var lapel := PackedVector2Array([
-		pose["neck"] + Vector2(-1.0 * f, 1.0),
-		pose["chest"] + Vector2(-10.0 * f, -6.0),
-		pose["chest"] + Vector2(-5.0 * f, 4.0),
-		pose["hip"] + Vector2(2.0 * f, -1.0),
+		neck - torso_axis * 0.5 + torso_side * 1.3,
+		neck + torso_axis * 1.9 + torso_side * 6.3,
+		chest - torso_axis * 1.5 + torso_side * 6.2,
+		hip - torso_side * 2.2,
 	])
 	draw_colored_polygon(lapel, VELOCITY_ORANGE)
 	draw_polyline(lapel + PackedVector2Array([lapel[0]]), ink, 1.2, true)
@@ -872,7 +871,7 @@ func _draw() -> void:
 		4:
 			_draw_shock_fashion(pose, head, f)
 		_:
-			# The dagger/grenadier fallback keeps the aristocratic swept collar.
+			# The dagger fallback keeps the aristocratic swept collar.
 			_draw_default_costume(pose, head, f)
 	draw_circle(head, 7.2, Color(0.035, 0.035, 0.055, 0.98))
 	draw_circle(head, 5.1, color.lightened(0.18))
@@ -883,8 +882,6 @@ func _draw() -> void:
 		Color(0.03, 0.03, 0.05), 1.2, true)
 
 	match fighter_style:
-		1:
-			_draw_grenade(pose["grip"])
 		2:
 			_draw_dashblade_kit(pose)
 		3:
