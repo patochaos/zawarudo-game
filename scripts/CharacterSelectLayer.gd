@@ -10,7 +10,7 @@ signal ui_navigated
 signal ui_accepted
 
 const DUELIST := 0
-## Weapon id 1 remains the retired Grenadier prototype in GameManager, but it
+## Weapon id 1 is vacant where the retired Grenadier sat, and it
 ## is deliberately absent from the playable roster.
 const DASHBLADE := 2
 const CHAKRAM := 3

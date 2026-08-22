@@ -30,7 +30,6 @@ const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
 const FIGHTER_VISUAL_SCRIPT := preload("res://scripts/FighterVisual.gd")
 const FIGHTER_SKIN_SCRIPT := preload("res://scripts/FighterSkin.gd")
-const GRENADE_SCRIPT := preload("res://scripts/Grenade.gd")
 const DASHBLADE_SCRIPT := preload("res://scripts/Dashblade.gd")
 const CHAKRAM_SCRIPT := preload("res://scripts/Chakram.gd")
 const SHOCK_PLASMA_SCRIPT := preload("res://scripts/ShockPlasma.gd")
@@ -61,10 +60,9 @@ const TEAM_COLORS := [Color(0.93, 0.19, 0.28), Color(0.16, 0.66, 0.98)]
 const TEAM_NAMES := ["CRIMSON", "AZURE"]
 
 enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
-## GRENADE remains reachable through its explicit legacy playtest route, but is
-## no longer offered as a roster fighter. The new ids are append-only so old
-## captures do not silently reinterpret id 1.
-enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
+## Ids are append-only and id 1 stays vacant where the retired Grenadier sat,
+## so old captures and telemetry cannot silently reinterpret a kit.
+enum Weapon { KNIVES = 0, DASHBLADE = 2, CHAKRAM = 3, SHOCK = 4 }
 
 # ------------------------------------------------------------------ tuning ---
 
@@ -191,22 +189,6 @@ var simplified_fighter_proto_enabled: bool = false
 ## not have to predict exactly; a full wind-up is a tight, fast pair.
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
-
-@export_group("Grenades")
-## Grenades cross meaningful space before their setup pays off. They retain enough
-## momentum to turn walls and platforms into authored bank-shot routes.
-@export var grenade_speed_min: float = 340.0
-@export var grenade_speed_max: float = 700.0
-@export var grenade_gravity: float = 850.0
-@export_range(0.0, 2.0, 0.05) var grenade_drag: float = 0.06
-@export_range(0.0, 1.0, 0.05) var grenade_bounce_retention: float = 0.75
-@export_range(0.0, 1.0, 0.05) var grenade_ground_friction: float = 0.82
-@export var grenade_rest_speed: float = 35.0
-@export var grenade_blast_radius: float = 92.0
-@export_range(0.25, 1.0, 0.05) var grenade_direct_blast_scale: float = 0.75
-@export var grenade_cluster_fragment_speed: float = 330.0
-@export_range(0.1, 1.0, 0.05) var grenade_cluster_fragment_fuse: float = 0.35
-@export_range(0.25, 1.0, 0.05) var grenade_cluster_blast_scale: float = 0.58
 
 @export_group("Character Prototypes")
 @export var dash_speed_min: float = 660.0
@@ -387,7 +369,6 @@ const SEAM_MARGIN := 340.0   # how far from an edge a platform gets a seam copy
 
 var players: Array = []
 var arrows: Array = []
-var grenades: Array = []
 var dashblades: Array = []
 var chakrams: Array = []
 var shock_plasmas: Array = []
@@ -399,7 +380,6 @@ var _character_select_vs_ai: bool = false
 var _character_select_freeplay: bool = false
 var _next_volley: int = 1
 var _next_arrow_id: int = 1
-var _next_grenade_id: int = 1
 var _next_character_projectile_id: int = 100000
 
 ## Online mode is lockstep: this browser records only its assigned player and
@@ -830,8 +810,6 @@ func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Arr
 	if not weapons.is_empty():
 		for i in mini(requested_players, weapons.size()):
 			player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	elif ai and requested_players == 2 and _menu.human_weapon == Weapon.GRENADE:
-		player_weapons[0] = Weapon.GRENADE
 	elif not ai and requested_players == 2:
 		player_weapons[0] = local_weapon_choices[0]
 		player_weapons[1] = local_weapon_choices[1]
@@ -847,15 +825,13 @@ func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Arr
 		int(ceil(float(requested_players) / 2.0)), int(requested_players / 2),
 	]
 	var telemetry_mode := "local_team_%s" % team_shape if team_mode else \
-		("ai_grenadier_wide" if uses_grenade(0) else \
 		"ai_wide" if ai else \
 		("local_2p_%s_%s" % [weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower()] \
-		if requested_players == 2 else "local_%dp" % requested_players))
+		if requested_players == 2 else "local_%dp" % requested_players)
 	_begin_match_telemetry(telemetry_mode)
 	var matchup := "CRIMSON VS AZURE // %s" % team_shape.to_upper() if team_mode else \
 		("%dP ROSTER" % requested_players if requested_players > 2 else \
-		("GRENADIER VS AI" if ai and uses_grenade(0) else \
-		("VS AI" if ai else "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)])))
+		("VS AI" if ai else "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)]))
 	_transition.play("%s // %s" % [matchup, level_name],
 		"WRITE THE MOVE", PLAYER_COLORS[0], reduced_flashes)
 
@@ -1061,10 +1037,7 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	var shot_tick := int(data.get("shot_tick", -1))
 	if shot_tick < -1 or shot_tick > dirs.size():
 		return "shot tick %d is outside the recording" % shot_tick
-	var grenade_fuse := int(data.get("grenade_fuse_seconds", 2))
 	var attack_mode := int(data.get("attack_mode", 0))
-	if grenade_fuse < 1 or grenade_fuse > 3:
-		return "grenade fuse %d is outside 1..3" % grenade_fuse
 	if attack_mode < 0 or attack_mode > 1:
 		return "attack mode %d is outside 0..1" % attack_mode
 	if bool(data.get("super_shot", false)) and (shot_tick < 0 or super_meter[i] < 1.0):
@@ -1157,9 +1130,6 @@ func _reset_freeplay() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	for g in grenades:
-		g.queue_free()
-	grenades.clear()
 	_clear_character_projectiles()
 	_effects.clear_all()
 	_load_level(level_index)
@@ -1474,10 +1444,6 @@ func arrow_speed_for(power: float) -> float:
 	return lerpf(arrow_speed_min, arrow_speed_max, clampf(power, 0.0, 1.0))
 
 
-func uses_grenade(i: int) -> bool:
-	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.GRENADE
-
-
 func uses_dashblade(i: int) -> bool:
 	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.DASHBLADE
 
@@ -1641,7 +1607,6 @@ func _roster_weapon_or_default(value: int) -> int:
 
 func weapon_short_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.GRENADE: return "GRENADIER"
 		Weapon.DASHBLADE: return "VELOCITY"
 		Weapon.CHAKRAM: return "BROODTAIL"
 		Weapon.SHOCK: return "STATIC WITCH"
@@ -1650,22 +1615,12 @@ func weapon_short_name(i: int) -> String:
 
 func character_display_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.GRENADE: return "THE GRENADIER"
 		Weapon.DASHBLADE: return "THE VELOCITY"
 		Weapon.CHAKRAM: return "BROODTAIL"
 		Weapon.SHOCK: return "THE STATIC WITCH"
 		_: return "DAGGER DUELIST"
 
 
-func grenade_launch_velocity(aim: Vector2, power: float) -> Vector2:
-	var direct := aim.normalized()
-	if direct.is_zero_approx():
-		direct = Vector2.RIGHT
-	return direct * lerpf(grenade_speed_min, grenade_speed_max, clampf(power, 0.0, 1.0))
-
-
-## Shared Chakram launch geometry. Execution and the planning preview both read
-## these velocities so the normal direct throw and SUPER spread cannot drift.
 func chakram_launch_velocities(aim: Vector2, power: float,
 		empowered: bool = false) -> Array[Vector2]:
 	var direct := aim.normalized()
@@ -1869,7 +1824,7 @@ func _sim_tick(dt: float) -> void:
 			continue
 		if p.plan.super_shot:
 			var since_launch: int = exec_tick - p.plan.shot_tick
-			if player_weapons[p.index] in [Weapon.KNIVES, Weapon.GRENADE] \
+			if player_weapons[p.index] == Weapon.KNIVES \
 					and since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
 				var wave: int = since_launch / maxi(1, super_wave_interval_ticks)
 				if wave < maxi(1, super_waves):
@@ -1994,7 +1949,6 @@ func _step_arrows(dt: float) -> void:
 	_step_dashblades(dt, survivors)
 	_resolve_clashes(survivors)
 	arrows = survivors
-	_step_grenades(dt)
 	_step_chakrams(dt)
 	_step_shock_weapons(dt)
 	if not damaged.is_empty():
@@ -2043,37 +1997,6 @@ func _step_dashblades(dt: float, live_arrows: Array) -> void:
 		else:
 			dash.queue_free()
 	dashblades = live
-
-
-func _step_grenades(dt: float) -> void:
-	var live: Array = []
-	var triggered: Array = []
-	for g in grenades:
-		var res: Dictionary = g.sim_step(dt, players)
-		if res["alive"]:
-			live.append(g)
-			if res["detonate"]:
-				triggered.append(g)
-		else:
-			g.queue_free()
-	grenades = live
-	arrows = _resolve_grenade_knife_contacts(arrows, triggered)
-
-	# Two moving grenades use the same synchronised swept test as knife clashes.
-	# Both are detonated, and the breadth-first explosion pass handles any chain.
-	for i in grenades.size():
-		for j in range(i + 1, grenades.size()):
-			var a = grenades[i]
-			var b = grenades[j]
-			if Arrow.moving_points_closest(a.prev_pos, a.position, b.prev_pos, b.position)[0] \
-					<= a.collision_radius() + b.collision_radius():
-				if not triggered.has(a):
-					triggered.append(a)
-				if not triggered.has(b):
-					triggered.append(b)
-
-	if not triggered.is_empty():
-		_detonate_grenades(triggered)
 
 
 func _step_chakrams(dt: float) -> void:
@@ -2137,24 +2060,6 @@ func _step_chakrams(dt: float) -> void:
 	if not broken_chakrams.is_empty():
 		_sfx.play("clash")
 
-	# A direct grenade body impact breaks the chakram and primes the grenade's
-	# ordinary detonation path; the explosion remains owned by its shooter.
-	var triggered_grenades: Array = []
-	for chakram in chakrams.duplicate():
-		for grenade in grenades:
-			if chakram.shooter == grenade.shooter:
-				continue
-			var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
-				grenade.prev_pos, grenade.position)
-			if contact[0] > Chakram.COLLISION_RADIUS + grenade.collision_radius():
-				continue
-			chakrams.erase(chakram)
-			chakram.queue_free()
-			if not triggered_grenades.has(grenade):
-				triggered_grenades.append(grenade)
-			break
-	if not triggered_grenades.is_empty():
-		_detonate_grenades(triggered_grenades)
 
 
 func _step_shock_weapons(dt: float) -> void:
@@ -2341,7 +2246,7 @@ func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
 		var blast_contact := _shock_blast_player_contact(orb.position, radius, player)
 		if player.alive and not player.is_invulnerable() \
 				and blast_contact.is_finite() \
-				and _grenade_blast_reaches(orb.position, blast_contact):
+				and _blast_reaches(orb.position, blast_contact):
 			_on_player_hit(player.index, player.position, scorer)
 	for arrow: Arrow in arrows:
 		var local_position: Vector2 = orb.position + wrap_delta(orb.position, arrow.position)
@@ -2356,13 +2261,6 @@ func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
 		if not redirected.is_equal_approx(chakram.vel):
 			chakram.vel = redirected
 			chakram.force_recall()
-	for grenade in grenades:
-		var local_position: Vector2 = orb.position + wrap_delta(orb.position, grenade.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			grenade.vel, impulse, radius)
-		if not redirected.is_equal_approx(grenade.vel):
-			grenade.vel = redirected
-			grenade.prev_pos = grenade.position
 	for other_plasma in shock_plasmas:
 		if other_plasma == source_projectile:
 			continue
@@ -2406,120 +2304,7 @@ func _shock_blast_player_contact(origin: Vector2, radius: float,
 	return nearest
 
 
-func _resolve_grenade_knife_contacts(live_arrows: Array, triggered: Array) -> Array:
-	if grenades.is_empty() or live_arrows.is_empty():
-		return live_arrows
-	var kept: Array = []
-	for a: Arrow in live_arrows:
-		var struck = null
-		var contact: Array = []
-		for g in grenades:
-			contact = Arrow.moving_points_closest(a.prev_pos, a.position, g.prev_pos, g.position)
-			if contact[0] <= g.collision_radius() + knife_clash_radius * 0.5:
-				struck = g
-				break
-		if struck == null:
-			kept.append(a)
-			continue
-		struck.position = contact[2]
-		struck.prev_pos = struck.position
-		if not triggered.has(struck):
-			triggered.append(struck)
-		a.queue_free()
-	return kept
-
-
-func _detonate_grenades(initial: Array) -> void:
-	var pending: Array = initial.duplicate()
-	var exploded: Array = []
-	var cluster_specs: Array[Dictionary] = []
-	var cursor := 0
-	while cursor < pending.size():
-		var g = pending[cursor]
-		cursor += 1
-		if exploded.has(g) or not grenades.has(g):
-			continue
-		exploded.append(g)
-		_blasts_this_execution += 1
-		_effects.add(Effects.Kind.EXPLOSION, g.position, g.color)
-		_remember_aftermath("BLAST", g.position, g.color)
-		_sfx.play("explosion")
-		var blast_radius: float = grenade_blast_radius * g.blast_radius_scale
-		# A three-second grenade rewards the full setup only when its timer matures.
-		# Early dagger, bomb and player impacts still detonate it normally.
-		if not g.cluster_fragment and g.fuse_ticks_total >= 3 * Engine.physics_ticks_per_second \
-				and g.fuse_ticks_left <= 0:
-			cluster_specs.append({
-				"position": g.position,
-				"shooter": g.shooter,
-				"color": g.color,
-			})
-
-		for p: Player in players:
-			if not p.alive or p.is_invulnerable():
-				continue
-			if wrap_delta(g.position, p.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, p.position):
-				_on_player_hit(p.index, p.position, g.shooter)
-
-		# An explosion consumes nearby knives. This prevents the dagger that lit
-		# the fuse from continuing invisibly through the blast.
-		var kept_arrows: Array = []
-		for a: Arrow in arrows:
-			if wrap_delta(g.position, a.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, a.position):
-				a.queue_free()
-			else:
-				kept_arrows.append(a)
-		arrows = kept_arrows
-
-		for other in grenades:
-			if other == g or exploded.has(other) or pending.has(other):
-				continue
-			if wrap_delta(g.position, other.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, other.position):
-				pending.append(other)
-
-	var kept_grenades: Array = []
-	for g in grenades:
-		if exploded.has(g):
-			g.queue_free()
-		else:
-			kept_grenades.append(g)
-	grenades = kept_grenades
-	_spawn_cluster_fragments(cluster_specs)
-
-
-func _spawn_cluster_fragments(specs: Array[Dictionary]) -> void:
-	var fragment_ticks := maxi(1, int(round(grenade_cluster_fragment_fuse \
-		* Engine.physics_ticks_per_second)))
-	var directions := PackedFloat32Array([-150.0, -90.0, -30.0])
-	for spec: Dictionary in specs:
-		var volley := _next_volley
-		_next_volley += 1
-		for degrees: float in directions:
-			var direction := Vector2.from_angle(deg_to_rad(degrees))
-			var g = GRENADE_SCRIPT.new()
-			g.cfg = self
-			g.shooter = int(spec["shooter"])
-			g.volley = volley
-			g.network_id = _next_grenade_id
-			_next_grenade_id += 1
-			g.color = spec["color"]
-			g.cluster_fragment = true
-			g.blast_radius_scale = grenade_cluster_blast_scale
-			g.position = wrap_point(Vector2(spec["position"]) + direction * 28.0)
-			g.prev_pos = g.position
-			g.vel = direction * grenade_cluster_fragment_speed
-			g.fuse_ticks_total = fragment_ticks
-			g.fuse_ticks_left = fragment_ticks
-			_arrow_layer.add_child(g)
-			grenades.append(g)
-
-
-## Hard cover blocks blast damage. The target is unfolded across wrapping seams
-## before the segment test so the shortest visible route is always used.
-func _grenade_blast_reaches(origin: Vector2, target: Vector2) -> bool:
+func _blast_reaches(origin: Vector2, target: Vector2) -> bool:
 	var endpoint := origin + wrap_delta(origin, target)
 	for r: Rect2 in solid_rects:
 		var impact := Arrow.segment_rect_impact(origin, endpoint, r)
@@ -3151,26 +2936,6 @@ func _capture_replay_frame() -> void:
 			"trail": a.trail.duplicate(),
 		})
 
-	var grenade_frames: Array[Dictionary] = []
-	for g in grenades:
-		grenade_frames.append({
-			"network_id": g.network_id,
-			"shooter": g.shooter,
-			"volley": g.volley,
-			"position": g.position,
-			"prev_pos": g.prev_pos,
-			"vel": g.vel,
-			"rotation": g.rotation,
-			"color": g.color,
-			"fuse_ticks_left": g.fuse_ticks_left,
-			"fuse_ticks_total": g.fuse_ticks_total,
-			"age_ticks": g.age_ticks,
-			"bounce_count": g.bounce_count,
-			"blast_radius_scale": g.blast_radius_scale,
-			"cluster_fragment": g.cluster_fragment,
-			"trail": g.trail.duplicate(),
-		})
-
 	var hazard_frames: Array[Dictionary] = []
 	for h: Hazard in hazards:
 		hazard_frames.append({
@@ -3185,7 +2950,6 @@ func _capture_replay_frame() -> void:
 		"score": score.duplicate(),
 		"players": player_frames,
 		"arrows": arrow_frames,
-		"grenades": grenade_frames,
 		"hazards": hazard_frames,
 		"world_tick": world_tick,
 		"platforms": platforms.duplicate(true),
@@ -3313,40 +3077,6 @@ func _apply_replay_frame(frame: Dictionary) -> void:
 		frame_arrows.append(a)
 	arrows = frame_arrows
 
-	var grenade_by_id: Dictionary = {}
-	for child in _arrow_layer.get_children():
-		if child is Grenade:
-			grenade_by_id[child.network_id] = child
-			child.visible = false
-	var frame_grenades: Array = []
-	for data: Dictionary in frame.get("grenades", []):
-		var id := int(data["network_id"])
-		var g = grenade_by_id.get(id)
-		if g == null:
-			g = GRENADE_SCRIPT.new()
-			g.cfg = self
-			g.network_id = id
-			_arrow_layer.add_child(g)
-			grenade_by_id[id] = g
-		g.visible = true
-		g.shooter = int(data["shooter"])
-		g.volley = int(data["volley"])
-		g.position = data["position"]
-		g.prev_pos = data["prev_pos"]
-		g.vel = data["vel"]
-		g.rotation = float(data["rotation"])
-		g.color = data["color"]
-		g.fuse_ticks_left = int(data["fuse_ticks_left"])
-		g.fuse_ticks_total = int(data["fuse_ticks_total"])
-		g.age_ticks = int(data["age_ticks"])
-		g.bounce_count = int(data["bounce_count"])
-		g.blast_radius_scale = float(data.get("blast_radius_scale", 1.0))
-		g.cluster_fragment = bool(data.get("cluster_fragment", false))
-		g.trail = PackedVector2Array(data["trail"])
-		g.queue_redraw()
-		frame_grenades.append(g)
-	grenades = frame_grenades
-
 	world_tick = int(frame["world_tick"])
 	platforms = frame["platforms"].duplicate(true)
 	_rebuild_solids()
@@ -3377,8 +3107,7 @@ func _finish_match_replay() -> void:
 	if not _replay_terminal_frame.is_empty():
 		_apply_replay_frame(_replay_terminal_frame)
 	for child in _arrow_layer.get_children():
-		if (child is Arrow and not arrows.has(child)) \
-				or (child is Grenade and not grenades.has(child)):
+		if child is Arrow and not arrows.has(child):
 			child.queue_free()
 	state = Phase.GAME_OVER
 	banner_text = "TEAM %s WINS THE MATCH" % TEAM_NAMES[winning_team] \
@@ -3472,8 +3201,6 @@ func _choose_respawn_point(player_index: int) -> Vector2:
 ## spread is the shot, not a sequence of shots.
 func _spawn_player_attack(p: Player) -> void:
 	match player_weapons[p.index]:
-		Weapon.GRENADE:
-			_spawn_grenade(p)
 		Weapon.DASHBLADE:
 			_spawn_dashblade(p, false)
 		Weapon.CHAKRAM:
@@ -3632,27 +3359,6 @@ func _spawn_character_super(p: Player) -> void:
 			_spawn_shock_plasma(p, p.aim_dir())
 
 
-func _spawn_grenade(p: Player) -> void:
-	var launch := grenade_launch_velocity(p.aim_dir(), p.plan.power)
-	var g = GRENADE_SCRIPT.new()
-	g.cfg = self
-	g.shooter = p.index
-	g.volley = _next_volley
-	_next_volley += 1
-	g.network_id = _next_grenade_id
-	_next_grenade_id += 1
-	g.color = p.color
-	g.position = p.shoulder() + launch.normalized() * 24.0
-	g.prev_pos = g.position
-	g.vel = launch
-	g.fuse_ticks_total = clampi(p.plan.grenade_fuse_seconds, 1, 3) \
-		* Engine.physics_ticks_per_second
-	g.fuse_ticks_left = g.fuse_ticks_total
-	_arrow_layer.add_child(g)
-	grenades.append(g)
-	_sfx.play("shoot")
-
-
 func _spawn_arrow(p: Player) -> void:
 	var launches: Array[Vector2] = knife_launch_velocities(p.aim_dir(), p.plan.power)
 	var origin: Vector2 = p.shoulder() + launches[0].normalized() * 22.0
@@ -3733,13 +3439,9 @@ func restart() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	for g in grenades:
-		g.queue_free()
-	grenades.clear()
 	_clear_character_projectiles()
 	_next_volley = 1
 	_next_arrow_id = 1
-	_next_grenade_id = 1
 	_next_character_projectile_id = 100000
 	_effects.clear_all()
 	_load_level(level_index)
@@ -4123,13 +3825,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			KEY_F8:
 				_fill_test_super(k.shift_pressed)
 			KEY_1, KEY_2, KEY_3:
-				if uses_grenade(0):
-					players[0].plan.grenade_fuse_seconds = int(k.keycode - KEY_0)
-					banner_text = "FREEPLAY GRENADE FUSE — %dS" % \
-						players[0].plan.grenade_fuse_seconds
-					banner_color = PLAYER_COLORS[0]
-					banner_time = 1.0
-				elif uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
+				if uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
 					_set_shock_attack_mode(0, 0 if k.keycode == KEY_1 else 1)
 				else:
 					_tuning.handle_key(k.keycode, k.shift_pressed)
@@ -4186,18 +3882,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			return
 		if state != Phase.PLANNING:
 			return
-		if uses_grenade(online_player):
-			match k.keycode:
-				KEY_1:
-					_set_grenade_fuse(online_player, 1)
-					return
-				KEY_2:
-					_set_grenade_fuse(online_player, 2)
-					return
-				KEY_3:
-					_set_grenade_fuse(online_player, 3)
-					return
-		elif uses_shock(online_player):
+		if uses_shock(online_player):
 			match k.keycode:
 				KEY_1:
 					_set_shock_attack_mode(online_player, 0)
@@ -4287,18 +3972,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if state != Phase.PLANNING:
 		return
 
-	if uses_grenade(keyboard_player):
-		match k.keycode:
-			KEY_1:
-				_set_grenade_fuse(keyboard_player, 1)
-				return
-			KEY_2:
-				_set_grenade_fuse(keyboard_player, 2)
-				return
-			KEY_3:
-				_set_grenade_fuse(keyboard_player, 3)
-				return
-	elif uses_shock(keyboard_player):
+	if uses_shock(keyboard_player):
 		match k.keycode:
 			KEY_1:
 				_set_shock_attack_mode(keyboard_player, 0)
@@ -4317,26 +3991,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_rollback(i)
 		elif k.keycode in map["reset"]:
 			_reset_path(i)
-
-
-func _set_grenade_fuse(i: int, seconds: int) -> void:
-	if state != Phase.PLANNING or not uses_grenade(i) or is_ai(i):
-		return
-	var p: Player = players[i]
-	if not p.alive or p.plan.confirmed:
-		return
-	p.plan.grenade_fuse_seconds = clampi(seconds, 1, 3)
-	banner_text = "P%d GRENADE FUSE — %d SECOND%s" % [
-		i + 1, p.plan.grenade_fuse_seconds,
-		"" if p.plan.grenade_fuse_seconds == 1 else "S",
-	]
-	banner_color = p.color
-	banner_time = 1.1
-	if _telemetry != null:
-		_telemetry.record("grenade_fuse_changed", turn, {
-			"player": i + 1, "seconds": p.plan.grenade_fuse_seconds,
-		})
-	p.queue_redraw()
 
 
 func _set_shock_attack_mode(i: int, mode: int) -> void:
@@ -4528,9 +4182,9 @@ func _poll_pad_meta(i: int) -> void:
 	if y:
 		_toggle_super(i)
 	if fuse_previous:
-		_cycle_grenade_fuse(i, -1)
+		_cycle_attack_mode(i, -1)
 	if fuse_next:
-		_cycle_grenade_fuse(i, 1)
+		_cycle_attack_mode(i, 1)
 
 
 func _pad_edge(i: int, pad: int, btn: int) -> bool:
@@ -4540,16 +4194,12 @@ func _pad_edge(i: int, pad: int, btn: int) -> bool:
 	return now and not was
 
 
-func _cycle_grenade_fuse(i: int, direction: int) -> void:
-	if direction == 0:
+## The shoulder buttons cycle whichever secondary choice the kit owns. Only
+## the Static Witch has one, so for every other fighter this is inert.
+func _cycle_attack_mode(i: int, direction: int) -> void:
+	if direction == 0 or not uses_shock(i):
 		return
-	if uses_shock(i):
-		_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
-		return
-	if not uses_grenade(i):
-		return
-	var current: int = players[i].plan.grenade_fuse_seconds
-	_set_grenade_fuse(i, posmod(current - 1 + direction, 3) + 1)
+	_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
 
 
 ## Free platformer control of the ghost, metered by stamina. Time only advances
@@ -4825,8 +4475,8 @@ func _online_state_digest() -> String:
 	var parts := PackedStringArray()
 	parts.append("turn:%d" % turn)
 	parts.append("score:%d,%d" % [score[0], score[1]])
-	parts.append("ids:%d,%d,%d,%d" % [
-		_next_volley, _next_arrow_id, _next_grenade_id, _next_character_projectile_id,
+	parts.append("ids:%d,%d,%d" % [
+		_next_volley, _next_arrow_id, _next_character_projectile_id,
 	])
 	parts.append("kits:%d,%d" % [player_weapons[0], player_weapons[1]])
 	parts.append("rng:%d" % rng.state)
@@ -4840,7 +4490,7 @@ func _online_state_digest() -> String:
 			p.drop_ticks, int(round(p.drop_from_y * 10000.0)),
 			1 if p.alive else 0, p.invuln_turns,
 			int(round(super_meter[i] * 1000000.0)), 1 if super_armed[i] else 0,
-			p.plan.grenade_fuse_seconds, p.plan.attack_mode,
+			p.plan.attack_mode,
 		])
 		parts.append("fd%d:%d,%d" % [i, frame_debt_cells[i], frame_debt_units[i]])
 		parts.append("fdl%d:%d" % [i, 1 if frame_debt_locked[i] else 0])
@@ -4848,10 +4498,6 @@ func _online_state_digest() -> String:
 	ordered_arrows.sort_custom(func(a: Arrow, b: Arrow): return a.network_id < b.network_id)
 	for a: Arrow in ordered_arrows:
 		parts.append("a:" + a.lockstep_digest_fragment())
-	var ordered_grenades: Array = grenades.duplicate()
-	ordered_grenades.sort_custom(func(a, b): return a.network_id < b.network_id)
-	for g in ordered_grenades:
-		parts.append("g:" + g.lockstep_digest_fragment())
 	var ordered_dashes: Array = dashblades.duplicate()
 	ordered_dashes.sort_custom(func(a, b): return a.owner_index < b.owner_index)
 	for dash in ordered_dashes:

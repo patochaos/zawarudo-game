@@ -179,12 +179,8 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var chakram_preview: bool = gm.uses_chakram(p.index)
 	var chakram_super: bool = chakram_preview and (p.plan.super_shot or (not armed \
 		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index]))
-	var grenade_preview: bool = gm.uses_grenade(p.index) and not p.plan.super_shot \
-		and not (not armed and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index])
 	var launches: Array[Vector2] = []
-	if grenade_preview:
-		launches.append(gm.grenade_launch_velocity(p.aim_dir(), power))
-	elif chakram_preview:
+	if chakram_preview:
 		launches = gm.chakram_launch_velocities(p.aim_dir(), power, chakram_super)
 	else:
 		launches = gm.knife_launch_velocities(p.aim_dir(), power)
@@ -195,7 +191,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var length: float = lerpf(AIM_LEN_MIN, AIM_LEN_MAX, power)
 	var tip: Vector2 = shoulder + dir * length
 	var body: Color = col.lightened(0.35) if live else Color(col.r, col.g, col.b, 0.5)
-	if not grenade_preview and not chakram_preview:
+	if not chakram_preview:
 		var dagger_reticle := _draw_dagger_trajectory_reticle(
 			shoulder, launches, gm.knife_launch_velocity(p.aim_dir(), power),
 			length, power, body, col, live)
@@ -216,10 +212,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 			draw_line(shoulder, shoulder + shot_dir * AIM_LEN_MAX,
 				Color(col.r, col.g, col.b, 0.12), 1.5)
 			draw_line(shoulder, shot_tip, body, 3.0 if live else 2.0)
-			if grenade_preview:
-				_draw_grenade_head(shot_tip, body)
-			else:
-				_draw_chakram_head(shot_tip, shot_dir, body)
+			_draw_chakram_head(shot_tip, shot_dir, body)
 
 		# The centre spine carries the power notches; the fan carries direction.
 		draw_line(shoulder, tip, Color(body.r, body.g, body.b, body.a * 0.45), 1.0)
@@ -238,9 +231,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var aimed: Vector2 = p.aim_dir().normalized()
 	var actual_elevation: float = rad_to_deg(atan2(-aimed.y, absf(aimed.x)))
 	var tag := "%d° · %d%%" % [int(round(actual_elevation)), int(round(power * 100.0))]
-	if grenade_preview:
-		tag = "GRENADE · FUSE %ds · %s" % [p.plan.grenade_fuse_seconds, tag]
-	elif chakram_preview:
+	if chakram_preview:
 		tag = ("TRIPLE CHAKRAM · " if chakram_super else \
 			"CHAKRAM · DIRECT · ") + tag
 	if armed:
@@ -499,15 +490,6 @@ func _draw_chakram_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 	draw_line(tip - side * 8.0, tip + side * 8.0, Color(col.r, col.g, col.b, col.a * 0.32), 1.0)
 
 
-func _draw_grenade_head(tip: Vector2, col: Color) -> void:
-	draw_circle(tip, Grenade.RADIUS, Color(0.025, 0.02, 0.035, col.a))
-	var shell_color := col.darkened(0.55)
-	draw_circle(tip, Grenade.RADIUS - 2.0, shell_color)
-	draw_line(tip + Vector2(3.0, -8.0), tip + Vector2(8.0, -15.0), col, 2.0)
-	draw_circle(tip + Vector2(9.0, -16.0), 2.6, col.lightened(0.55))
-
-
-## Marks the point along the path where the bow releases.
 func _launch_marker(at: Vector2, col: Color, alpha: float, caption: String) -> void:
 	var c := Color(col.r, col.g, col.b, alpha)
 	draw_circle(at, 4.0, c)

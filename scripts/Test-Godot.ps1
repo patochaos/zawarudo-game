@@ -32,7 +32,6 @@ $tests = @(
     "KineticArenaTest",
     "TouchControlsTest",
 	"MenuInteractionTest",
-	"GrenadierTest",
 	"DashbladeTest",
 	"ChakramTest",
 	"ShockWeaponTest",

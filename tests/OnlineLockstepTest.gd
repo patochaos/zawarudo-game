@@ -23,7 +23,6 @@ func _test_plan_roundtrip() -> void:
 	original.shot_tick = 2
 	original.aim_angle = 133.5
 	original.power = 0.8
-	original.grenade_fuse_seconds = 3
 	original.attack_mode = 1
 	original.super_shot = true
 	var restored := PlayerPlan.new()
@@ -34,15 +33,15 @@ func _test_plan_roundtrip() -> void:
 	_check(restored.drop_at(2) and not restored.jump_at(2),
 		"a relayed drop must arrive as a drop and never as a jump")
 	_check(restored.shot_tick == 2 and is_equal_approx(restored.aim_angle, 133.5) \
-		and is_equal_approx(restored.power, 0.8) and restored.grenade_fuse_seconds == 3 \
+		and is_equal_approx(restored.power, 0.8) \
 		and restored.attack_mode == 1 and restored.super_shot,
 		"network plan must preserve shot timing, aim, kit settings and SUPER")
 	_check(restored.confirmed, "a relayed network plan must arrive locked")
-	var legacy := original.to_network_dict()
-	legacy.erase("drops")
-	restored.apply_network_dict(legacy)
-	_check(restored.drops.size() == restored.dirs.size() and restored.drops.count(1) == 0,
-		"a legacy relay without drops must normalize to one zero byte per movement tick")
+	var wire := original.to_network_dict()
+	_check(not wire.has("grenade_fuse_seconds"),
+		"the retired Grenadier fuse must not travel on the wire")
+	_check(wire["drops"].size() == wire["dirs"].size(),
+		"drops is a required channel and must match the recording length")
 
 
 func _test_remote_slot_uses_local_controls() -> void:

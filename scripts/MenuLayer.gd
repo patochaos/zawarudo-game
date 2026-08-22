@@ -46,7 +46,6 @@ const WEAPON_ROSTER := [0, 2, 4, 3]
 
 ## This is the remembered local choice. The online lobby starts from it, then
 ## lets each remote player choose their own fighter before joining the room.
-var human_weapon: int = 0
 
 const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)

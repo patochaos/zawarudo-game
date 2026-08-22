@@ -160,21 +160,21 @@ func _run() -> void:
 		+ Vector2(game.shock_combo_radius + Player.HALF.x - 2.0, 0.0)
 	# Isolate radial contact from the authored arena's hard-cover check.
 	game.solid_rects.clear()
-	var redirected_grenade := Grenade.new()
-	redirected_grenade.cfg = game
-	redirected_grenade.position = lethal_orb.position + Vector2(48.0, 0.0)
-	redirected_grenade.prev_pos = redirected_grenade.position
-	redirected_grenade.vel = Vector2(0.0, 80.0)
-	game._arrow_layer.add_child(redirected_grenade)
-	game.grenades = [redirected_grenade]
+	var redirected_arrow := Arrow.new()
+	redirected_arrow.cfg = game
+	redirected_arrow.position = lethal_orb.position + Vector2(48.0, 0.0)
+	redirected_arrow.prev_pos = redirected_arrow.position
+	redirected_arrow.vel = Vector2(0.0, 80.0)
+	game._arrow_layer.add_child(redirected_arrow)
+	game.arrows = [redirected_arrow]
 	game._detonate_shock_orb(lethal_orb, true, 1, 1.0)
 	_check(not game.players[0].alive,
 		"a fighter whose body touches the charged combo edge must be killed")
-	_check(redirected_grenade.vel.x > 0.0,
-		"a shock combo must redirect other projectile families such as grenades")
+	_check(redirected_arrow.vel.x > 0.0,
+		"a shock combo must redirect other projectile families such as daggers")
 	game.players[0].alive = true
-	game.grenades.clear()
-	redirected_grenade.queue_free()
+	game.arrows.clear()
+	redirected_arrow.queue_free()
 
 	game._clear_character_projectiles()
 	game.players[1].plan.power = 1.0

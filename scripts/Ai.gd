@@ -203,9 +203,7 @@ func _arm() -> void:
 	pl.set_aim_from_vector(Vector2(float(_best["side"]), -1.0), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.set_elevation(_best["elev"] + _gm.rng.randf_range(-j, j), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.power = clampf(_best["power"] + _gm.rng.randf_range(-0.02, 0.02), 0.0, 1.0)
-	if _gm.uses_grenade(_idx):
-		pl.grenade_fuse_seconds = int(_best.get("fuse", _choose_grenade_fuse(_me.position)))
-	elif _gm.uses_dashblade(_idx):
+	if _gm.uses_dashblade(_idx):
 		_aim_dashblade(pl)
 	elif _gm.uses_shock(_idx):
 		_aim_shock(pl)
@@ -302,8 +300,7 @@ func _build_coarse_queue() -> void:
 				var e := lo
 				while e <= top:
 					for power in COARSE_POWERS:
-						if _gm.uses_grenade(_idx) or _gm.uses_dashblade(_idx) \
-								or _gm.uses_shock(_idx) or e < 5.0 \
+						if _gm.uses_dashblade(_idx) or _gm.uses_shock(_idx) or e < 5.0 \
 								or _plausible(origin, side, e, power):
 							_queue.append([cand, ft, e, power, side])
 					e += COARSE_STEP
@@ -564,8 +561,6 @@ func _dist_along(ox: float, side: int) -> float:
 ## checked against all of them without one hypothetical hit consuming it.
 func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int,
 		candidate: Dictionary = {}) -> Dictionary:
-	if _gm.uses_grenade(_idx):
-		return _fire_grenade(origin, side, elev, power, fire_tick)
 	if _gm.uses_dashblade(_idx):
 		return _fire_dashblade(origin, power, fire_tick, candidate)
 	if _gm.uses_shock(_idx):
@@ -753,7 +748,7 @@ func _shock_combo_opportunity(orb) -> Dictionary:
 			continue
 		var distance: float = _gm.wrap_delta(orb.position, player.position).length()
 		if distance <= _gm.shock_combo_radius * 0.88 and distance < best_distance \
-				and _gm._grenade_blast_reaches(orb.position, player.position):
+				and _gm._blast_reaches(orb.position, player.position):
 			best_target = player.index
 			best_distance = distance
 	return {"ready": best_target >= 0, "target": best_target, "distance": best_distance}
@@ -823,90 +818,3 @@ func _line_blocked(origin: Vector2, target: Vector2, radius: float, fire_tick: i
 	return false
 
 
-## Grenadier candidates use their own slower ballistic model, including terrain
-## bounces and the selected timer. Player futures remain mutually exclusive, so
-## direct contacts are scored independently without one guess altering another.
-func _fire_grenade(origin: Vector2, side: int, elev: float, power: float,
-		fire_tick: int) -> Dictionary:
-	var ang: float = elev if side > 0 else 180.0 - elev
-	var direction: Vector2 = Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
-	var pos: Vector2 = origin + direction * 24.0
-	var vel: Vector2 = _gm.grenade_launch_velocity(direction, power)
-	var fuse: int = _choose_grenade_fuse(origin)
-	var fuse_ticks: int = fuse * Engine.physics_ticks_per_second
-	var covered := [false, false, false]
-	var closest: float = 1e9
-
-	for t in fuse_ticks:
-		vel.x *= maxf(0.0, 1.0 - _gm.grenade_drag * _dt)
-		vel.y = minf(vel.y + _gm.grenade_gravity * _dt, _gm.max_fall_speed)
-		var raw: Vector2 = pos + vel * _dt
-		var first_hit: Array = []
-		for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
-			var impact := Arrow.segment_rect_impact(pos, raw, solid.grow(Grenade.RADIUS))
-			if not impact.is_empty() and (first_hit.is_empty() or impact[0] < first_hit[0]):
-				first_hit = impact
-
-		var world_t: int = fire_tick + t
-		for h in _futures.size():
-			var future: PackedVector2Array = _futures[h]
-			var fi: int = clampi(world_t, 0, future.size() - 1)
-			if not covered[h] and _hits_body(pos, raw, future[fi]):
-				covered[h] = true
-			closest = minf(closest, _gm.wrap_delta(raw, future[fi]).length())
-
-		if not first_hit.is_empty():
-			var normal: Vector2 = first_hit[1]
-			if normal.is_zero_approx():
-				normal = -vel.normalized() if not vel.is_zero_approx() else Vector2.UP
-			pos = pos.lerp(raw, float(first_hit[0])) + normal * 1.5
-			vel = vel.bounce(normal) * _gm.grenade_bounce_retention
-		else:
-			pos = _gm.wrap_point(raw)
-		if not _gm.world_bounds.grow(Grenade.RADIUS * 2.0).has_point(pos):
-			break
-
-	for h in _futures.size():
-		var future: PackedVector2Array = _futures[h]
-		var fi: int = clampi(fire_tick + fuse_ticks, 0, future.size() - 1)
-		if _gm.wrap_delta(pos, future[fi]).length() <= _gm.grenade_blast_radius \
-				and _gm._grenade_blast_reaches(pos, future[fi]):
-			covered[h] = true
-
-	var hits: int = 0
-	for did_hit in covered:
-		if did_hit:
-			hits += 1
-	var setup_value: float = 85.0 if fuse == 3 \
-		and closest < _gm.grenade_blast_radius * 2.4 else 0.0
-	return {
-		"score": float(hits) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2 + setup_value,
-		"fuse": fuse,
-	}
-
-
-func _choose_grenade_fuse(origin: Vector2) -> int:
-	var distance: float = _gm.wrap_delta(origin, _foe.position).length()
-	var has_setup: bool = false
-	for grenade in _gm.grenades:
-		if grenade.shooter == _idx and _gm.wrap_delta(grenade.position, _foe.position).length() \
-				<= _gm.grenade_blast_radius * 1.7:
-			has_setup = true
-			break
-	var crowded: bool = false
-	for p: Player in _gm.players:
-		if p == _me or p == _foe or not p.alive:
-			continue
-		if _gm.wrap_delta(p.position, _foe.position).length() < 230.0:
-			crowded = true
-			break
-	return choose_grenade_fuse(distance, has_setup, crowded)
-
-
-static func choose_grenade_fuse(distance: float, has_live_setup: bool = false,
-		crowded_target: bool = false) -> int:
-	if has_live_setup or distance < 270.0:
-		return 1
-	if crowded_target or distance < 610.0:
-		return 2
-	return 3

@@ -171,7 +171,7 @@ func _break() -> AudioStreamWAV:
 	return _wav(s)
 
 
-## Grenade blast: a hard transient over a low, rapidly falling pressure wave.
+## Blast: a hard transient over a low, rapidly falling pressure wave.
 func _explosion() -> AudioStreamWAV:
 	var n := int(RATE * 0.42)
 	var s := PackedFloat32Array()
