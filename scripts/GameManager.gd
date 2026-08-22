@@ -4478,7 +4478,7 @@ func _online_state_digest() -> String:
 	parts.append("rng:%d" % rng.state)
 	for i in players.size():
 		var p: Player = players[i]
-		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			i,
 			int(round(p.position.x * 10000.0)), int(round(p.position.y * 10000.0)),
 			int(round(p.vel.x * 10000.0)), int(round(p.vel.y * 10000.0)),
