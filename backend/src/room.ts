@@ -49,6 +49,7 @@ export interface RoomInfo {
   seed?: number;
   turn?: number;
   hasGuest?: boolean;
+  weapons?: number[];
 }
 
 function freshSeed(): number {
@@ -116,8 +117,24 @@ export class Room extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS rematch_ready (
         slot INTEGER PRIMARY KEY
       );
+      CREATE TABLE IF NOT EXISTS fighters (
+        slot INTEGER PRIMARY KEY,
+        weapon INTEGER NOT NULL
+      );
       INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at)
       VALUES (1, unixepoch());
+    `);
+    const fighterColumns = this.ctx.storage.sql.exec<{ name: string }>(
+      "PRAGMA table_info(fighters)",
+    ).toArray();
+    if (!fighterColumns.some((column) => column.name === "protocol")) {
+      this.ctx.storage.sql.exec(
+        "ALTER TABLE fighters ADD COLUMN protocol INTEGER NOT NULL DEFAULT 1",
+      );
+    }
+    this.ctx.storage.sql.exec(`
+      INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at)
+      VALUES (2, unixepoch());
     `);
   }
 
@@ -127,7 +144,8 @@ export class Room extends DurableObject<Env> {
     ).toArray()[0] ?? null;
   }
 
-  async reserve(code: string, hostToken: string, level: number, seed: number): Promise<boolean> {
+  async reserve(code: string, hostToken: string, level: number, seed: number,
+    hostWeapon = 0, hostProtocol = 1): Promise<boolean> {
     if (this.room() !== null) {
       return false;
     }
@@ -141,11 +159,16 @@ export class Room extends DurableObject<Env> {
       hostToken,
       Date.now(),
     );
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO fighters (slot, weapon, protocol) VALUES (0, ?, ?)",
+      hostWeapon,
+      hostProtocol,
+    );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return true;
   }
 
-  async join(guestToken: string): Promise<JoinResult> {
+  async join(guestToken: string, guestWeapon = 0, guestProtocol = 1): Promise<JoinResult> {
     const room = this.room();
     if (room === null) {
       return { ok: false, reason: "missing" };
@@ -156,6 +179,11 @@ export class Room extends DurableObject<Env> {
     this.ctx.storage.sql.exec(
       "UPDATE room SET guest_token = ? WHERE singleton = 1",
       guestToken,
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR REPLACE INTO fighters (slot, weapon, protocol) VALUES (1, ?, ?)",
+      guestWeapon,
+      guestProtocol,
     );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return { ok: true, player: 1 };
@@ -173,6 +201,7 @@ export class Room extends DurableObject<Env> {
       seed: room.seed,
       turn: room.turn,
       hasGuest: room.guest_token !== null,
+      weapons: this.weapons(),
     };
   }
 
@@ -289,6 +318,7 @@ export class Room extends DurableObject<Env> {
       DELETE FROM turn_results;
       DELETE FROM match_reports;
       DELETE FROM rematch_ready;
+      DELETE FROM fighters;
       DELETE FROM room;
     `);
   }
@@ -472,7 +502,9 @@ export class Room extends DurableObject<Env> {
       DELETE FROM rematch_ready;
     `);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
-    this.broadcast({ type: "match_start", level: selectedLevel, seed, turn: 1 });
+    this.broadcast({
+      type: "match_start", level: selectedLevel, seed, turn: 1, weapons: this.weapons(),
+    });
   }
 
   private maybeStartMatch(): void {
@@ -489,6 +521,7 @@ export class Room extends DurableObject<Env> {
       level: room.level,
       seed: room.seed,
       turn: room.turn,
+      weapons: this.weapons(),
     });
   }
 
@@ -505,7 +538,24 @@ export class Room extends DurableObject<Env> {
       seed: room.seed,
       turn: room.turn,
       connected: [this.isConnected(0), this.isConnected(1)],
+      weapons: this.weapons(),
     });
+  }
+
+  private weapons(): number[] {
+    const rows = this.ctx.storage.sql.exec<{ slot: number; weapon: number; protocol: number }>(
+      "SELECT slot, weapon, protocol FROM fighters ORDER BY slot",
+    ).toArray();
+    const weapons = [0, 0];
+    if (rows.length !== 2 || rows.some((row) => Number(row.protocol) < 2)) {
+      return weapons;
+    }
+    for (const row of rows) {
+      if (row.slot === 0 || row.slot === 1) {
+        weapons[row.slot] = Number(row.weapon);
+      }
+    }
+    return weapons;
   }
 
   private isConnected(slot: PlayerSlot): boolean {

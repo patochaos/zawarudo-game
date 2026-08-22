@@ -23,15 +23,16 @@ func _run() -> void:
 	var velocity_stamina: float = game.stamina[0]
 	_check(game.can_pilot_move(0) and game._pilot_step(0, 1, true, true) \
 			and velocity_plan.recorded_ticks() == 1 \
+			and not velocity_plan.jump_at(0) \
 			and game.stamina[0] < velocity_stamina,
-		"Velocity must be able to record walking and jumping again")
-	_check(is_equal_approx(game.movement_speed_scale(0), 0.75) \
-			and is_equal_approx(game.movement_speed_scale(1), 1.10) \
-			and game.movement_speed_scale(0) < game.movement_speed_scale(1),
-		"Velocity must use the slow locomotion profile and Shock the fast profile")
+		"Velocity must record ground movement while rejecting ordinary jumps")
+	_check(is_equal_approx(game.movement_speed_scale(0), 0.90) \
+			and is_equal_approx(game.movement_speed_scale(1), 0.90),
+		"Velocity and Static Witch must use the authored 90% walk profile")
+	_test_class_movement_profiles(game)
 	var debt_threshold: int = game._frame_debt_threshold_units()
 	game.frame_debt_units[0] = debt_threshold - 1000
-	game._accrue_frame_debt(0, Vector2.ZERO, Vector2(3.0, 0.0), 1)
+	game._accrue_frame_debt(0, Vector2.ZERO, Vector2(9.0, 0.0), 1)
 	_check(game.frame_debt_cells[0] == 1 and game.frame_debt_units[0] == 0,
 		"Velocity must turn her denied horizontal movement into a completed Lost Frame")
 	game._accrue_frame_debt(0, Vector2.ZERO, Vector2.ZERO, 1)
@@ -243,6 +244,36 @@ func _run() -> void:
 	quit(_failures)
 
 
+func _test_class_movement_profiles(game) -> void:
+	var original_weapons: Array[int] = game.player_weapons.duplicate()
+	var kits: Array[int] = [game.Weapon.KNIVES, game.Weapon.DASHBLADE,
+		game.Weapon.SHOCK, game.Weapon.CHAKRAM]
+	var expected_speed: Array[float] = [1.0, 0.90, 0.90, 1.05]
+	var expected_jumps: Array[int] = [1, 0, 0, 1]
+	var expected_fall: Array[float] = [1.0, 1.10, 0.85, 0.90]
+	for kit_index in kits.size():
+		game.player_weapons[0] = kits[kit_index]
+		_check(is_equal_approx(game.movement_speed_scale(0), expected_speed[kit_index]),
+			"class %d must use its authored walk-speed scale" % kits[kit_index])
+		_check(game.air_jumps_for(0) == expected_jumps[kit_index],
+			"class %d must use its authored air-jump count" % kits[kit_index])
+		_check(is_equal_approx(game.max_fall_speed_for(0),
+			game.max_fall_speed * expected_fall[kit_index]),
+			"class %d must use its authored fall-speed scale" % kits[kit_index])
+
+	game.player_weapons[0] = game.Weapon.DASHBLADE
+	var denied := Player.apply_jump(Vector2.ZERO, true, game.air_jumps_for(0), true,
+		game.jump_impulse_for(0), game.air_jump_impulse_for(0), game.air_jumps_for(0))
+	_check(not denied[3] and denied[0] == Vector2.ZERO,
+		"Velocity must have no ground jump, not merely a very short one")
+
+	game.player_weapons[0] = game.Weapon.CHAKRAM
+	_check(game.jump_impulse_for(0) > game.jump_impulse \
+			and game.air_jump_impulse_for(0) < game.jump_impulse_for(0),
+		"Broodtail must have the highest takeoff and a weaker second jump")
+	game.player_weapons = original_weapons
+
+
 func _test_velocity_dash_time_stop_preview(game) -> void:
 	game._clear_character_projectiles()
 	var saved_platforms: Array = game.platforms.duplicate(true)
@@ -257,7 +288,7 @@ func _test_velocity_dash_time_stop_preview(game) -> void:
 	p.position = Vector2(100.0, 100.0)
 	p.vel = Vector2.ZERO
 	p.on_ground = false
-	p.air_jumps_left = Player.MAX_AIR_JUMPS
+	p.air_jumps_left = game.air_jumps_for(0)
 	p.plan.start_new_turn()
 	p.plan.set_aim_from_vector(Vector2.RIGHT, game.aim_min_angle, game.aim_max_angle)
 	p.plan.power = 1.0

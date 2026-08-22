@@ -167,6 +167,17 @@ time motifs rather than another franchise's hair, collars, emblems or catchphras
 - Render the standing art around **56×82 to 64×92 logical pixels**, anchored at
   the same feet. Visual volume may extend beyond collision; gameplay does not.
 - Test silhouettes in black at 64 px tall before painting details.
+- **Every fighter must own at least two character-exclusive outer-silhouette
+  anchors.** These must identify the fighter without color, facial detail,
+  weapon, nameplate or HUD portrait. The Gilded Executor's anchors are the
+  angular/spiky hair wedge and the long blade-like split cape tails. Other
+  fighters must use different anchor combinations rather than variations of
+  those shapes.
+- Approve a new arena fighter only after its solid-black silhouette remains
+  identifiable at match scale against a noisy arena background, during bright
+  combat effects and when roughly one third of the body is temporarily
+  occluded. If recognition depends on costume texture or palette, redesign the
+  outer contour before adding detail.
 - Limit each fighter to one large costume shape, one medium identity prop and
   two small accents.
 - Use a two-pixel-equivalent dark outer keyline at final 720p scale.

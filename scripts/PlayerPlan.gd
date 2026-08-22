@@ -132,6 +132,8 @@ func to_network_dict() -> Dictionary:
 		"shot_tick": shot_tick,
 		"aim_angle": aim_angle,
 		"power": power,
+		"grenade_fuse_seconds": grenade_fuse_seconds,
+		"attack_mode": attack_mode,
 		"super_shot": super_shot,
 	}
 
@@ -140,10 +142,20 @@ func apply_network_dict(data: Dictionary) -> void:
 	dirs = PackedByteArray(data.get("dirs", []))
 	jumps = PackedByteArray(data.get("jumps", []))
 	holds = PackedByteArray(data.get("holds", []))
-	drops = PackedByteArray(data.get("drops", []))
+	# Builds from before ledge drops existed relay only three movement channels.
+	# Treat the missing channel as "no drop" so either deployment order remains
+	# compatible while the room service and web client roll over.
+	if data.has("drops"):
+		drops = PackedByteArray(data["drops"])
+	else:
+		drops = PackedByteArray()
+		drops.resize(dirs.size())
+		drops.fill(0)
 	shot_tick = int(data.get("shot_tick", -1))
 	aim_angle = float(data.get("aim_angle", 0.0))
 	power = clampf(float(data.get("power", 0.5)), 0.0, 1.0)
+	grenade_fuse_seconds = clampi(int(data.get("grenade_fuse_seconds", 2)), 1, 3)
+	attack_mode = clampi(int(data.get("attack_mode", 0)), 0, 1)
 	super_shot = bool(data.get("super_shot", false))
 	super_volley = -1
 	confirmed = true

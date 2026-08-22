@@ -50,6 +50,21 @@ func _run() -> void:
 	_check(gm.state == Phase.REPLAY, "the result screen must allow replay to be watched again")
 	gm._finish_match_replay()
 
+	gm._replay_frames.clear()
+	gm.replay_history_seconds = 2.0 / float(Engine.physics_ticks_per_second)
+	gm.state = Phase.EXECUTING
+	var frames_to_force_compaction: int = int(ceil(gm.REPLAY_COMPACTION_SLACK_SECONDS \
+		* float(Engine.physics_ticks_per_second))) + 3
+	for i in frames_to_force_compaction:
+		gm.score[0] = i
+		gm._capture_replay_frame()
+	_check(gm._replay_frames.size() <= gm.replay_frame_capacity(),
+		"long matches must compact replay snapshots to the configured memory bound")
+	_check(gm._replay_frames.back()["score"][0] == frames_to_force_compaction - 1,
+		"replay compaction must preserve the newest execution snapshot")
+	gm.replay_history_seconds = 30.0
+	gm.state = Phase.GAME_OVER
+
 	var previous_level: int = gm.level_index
 	gm._cycle_rematch_level(1)
 	_check(gm.level_index == previous_level and gm.rematch_level_index != previous_level,

@@ -23,6 +23,8 @@ func _test_plan_roundtrip() -> void:
 	original.shot_tick = 2
 	original.aim_angle = 133.5
 	original.power = 0.8
+	original.grenade_fuse_seconds = 3
+	original.attack_mode = 1
 	original.super_shot = true
 	var restored := PlayerPlan.new()
 	restored.apply_network_dict(original.to_network_dict())
@@ -32,9 +34,15 @@ func _test_plan_roundtrip() -> void:
 	_check(restored.drop_at(2) and not restored.jump_at(2),
 		"a relayed drop must arrive as a drop and never as a jump")
 	_check(restored.shot_tick == 2 and is_equal_approx(restored.aim_angle, 133.5) \
-		and is_equal_approx(restored.power, 0.8) and restored.super_shot,
-		"network plan must preserve shot timing, aim, power and SUPER")
+		and is_equal_approx(restored.power, 0.8) and restored.grenade_fuse_seconds == 3 \
+		and restored.attack_mode == 1 and restored.super_shot,
+		"network plan must preserve shot timing, aim, kit settings and SUPER")
 	_check(restored.confirmed, "a relayed network plan must arrive locked")
+	var legacy := original.to_network_dict()
+	legacy.erase("drops")
+	restored.apply_network_dict(legacy)
+	_check(restored.drops.size() == restored.dirs.size() and restored.drops.count(1) == 0,
+		"a legacy relay without drops must normalize to one zero byte per movement tick")
 
 
 func _test_remote_slot_uses_local_controls() -> void:
@@ -44,8 +52,9 @@ func _test_remote_slot_uses_local_controls() -> void:
 	var controls: Dictionary = gm._input_map_for(1)
 	_check(KEY_A in controls["left"] and KEY_D in controls["right"],
 		"online Player 2 must use A/D on their own keyboard")
-	_check(KEY_SPACE in controls["jump"] and KEY_W not in controls["jump"],
-		"online Player 2 must use SPACE, never an upward direction, to jump")
+	_check(KEY_SPACE in controls["jump"] and KEY_W in controls["jump"] \
+			and KEY_UP in controls["jump"],
+		"online Player 2 must be able to jump with SPACE, W, or UP")
 	_check(KEY_SPACE not in controls["charge"],
 		"SPACE must be reserved for jumping and never charge or fire")
 	gm.online_mode = false
@@ -59,6 +68,13 @@ func _test_plan_legality() -> void:
 	var gm = GAME_MANAGER.new()
 	var legal := PlayerPlan.new().to_network_dict()
 	_check(gm._online_plan_is_legal(0, legal), "an empty legal plan must be accepted")
+	var legacy := legal.duplicate(true)
+	legacy.erase("drops")
+	legacy["dirs"] = [1]
+	legacy["jumps"] = [0]
+	legacy["holds"] = [0]
+	_check(gm._online_plan_is_legal(0, legacy),
+		"a plan stripped by the legacy server must remain playable")
 	var budget: int = gm.movement_tick_budget()
 	_check(budget == 30, "the default 0.5 second movement budget must be exactly 30 ticks")
 	var full_budget: Dictionary = legal.duplicate(true)
@@ -84,6 +100,10 @@ func _test_plan_legality() -> void:
 		impossible["drops"].append(0)
 	_check(not gm._online_plan_is_legal(0, impossible),
 		"a remote plan cannot exceed the movement budget")
+	var bad_kit := legal.duplicate(true)
+	bad_kit["attack_mode"] = 2
+	_check(not gm._online_plan_is_legal(0, bad_kit),
+		"a remote plan cannot inject an unknown character attack mode")
 	gm.free()
 
 

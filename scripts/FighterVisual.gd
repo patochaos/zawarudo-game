@@ -322,7 +322,8 @@ func _draw_defeat(pose: Dictionary) -> void:
 
 
 func _draw_aim_arm(canvas: Node2D) -> void:
-	if _fighter == null or skin == null or not _fighter.alive:
+	if _fighter == null or skin == null or not skin.procedural_aim_arm_enabled \
+			or not _fighter.alive:
 		return
 	var segment := aim_segment_local()
 	if segment.size() != 2:

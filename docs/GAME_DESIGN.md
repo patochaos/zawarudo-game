@@ -261,14 +261,15 @@ formar parte de la selección de personajes.
 
 ### Prototipos de personaje
 
-- **The Velocity / Lost Frames:** se mueve al 75% porque elimina uno de cada
-  cuatro fotogramas de su propia locomoción. La distancia horizontal realmente
+- **The Velocity / Lost Frames:** se mueve al 90% porque pierde parte de los
+  fotogramas de su propia locomoción. La distancia horizontal realmente
   perdida al moverse llena hasta tres celdas persistentes; quedarse quieta o
   empujar una pared no genera recurso. Su ataque **CUT TO END** convierte al
   propio combatiente en la trayectoria comprometida y consume las celdas para
   extenderla. Una carga completa añade guardia frontal. La espada intercepta
   físicamente proyectiles y pierde durabilidad; no concede invulnerabilidad
-  abstracta.
+  abstracta. No tiene salto convencional: CUT TO END es también su única forma
+  de ganar altura, y cae más rápido que el resto del elenco.
 - **The Static Witch / Shock:** alterna entre un plasma recto cuya velocidad,
   alcance y grosor crecen con la carga —solo la carga completa cruza toda la
   pantalla— y un orbe lento que persiste, se arma y descansa

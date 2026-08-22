@@ -30,7 +30,7 @@ func _capture() -> void:
 	game.players[1].plan.power = 0.45
 	game.players[1].plan.shot_tick = 0
 	game._rebuild_ghost_paths()
-	game.banner_text = "CLOSE CAMERA — DIRECT + SMALL LOB"
+	game.banner_text = "CLOSE CAMERA — TWO-DAGGER TRAJECTORY"
 	game.banner_color = Color(0.62, 0.95, 1.0)
 	game.banner_time = 4.0
 	game._ui.refresh()

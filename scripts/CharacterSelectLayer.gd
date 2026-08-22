@@ -166,10 +166,10 @@ class CharacterCard:
 
 	func _attack_for(value: int) -> String:
 		match value:
-			DASHBLADE: return "75% WALK · BANK LOST FRAMES"
-			CHAKRAM: return "RETURNING CHAKRAM · DIRECT"
-			SHOCK: return "PLASMA LANCE · MULTI-ORB FIELD"
-			_: return "TWIN DAGGERS · FAN"
+			DASHBLADE: return "NO JUMP · 90% WALK · FAST FALL"
+			CHAKRAM: return "HIGH + DOUBLE JUMP · 105% WALK"
+			SHOCK: return "FLOATY SINGLE JUMP · 90% WALK"
+			_: return "BALANCED WALK · DOUBLE JUMP"
 
 	func _rule_for(value: int) -> String:
 		match value:

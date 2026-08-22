@@ -1,7 +1,7 @@
 extends Node2D
 class_name Player
 
-## Physics-based duelist. All motion goes through the static `step_state()` below
+## Physics-based fighter. All motion goes through the static `step_state()` below
 ## so that PredictionSystem can produce a ghost using the exact same integration.
 
 const SIZE := Vector2(32.0, 48.0)
@@ -184,17 +184,19 @@ func sim_free(dt: float, dir: int, jump: bool, jump_held: bool, drop: bool = fal
 	on_ground = drop_result[1]
 	drop_ticks = drop_result[2]
 	drop_from_y = drop_result[3]
-	var jump_result := Player.apply_jump(vel, on_ground, air_jumps_left, jump, cfg.jump_impulse)
+	var jump_result := Player.apply_jump(vel, on_ground, air_jumps_left, jump,
+		cfg.jump_impulse_for(index), cfg.air_jump_impulse_for(index), cfg.air_jumps_for(index))
 	vel = jump_result[0]
 	on_ground = jump_result[1]
 	air_jumps_left = jump_result[2]
 	var st := Player.step_state(position, vel, on_ground, dir, jump_held, dt, cfg, -1,
-		drop_ticks, drop_from_y, cfg.movement_speed_scale(index))
+		drop_ticks, drop_from_y, cfg.movement_speed_scale(index), cfg.jump_impulse_for(index),
+		cfg.max_fall_speed_for(index))
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
 	if on_ground:
-		air_jumps_left = MAX_AIR_JUMPS
+		air_jumps_left = cfg.air_jumps_for(index)
 
 
 ## Replays tick `t` of the recorded plan. Past the end of the recording the
@@ -213,17 +215,19 @@ func sim_step(dt: float, t: int, from_tick: int = -1) -> void:
 	drop_ticks = drop_result[2]
 	drop_from_y = drop_result[3]
 	var jump_result := Player.apply_jump(vel, on_ground, air_jumps_left,
-		plan.jump_at(t), cfg.jump_impulse)
+		plan.jump_at(t), cfg.jump_impulse_for(index), cfg.air_jump_impulse_for(index),
+		cfg.air_jumps_for(index))
 	vel = jump_result[0]
 	on_ground = jump_result[1]
 	air_jumps_left = jump_result[2]
 	var st := Player.step_state(position, vel, on_ground, plan.dir_at(t), plan.hold_at(t), dt,
-		cfg, from_tick, drop_ticks, drop_from_y, cfg.movement_speed_scale(index))
+		cfg, from_tick, drop_ticks, drop_from_y, cfg.movement_speed_scale(index),
+		cfg.jump_impulse_for(index), cfg.max_fall_speed_for(index))
 	position = st[0]
 	vel = st[1]
 	on_ground = st[2]
 	if on_ground:
-		air_jumps_left = MAX_AIR_JUMPS
+		air_jumps_left = cfg.air_jumps_for(index)
 
 
 ## Returns [velocity, on_ground, drop_ticks, drop_from_y]. Opening a drop costs
@@ -245,12 +249,15 @@ static func apply_drop(pos_y: float, vel: Vector2, on_ground: bool, drop_ticks: 
 ## Returns [velocity, on_ground, air_jumps_left, jumped]. Keeping the rule here
 ## lets live play, ghost planning, AI previews and execution share one decision.
 static func apply_jump(vel: Vector2, on_ground: bool, air_jumps_left: int,
-		requested: bool, impulse: float) -> Array:
+		requested: bool, ground_impulse: float, air_impulse: float = -1.0,
+		max_air_jumps: int = MAX_AIR_JUMPS) -> Array:
 	var jumped := false
-	if requested and (on_ground or air_jumps_left > 0):
+	var impulse := ground_impulse if on_ground else \
+		(ground_impulse if air_impulse < 0.0 else air_impulse)
+	if requested and impulse > 0.0 and (on_ground or air_jumps_left > 0):
 		vel.y = -impulse
 		if on_ground:
-			air_jumps_left = MAX_AIR_JUMPS
+			air_jumps_left = max_air_jumps
 		else:
 			air_jumps_left -= 1
 		on_ground = false
@@ -262,7 +269,8 @@ static func apply_jump(vel: Vector2, on_ground: bool, air_jumps_left: int,
 ## system can run it on a copy of the state.
 static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, jump_held: bool,
 		dt: float, cfg, from_tick: int = -1, drop_ticks: int = 0,
-		drop_from_y: float = 0.0, move_speed_scale: float = 1.0) -> Array:
+		drop_from_y: float = 0.0, move_speed_scale: float = 1.0,
+		jump_cut_impulse: float = -1.0, fall_speed: float = -1.0) -> Array:
 	# Ride whatever moving piece this body is standing on, then resolve against
 	# the geometry as it stands at the END of the tick. Doing both from the same
 	# pure tick function is what lets a planning ghost and the live execution
@@ -277,13 +285,16 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	# Variable jump height: let go while still climbing and the rise is capped,
 	# so a tap is a hop that fits inside one execution window and a held jump is
 	# the full floaty arc that deliberately overruns it.
+	var effective_jump_impulse: float = cfg.jump_impulse \
+		if jump_cut_impulse < 0.0 else jump_cut_impulse
 	if vel.y < 0.0 and not jump_held:
-		vel.y = maxf(vel.y, -cfg.jump_impulse * cfg.jump_cut)
+		vel.y = maxf(vel.y, -effective_jump_impulse * cfg.jump_cut)
 
 	var target: float = float(dir) * cfg.player_move_speed * move_speed_scale
 	var accel: float = cfg.player_acceleration if on_ground else cfg.player_air_acceleration
 	vel.x = move_toward(vel.x, target, accel * dt)
-	vel.y = minf(vel.y + cfg.gravity * dt, cfg.max_fall_speed)
+	var effective_fall_speed: float = cfg.max_fall_speed if fall_speed < 0.0 else fall_speed
+	vel.y = minf(vel.y + cfg.gravity * dt, effective_fall_speed)
 
 	# A drop-through makes thin ledges transparent on BOTH axes for its duration.
 	# Skipping only the vertical pass would let the horizontal one snap the body
@@ -416,7 +427,7 @@ func _draw_joint(at: Vector2, radius: float, body: Color) -> void:
 	draw_circle(at, radius, body.lightened(0.18))
 
 
-func _draw_knife_pair(grip: Vector2, d: Vector2) -> void:
+func _draw_knife_fan(grip: Vector2, d: Vector2) -> void:
 	for launch in cfg.knife_launch_velocities(d, plan.power):
 		var kd: Vector2 = launch.normalized()
 		var side: Vector2 = kd.orthogonal()
@@ -881,7 +892,7 @@ func _draw() -> void:
 		4:
 			_draw_shock_kit(pose)
 		_:
-			_draw_knife_pair(pose["grip"], aim_dir())
+			_draw_knife_fan(pose["grip"], aim_dir())
 
 	if cfg == null or not bool(cfg.team_mode):
 		draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), "P%d" % (index + 1),

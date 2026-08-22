@@ -1,6 +1,7 @@
 extends SceneTree
 
 const GAME_MANAGER := preload("res://scripts/GameManager.gd")
+const PREVIEW_LAYER := preload("res://scripts/PreviewLayer.gd")
 var _failures: int = 0
 
 
@@ -37,6 +38,7 @@ func _init() -> void:
 	_test_synchronised_sweep()
 	_test_velocity_response()
 	_test_secret_triple_fan()
+	_test_charge_aware_dagger_reticle()
 	_test_drag_collapses_the_arc()
 	_test_deflected_knives_fall_as_debris()
 	_test_preview_uses_platform_material_for_ricochet()
@@ -94,7 +96,33 @@ func _test_secret_triple_fan() -> void:
 		"all three knives must use identical ordinary speed and physics")
 	var left: Array[Vector2] = gm.knife_launch_velocities(Vector2(-aim.x, aim.y), 0.6, true)
 	_check(left.size() == 3 and left[0].x < 0.0 and left[1].x < 0.0 and left[2].x < 0.0,
-		"the normal three-knife fan must mirror when aiming left")
+		"the secret three-knife fan must mirror when aiming left")
+	gm.free()
+
+
+func _test_charge_aware_dagger_reticle() -> void:
+	var gm = GAME_MANAGER.new()
+	var preview = PREVIEW_LAYER.new()
+	preview.gm = gm
+	var start := Vector2(100.0, 100.0)
+	var low_power := 0.0
+	var high_power := 1.0
+	var low_length: float = lerpf(preview.AIM_LEN_MIN, preview.AIM_LEN_MAX, low_power)
+	var high_length: float = lerpf(preview.AIM_LEN_MIN, preview.AIM_LEN_MAX, high_power)
+	var low := preview._dagger_reticle_path(start,
+		gm.knife_launch_velocity(Vector2.RIGHT, low_power), low_length)
+	var high := preview._dagger_reticle_path(start,
+		gm.knife_launch_velocity(Vector2.RIGHT, high_power), high_length)
+	var low_tip: Vector2 = low[low.size() - 1]
+	var high_tip: Vector2 = high[high.size() - 1]
+	_check(high_tip.x > low_tip.x + 80.0,
+		"a fully charged Duelist reticle must extend substantially farther")
+	_check(low_tip.y > start.y and high_tip.y > start.y,
+		"the Duelist reticle must curve under the dagger's real gravity")
+	_check((low_tip.y - start.y) / (low_tip.x - start.x) \
+			> (high_tip.y - start.y) / (high_tip.x - start.x),
+		"low charge must read as a droopier arc than a full-power throw")
+	preview.free()
 	gm.free()
 
 

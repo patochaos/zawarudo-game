@@ -18,6 +18,7 @@ func _init() -> void:
 
 func _run() -> void:
 	_test_motion_is_a_pure_function()
+	await _test_ghost_path_cache()
 	await _test_preview_matches_execution()
 	await _test_lift_carries_its_rider()
 	await _test_orb_detonates_and_recharges()
@@ -57,6 +58,21 @@ func phased_is_opposite(a: Dictionary, b: Dictionary) -> bool:
 		if absf(sum - 200.0) > 0.001:
 			return false
 	return true
+
+
+func _test_ghost_path_cache() -> void:
+	var gm = await _fresh_game(PENDULUM)
+	gm._rebuild_ghost_paths()
+	var sentinel := PackedVector2Array([Vector2(-999.0, -999.0)])
+	gm.ghost_path[0] = sentinel
+	gm._refresh_dirty_ghost_paths()
+	_check(gm.ghost_path[0] == sentinel,
+		"an unchanged planning frame must reuse its cached ghost prediction")
+	gm._mark_ghost_path_dirty(0)
+	gm._refresh_dirty_ghost_paths()
+	_check(gm.ghost_path[0] != sentinel and gm.ghost_path[0].size() == gm.exec_ticks() + 1,
+		"a dirty plan must rebuild one complete execution prediction")
+	gm.free()
 
 
 # ----------------------------------------------------------- plan honesty ----

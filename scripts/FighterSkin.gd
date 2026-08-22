@@ -22,6 +22,7 @@ class_name FighterSkin
 }
 @export var silhouette: Dictionary = {}
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
+@export var procedural_aim_arm_enabled: bool = true
 
 
 const EXECUTOR_ATLAS_PATHS := {
@@ -40,6 +41,15 @@ const EXECUTOR_COUNTS := {
 	&"FALL": 4,
 	&"SHOT": 6,
 	&"LOCK": 2,
+}
+
+const SIMPLIFIED_EXECUTOR_PATHS := {
+	&"IDLE": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/idle.png",
+	&"RUN": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/run.png",
+	&"RISE": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/rise.png",
+	&"FALL": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/rise.png",
+	&"SHOT": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/lock.png",
+	&"LOCK": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/lock.png",
 }
 
 
@@ -70,6 +80,30 @@ static func executor_prototype(player_index: int) -> FighterSkin:
 	skin.sprite_tint = Color.WHITE if player_index % 2 == 0 else Color(0.82, 0.74, 1.0)
 	skin.visual_bounds = Rect2(-64.0, -97.0, 128.0, 128.0)
 	skin.ticks_per_frame = 5
+	return skin
+
+
+static func simplified_executor_proof() -> FighterSkin:
+	var skin := greybox(0)
+	skin.skin_id = &"gilded_executor_simplified_proof_v1"
+	skin.display_name = "The Gilded Executor — simplified arena proof"
+	skin.sprite_atlases = {}
+	for state: StringName in SIMPLIFIED_EXECUTOR_PATHS:
+		var texture := load(SIMPLIFIED_EXECUTOR_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = {
+		&"IDLE": 1, &"RUN": 1, &"RISE": 1,
+		&"FALL": 1, &"SHOT": 1, &"LOCK": 1,
+	}
+	skin.sprite_cell_size = Vector2i(256, 256)
+	skin.sprite_draw_rect = Rect2(-64.0, -104.0, 128.0, 128.0)
+	skin.sprite_tint = Color.WHITE
+	skin.visual_bounds = Rect2(-64.0, -104.0, 128.0, 128.0)
+	skin.ticks_per_frame = 5
+	# The proof sprites still contain both arms. A layered aim arm belongs to the
+	# eventual production atlas; drawing the technical overlay now makes three.
+	skin.procedural_aim_arm_enabled = false
 	return skin
 
 

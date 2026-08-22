@@ -9,9 +9,12 @@ export interface PlayerPlanPayload {
   dirs: number[];
   jumps: number[];
   holds: number[];
+  drops: number[];
   shot_tick: number;
   aim_angle: number;
   power: number;
+  grenade_fuse_seconds: number;
+  attack_mode: number;
   super_shot: boolean;
 }
 
@@ -58,8 +61,12 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
   const dirs = parseByteArray(value.dirs, 2);
   const jumps = parseByteArray(value.jumps, 1);
   const holds = parseByteArray(value.holds, 1);
+  const drops = value.drops === undefined
+    ? (dirs === null ? null : Array<number>(dirs.length).fill(0))
+    : parseByteArray(value.drops, 1);
   if (dirs === null || jumps === null || holds === null
-      || dirs.length !== jumps.length || dirs.length !== holds.length) {
+      || drops === null || dirs.length !== jumps.length || dirs.length !== holds.length
+      || dirs.length !== drops.length) {
     return null;
   }
   if (!isIntegerInRange(value.shot_tick, -1, MAX_PLAN_TICKS)) {
@@ -73,6 +80,12 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
       || value.power < 0 || value.power > 1) {
     return null;
   }
+  const grenadeFuseSeconds = value.grenade_fuse_seconds ?? 2;
+  const attackMode = value.attack_mode ?? 0;
+  if (!isIntegerInRange(grenadeFuseSeconds, 1, 3)
+      || !isIntegerInRange(attackMode, 0, 1)) {
+    return null;
+  }
   if (typeof value.super_shot !== "boolean") {
     return null;
   }
@@ -81,9 +94,12 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
     dirs,
     jumps,
     holds,
+    drops,
     shot_tick: value.shot_tick,
     aim_angle: value.aim_angle,
     power: value.power,
+    grenade_fuse_seconds: grenadeFuseSeconds,
+    attack_mode: attackMode,
     super_shot: value.super_shot,
   };
 }

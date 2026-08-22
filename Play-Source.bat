@@ -26,7 +26,7 @@ if not defined GODOT for /f "delims=" %%i in ('where godot 2^>nul') do (
 
 if not defined GODOT goto :nogodot
 
-start "" "%GODOT%" --path "%CD%"
+start "" "%GODOT%" --path "%CD%" %*
 exit /b 0
 
 :nogodot

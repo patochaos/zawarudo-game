@@ -16,11 +16,17 @@ func _capture() -> void:
 	await process_frame
 	await process_frame
 
-	var output := "res://previews/tutorial-onboarding.png"
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error == OK:
-		print("Tutorial onboarding preview saved: %s" % output)
-	else:
-		push_error("Could not save tutorial onboarding preview (error %d)" % error)
+	var error := OK
+	for page in game._tutorial.PAGES.size():
+		if page > 0:
+			game._tutorial.advance()
+			await process_frame
+			await process_frame
+		var output := "res://previews/tutorial-briefing-%02d.png" % (page + 1)
+		var image := root.get_texture().get_image()
+		error = image.save_png(ProjectSettings.globalize_path(output))
+		if error != OK:
+			push_error("Could not save tutorial page %d (error %d)" % [page + 1, error])
+			break
+		print("Tutorial briefing preview saved: %s" % output)
 	quit(error)

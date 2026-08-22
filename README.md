@@ -8,7 +8,7 @@ physics. Everything — players and knives — keeps its position and velocity
 across the freeze, so a dangerous knife can hang in mid-air for several planning
 phases while both players decide what to do about it.
 
-Each throw releases a two-knife fan. Low charge is slow and wide for space
+Each Duelist throw releases a two-knife fan. Low charge is slow and wide for space
 control; full charge is fast and nearly parallel. Knives from different throws
 can collide in flight, ricochet, lose force, tumble, and remain lethal as they
 fall through later execution windows.
@@ -75,7 +75,8 @@ next one begins.
 
 To play online:
 
-1. Player 1 chooses **ONLINE** and **CREATE PRIVATE ROOM**, then sends the
+1. Each player chooses their fighter in the Online lobby. Player 1 also chooses
+   the arena, selects **CREATE PRIVATE ROOM**, then sends the
    six-character code to Player 2.
 2. Player 2 chooses **ONLINE**, enters that code, and presses **JOIN**.
 3. Both players use their own keyboard and mouse. Online, the controls on both
@@ -114,7 +115,7 @@ npx wrangler deploy
 
 ## Menu
 
-The title screen keeps six primary choices: **PLAY**, **TUTORIAL**, **ONLINE**,
+The title screen keeps six primary choices: **PLAY**, **HOW TO PLAY**, **ONLINE**,
 **CONTROLS**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
 navigation remains available (`W`/`S` select, `Enter` activate). The redesigned
 command-dossier layout keeps navigation on the left and explains the selected
@@ -146,9 +147,11 @@ activation, and playtest shortcuts.
   another as well as the human. The first player to reach the hit limit wins.
 * **FREE PLAY** — see below.
 
-**TUTORIAL** is a quiet one-player tunnel with three simple platforms and
-horizontal wrapping. Move, jump, and throw are taught in three action-gated
-steps with no timer; normal timed turns begin after all three are completed.
+**HOW TO PLAY** is a six-screen illustrated combat briefing. It explains the
+plan/lock/execute loop, movement stamina, jumping and waiting, attack placement,
+undo/reset/lock, and the win condition. The simulation is fully paused while it
+is open, so every page can be read and navigated without completing a live input
+challenge. Keyboard, gamepad, and touch equivalents appear beside every action.
 **ONLINE** creates or joins a private six-character room; plans remain hidden
 until both players lock. **OPTIONS** has its own page for sound level, hit
 freeze, reduced flashes, high-contrast planning previews, and the
@@ -169,7 +172,7 @@ a time. **FREE PLAY** drops the freeze entirely — continuous real-time control
 one player, no turns, no timer, no score, with Player 2 as an inert target to
 shoot at. Platform destruction still works; the dummy just gets back up.
 
-`A`/`D` run · `Space` jump · mouse aim · hold `LMB` to draw, release to fire.
+`A`/`D` run · `Space`/`W`/`↑` jump · mouse aim · hold `LMB` to draw, release to fire.
 
 The left panel edits the tuning **live**, and whatever you set carries into a
 real match afterwards:
@@ -236,7 +239,8 @@ invulnerability** (a white ring; knives pass straight through). A banner names
 who was hit and shows the score for a couple of seconds.
 
 When the match ends, the result screen stays on the winner. Press `R`, gamepad
-`Y`, or **WATCH REPLAY** on touch to replay every execution tick at **1.5×**.
+`Y`, or **WATCH REPLAY** on touch to replay the latest **30 seconds** of execution
+ticks at **1.5×**. Planning and commit pauses are not recorded.
 Planning, commit delays, and SUPER freeze-frame introductions are omitted, so
 the whole match plays back as one continuous action sequence. Offline, choose
 the next rematch arena with `←`/`→`, the D-pad, or the result-screen arrows.
@@ -313,7 +317,7 @@ Key properties:
 | | Keyboard + mouse fighter | Any joined gamepad fighter |
 |---|---|---|
 | Walk the ghost | hold `A` / `D` | Left stick / D-pad |
-| Jump / double jump (hold = higher) | `Space` | `A` |
+| Jump / double jump (hold = higher) | `Space` / `W` / `↑` | `A` |
 | Let time run | `S` | Left stick down |
 | Aim | **Mouse** — free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
@@ -615,8 +619,10 @@ the rhythm without dominating it. Everything shares an 8-voice pool. `M` mutes.
 * **Dotted tail** — uncontrolled coast to the end of the window.
 * **Ring labelled `END`** — where you finish the execution window.
 * **Green→red bar over the ghost** — stamina left.
-* **Two notched knife rays** — the real fan direction and draw strength. Low
-  power opens the fan; full power pulls the pair almost parallel. They show
+* **Two notched dagger arcs** — the real fan direction and draw strength. Low
+  power opens the fan and droops early; full power reaches farther and pulls the
+  pair almost parallel. The compact arc uses live dagger drag and gravity without
+  revealing the complete landing point.
   where you are *pointing*, **not where the knives land** — you still estimate
   the ballistic arc yourself.
 * **Ringed dot labelled `FIRE`** — where and when along your path the volley releases.
@@ -735,7 +741,7 @@ the thing this prototype exists to test.
 | `scripts/Player.gd` | Player state, rendering, and `sim_step(dt, tick, from_tick)` which replays one tick of the recording. Motion lives in a static, side-effect-free `step_state()` that resolves against the geometry as it will stand at the end of the tick. |
 | `scripts/Arrow.gd` | Knife integration, terrain/player hits, synchronised swept clash math, deflection and tumbling. The legacy class name remains internal. |
 | `scripts/PredictionSystem.gd` | Knife trajectories and the uncontrolled `coast()` tail. Uses the *same* static step functions as the real simulation. |
-| `scripts/PreviewLayer.gd` | Ghost path, stamina, two-ray knife fan, existing-knife trajectories, phase markers, and optional high-contrast planning treatment. |
+| `scripts/PreviewLayer.gd` | Ghost path, stamina, charge-aware dagger arc reticle, existing-knife trajectories, phase markers, and optional high-contrast planning treatment. |
 | `scripts/TemporalCore.gd` | Visual telegraph and active-world rendering for the full-SUPER movement objective. |
 | `scripts/UI.gd` | Compact central match HUD, phase progress, portrait seals, banners, and the desktop result action panel. |
 | `scripts/Ai.gd` | The AI opponent. Ranks movements by safety, then searches shots coarse-to-fine against three hypotheses of what you might do. Sliced across frames. |

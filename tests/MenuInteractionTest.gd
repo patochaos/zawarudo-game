@@ -16,11 +16,11 @@ func _run() -> void:
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
-		"PLAY", "TUTORIAL", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
+		"PLAY", "HOW TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
 	], "the main menu must retain its primary destinations")
 	var play_footer: String = menu._footer.text
 	menu._row_buttons[menu.ROW_TUTORIAL].mouse_entered.emit()
-	_check(menu._footer.text != play_footer and "stamina" in menu._footer.text,
+	_check(menu._footer.text != play_footer and "six-screen" in menu._footer.text,
 		"hovering a row must replace the contextual footer copy")
 
 	menu._row_buttons[menu.ROW_CONTROLS].pressed.emit()

@@ -20,15 +20,15 @@ func _run() -> void:
 
 	game._on_menu_tutorial()
 	game._transition.visible = false
-	_check(game.tutorial_mode and game.state == Phase.PLANNING and game._tutorial.visible,
-		"Tutorial must open directly into its progressive planning lesson")
-	_check(game.players.size() == 1 and game._ui.visible,
-		"Tutorial must isolate one learner while preserving the match HUD")
+	_check(game.tutorial_mode and game.state == Phase.TUTORIAL and game._tutorial.visible,
+		"How To Play must open directly into its screen-by-screen briefing")
+	_check(game._tutorial.page == 0 and not game._ui.visible,
+		"How To Play must start on page one without match HUD noise")
 
 	game._open_menu()
 	game._transition.visible = false
 	_check(game.state == Phase.MENU and not game.tutorial_mode and not game._tutorial.visible,
-		"leaving Tutorial must cleanly restore the title state")
+		"leaving How To Play must cleanly restore the title state")
 
 	game._on_menu_start(false, 2, 2)
 	game._transition.visible = false

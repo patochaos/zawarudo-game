@@ -64,7 +64,7 @@ func build(manager) -> void:
 
 	_hint = _label(Vector2(16.0, 672.0), 1248.0, 14, Color(0.55, 0.60, 0.70))
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text = "A/D run · SPACE jump · MOUSE aim · hold LMB draw, release to fire     " \
+	_hint.text = "A/D run · SPACE/W/↑ jump · MOUSE aim · hold LMB draw, release to fire     " \
 		+ "↑/↓ pick value · ←/→ change (SHIFT = ×5) · BACKSPACE reset all · R reset arena · ESC menu"
 
 	for p in PARAMS:

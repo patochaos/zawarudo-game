@@ -2,10 +2,11 @@
 
 ## Rule
 
-Velocity moves at 75% of the shared horizontal baseline because every fourth
-frame is withheld. Only real horizontal displacement made while directional
-input is active creates Frame Debt; idle time, coasting and pushing into a wall
-create none.
+Velocity moves at 90% of the shared horizontal baseline because part of her
+locomotion is withheld. The original 75% value was raised when her conventional
+jump was removed. Only real horizontal displacement made while directional input
+is active creates Frame Debt; idle time, coasting and pushing into a wall create
+none.
 
 Denied distance persists between execution windows as three completed LOST
 FRAME cells plus deterministic sub-cell progress. CUT TO END automatically
@@ -13,7 +14,8 @@ commits every completed cell available on its release tick.
 
 ## First-pass tuning
 
-- 8 denied horizontal pixels complete one cell.
+- 2.75 denied horizontal pixels complete one cell. This preserves approximately
+  the original cell cadence after the walk-speed increase.
 - Each committed cell adds one simulated dash tick.
 - Committing all three cells adds one front-guard durability.
 - An ordinary empty dash retains the previous speed, duration and two-point

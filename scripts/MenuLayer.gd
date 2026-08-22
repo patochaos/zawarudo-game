@@ -45,9 +45,8 @@ const SETUP_FIRST_FIGHTER := 2
 ## after Static Witch so it appears as the fourth roster character.
 const WEAPON_ROSTER := [0, 2, 4, 3]
 
-## Weapon selection is deliberately local-only for now. GameManager reads this
-## when the selected arena starts; online and AI-controlled fighters stay on
-## the established knife ruleset.
+## This is the remembered local choice. The online lobby starts from it, then
+## lets each remote player choose their own fighter before joining the room.
 var human_weapon: int = 0
 
 const DIM := Color(0.55, 0.60, 0.70)
@@ -645,7 +644,7 @@ func _page_names() -> Array[String]:
 		return ["‹  BACK"]
 	return [
 		"PLAY",
-		"TUTORIAL",
+		"HOW TO PLAY",
 		"ONLINE",
 		"CONTROLS",
 		"OPTIONS",
@@ -662,7 +661,7 @@ func _page_description() -> String:
 		MenuPage.MAIN:
 			return [
 				"Local duels, AI fights and the free-play sandbox live here.",
-				"Learn movement, stamina, jumping and throwing without an opponent.",
+				"Read the six-screen combat briefing. No inputs or live challenges required.",
 				"Create or join a private room for a hidden-plan duel.",
 				"See P1 keyboard + mouse, P2 gamepad, SUPER activation and playtest shortcuts.",
 				"Tune sound, impact feedback, flashes, preview contrast and playtest logs.",

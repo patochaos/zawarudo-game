@@ -9,6 +9,7 @@ signal message_received(message: Dictionary)
 signal status_changed(text: String, is_error: bool)
 
 const API_URL := "https://zawarudo-rooms.patochaos.workers.dev"
+const PROTOCOL_VERSION := 2
 const HEARTBEAT_SECONDS := 20.0
 const RECONNECT_SECONDS := 1.5
 
@@ -33,20 +34,20 @@ func _ready() -> void:
 	add_child(_http)
 
 
-func create_room(level: int) -> void:
+func create_room(level: int, weapon: int = 0) -> void:
 	if _request_kind != RequestKind.NONE:
 		return
 	_request_kind = RequestKind.CREATE
 	status_changed.emit("CREATING PRIVATE ROOM…", false)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var err := _http.request(API_URL + "/rooms", headers, HTTPClient.METHOD_POST,
-		JSON.stringify({"level": level}))
+		JSON.stringify({"level": level, "weapon": weapon, "protocol": PROTOCOL_VERSION}))
 	if err != OK:
 		_request_kind = RequestKind.NONE
 		status_changed.emit("COULD NOT START ROOM REQUEST", true)
 
 
-func join_room(code: String) -> void:
+func join_room(code: String, weapon: int = 0) -> void:
 	if _request_kind != RequestKind.NONE:
 		return
 	var clean := code.strip_edges().to_upper()
@@ -56,7 +57,8 @@ func join_room(code: String) -> void:
 	_request_kind = RequestKind.JOIN
 	status_changed.emit("JOINING ROOM %s…" % clean, false)
 	var err := _http.request(API_URL + "/rooms/%s/join" % clean,
-		PackedStringArray(), HTTPClient.METHOD_POST)
+		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST,
+		JSON.stringify({"weapon": weapon, "protocol": PROTOCOL_VERSION}))
 	if err != OK:
 		_request_kind = RequestKind.NONE
 		status_changed.emit("COULD NOT START JOIN REQUEST", true)

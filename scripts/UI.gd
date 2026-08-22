@@ -496,11 +496,11 @@ func refresh() -> void:
 					"P1 GRENADIER  A/D MOVE · SPACE JUMP · LMB GRENADE · 1/2/3 FUSE · SHIFT LOCK · R UNDO"
 				_level_label.text += "   ·   P1 FUSE %ds" % gm.players[0].plan.grenade_fuse_seconds
 			elif gm.uses_dashblade(0):
-				_hint_p1.text = "P1 VELOCITY  MOVE TO BANK FRAMES · SPACE JUMP · LMB CUT TO END · T SUPER · SHIFT LOCK"
+				_hint_p1.text = "P1 VELOCITY  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
 			elif gm.uses_chakram(0):
 				_hint_p1.text = "P1 BROODTAIL  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
 			elif gm.uses_shock(0):
-				_hint_p1.text = "P1 STATIC WITCH  FAST MOVE · SPACE JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
+				_hint_p1.text = "P1 STATIC WITCH  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
 				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
 					if gm.players[0].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(0),
 					"" if gm.shock_orb_count(0) == 1 else "S"]

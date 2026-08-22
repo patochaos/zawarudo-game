@@ -1,8 +1,8 @@
 extends CanvasLayer
 class_name OnlineLobby
 
-signal create_requested(level: int)
-signal join_requested(code: String)
+signal create_requested(level: int, weapon: int)
+signal join_requested(code: String, weapon: int)
 signal cancel_requested
 signal ui_navigated
 signal ui_accepted
@@ -12,6 +12,7 @@ const VIOLET := Color(0.76, 0.42, 1.0)
 const TEXT := Color(0.84, 0.87, 0.94)
 const DIM := Color(0.56, 0.61, 0.71)
 const ROOM_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+const FIGHTER_ROSTER := [0, 2, 4, 3]
 
 
 class LobbyChrome:
@@ -59,6 +60,7 @@ class LobbyChrome:
 
 
 var level: int = 0
+var weapon: int = 0
 var _code_input: LineEdit
 var _room_label: Label
 var _room_caption: Label
@@ -66,6 +68,11 @@ var _join_divider: Label
 var _status: Label
 var _status_rule: ColorRect
 var _level_label: Label
+var _fighter_label: Label
+var _fighter_left: Button
+var _fighter_right: Button
+var _level_left: Button
+var _level_right: Button
 var _create: Button
 var _join: Button
 var _copy: Button
@@ -92,7 +99,7 @@ func _ready() -> void:
 
 	_create = _button(Vector2(360.0, 250.0), Vector2(560.0, 58.0),
 		"01   CREATE PRIVATE ROOM", true)
-	_create.pressed.connect(func(): create_requested.emit(level))
+	_create.pressed.connect(func(): create_requested.emit(level, weapon))
 
 	_join_divider = _label(Vector2(300.0, 329.0), 680.0, 13, DIM)
 	_join_divider.text = "OR JOIN AN EXISTING DUEL"
@@ -137,22 +144,32 @@ func _ready() -> void:
 		DisplayServer.clipboard_set(_room_label.text)
 		set_status("CODE COPIED — SEND IT TO PLAYER 2", false))
 
-	_level_label = _label(Vector2(350.0, 453.0), 580.0, 13, GOLD)
+	_fighter_left = _button(Vector2(348.0, 446.0), Vector2(52.0, 32.0), "‹")
+	_fighter_left.pressed.connect(func(): _cycle_fighter(-1))
+	_fighter_label = _label(Vector2(410.0, 440.0), 460.0, 13, VIOLET)
+	_fighter_right = _button(Vector2(880.0, 446.0), Vector2(52.0, 32.0), "›")
+	_fighter_right.pressed.connect(func(): _cycle_fighter(1))
+	_level_left = _button(Vector2(348.0, 481.0), Vector2(52.0, 32.0), "‹")
+	_level_left.pressed.connect(func(): _cycle_level(-1))
+	_level_label = _label(Vector2(410.0, 475.0), 460.0, 13, GOLD)
+	_level_right = _button(Vector2(880.0, 481.0), Vector2(52.0, 32.0), "›")
+	_level_right.pressed.connect(func(): _cycle_level(1))
 	_status_rule = ColorRect.new()
-	_status_rule.position = Vector2(430.0, 492.0)
+	_status_rule.position = Vector2(430.0, 523.0)
 	_status_rule.size = Vector2(420.0, 2.0)
 	_status_rule.color = Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.40)
 	add_child(_status_rule)
-	_status = _label(Vector2(330.0, 505.0), 620.0, 15, Color(0.62, 0.78, 0.70))
+	_status = _label(Vector2(330.0, 532.0), 620.0, 15, Color(0.62, 0.78, 0.70))
 	_status.text = ""
 
-	var back := _button(Vector2(500.0, 554.0), Vector2(280.0, 40.0), "‹  BACK TO MENU")
+	var back := _button(Vector2(500.0, 582.0), Vector2(280.0, 40.0), "‹  BACK TO MENU")
 	back.pressed.connect(func(): cancel_requested.emit())
 	visible = false
 
 
-func open(selected_level: int) -> void:
+func open(selected_level: int, selected_weapon: int = 0) -> void:
 	level = selected_level
+	weapon = selected_weapon if selected_weapon in FIGHTER_ROSTER else 0
 	visible = true
 	_chrome.set_room_active(false)
 	_code_input.text = ""
@@ -164,8 +181,8 @@ func open(selected_level: int) -> void:
 	_room_caption.visible = false
 	_room_label.visible = false
 	_copy.visible = false
-	_level_label.text = "ARENA // %02d OF %02d  —  %s" % [
-		level + 1, Levels.count(), Levels.build(level)["name"]]
+	_set_choices_visible(true)
+	_refresh_choices()
 	set_status("READY TO CREATE OR JOIN", false)
 	_code_input.call_deferred("grab_focus")
 
@@ -182,6 +199,7 @@ func show_room(code: String, player: int) -> void:
 	_room_caption.visible = true
 	_room_label.visible = true
 	_copy.visible = player == 0
+	_set_choices_visible(false)
 	_room_label.text = code
 	_chrome.set_room_active(true)
 	set_status("YOU ARE PLAYER %d — %s" % [player + 1,
@@ -205,6 +223,40 @@ func handle_key(code: int) -> bool:
 	return false
 
 
+func _cycle_fighter(direction: int) -> void:
+	var index := FIGHTER_ROSTER.find(weapon)
+	weapon = FIGHTER_ROSTER[posmod(index + direction, FIGHTER_ROSTER.size())]
+	_refresh_choices()
+
+
+func _cycle_level(direction: int) -> void:
+	level = posmod(level + direction, Levels.count())
+	_refresh_choices()
+
+
+func _refresh_choices() -> void:
+	_fighter_label.text = "YOUR FIGHTER // %s" % _fighter_name(weapon)
+	_level_label.text = "HOST ARENA // %02d OF %02d  —  %s" % [
+		level + 1, Levels.count(), Levels.build(level)["name"]]
+
+
+func _set_choices_visible(can_edit: bool) -> void:
+	_fighter_left.visible = can_edit
+	_fighter_right.visible = can_edit
+	_level_left.visible = can_edit
+	_level_right.visible = can_edit
+	_fighter_label.visible = true
+	_level_label.visible = true
+
+
+func _fighter_name(value: int) -> String:
+	match value:
+		2: return "THE VELOCITY"
+		3: return "BROODTAIL"
+		4: return "THE STATIC WITCH"
+		_: return "DAGGER DUELIST"
+
+
 func _sanitize_code(value: String) -> void:
 	var clean := ""
 	for character in value.to_upper():
@@ -224,7 +276,7 @@ func _request_join() -> void:
 		set_status("ENTER ALL 6 CHARACTERS TO JOIN", true)
 		_code_input.grab_focus()
 		return
-	join_requested.emit(code)
+	join_requested.emit(code, weapon)
 
 
 func _label(pos: Vector2, width: float, size: int, color: Color) -> Label:

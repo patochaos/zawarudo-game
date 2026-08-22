@@ -90,7 +90,13 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	_seam = gm.SEAM_MARGIN
 	_wide = Vector2(gm.ARENA_W, 0.0)
 	var budget: int = mini(int(round(gm.movement_budget / _dt)), gm.exec_ticks())
-	var move_options: Array = MOVES
+	var move_options: Array = []
+	for move in MOVES:
+		if move[1] and gm.jump_impulse_for(idx) <= 0.0:
+			continue
+		if move[3] >= 0 and gm.air_jumps_for(idx) <= 0:
+			continue
+		move_options.append(move)
 
 	var threats := _threat_paths()
 	_futures = _foe_futures()
@@ -355,7 +361,9 @@ func _walk(who: Player, dir: int, jump: bool, ticks: int,
 	for t in _gm.exec_ticks():
 		var d: int = dir if t < ticks else 0
 		var jump_now: bool = t < ticks and ((t == 0 and jump) or t == air_jump_tick)
-		var jump_result := Player.apply_jump(vel, og, air_jumps, jump_now, _gm.jump_impulse)
+		var jump_result := Player.apply_jump(vel, og, air_jumps, jump_now,
+			_gm.jump_impulse_for(who.index), _gm.air_jump_impulse_for(who.index),
+			_gm.air_jumps_for(who.index))
 		vel = jump_result[0]
 		og = jump_result[1]
 		air_jumps = jump_result[2]
@@ -363,12 +371,13 @@ func _walk(who: Player, dir: int, jump: bool, ticks: int,
 		# and adding it would multiply the candidate space for a move the AI has
 		# no way to value yet.
 		var st := Player.step_state(pos, vel, og, d, jump and t < ticks, _dt, _gm,
-			_gm.world_tick + t, 0, 0.0, _gm.movement_speed_scale(who.index))
+			_gm.world_tick + t, 0, 0.0, _gm.movement_speed_scale(who.index),
+			_gm.jump_impulse_for(who.index), _gm.max_fall_speed_for(who.index))
 		pos = st[0]
 		vel = st[1]
 		og = st[2]
 		if og:
-			air_jumps = Player.MAX_AIR_JUMPS
+			air_jumps = _gm.air_jumps_for(who.index)
 		path.append(pos)
 	return path
 

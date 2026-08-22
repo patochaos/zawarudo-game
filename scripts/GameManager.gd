@@ -92,11 +92,16 @@ enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
 ## Technical Gate 1 harness. Keep disabled until an art-approved skin exists;
 ## false preserves the original stick renderer exactly.
 @export var fighter_visuals_enabled: bool = false
+## Launch-only art review mode. P1 receives the simplified Executor while
+## opponents retain the legacy renderer until their own silhouettes exist.
+var simplified_fighter_proto_enabled: bool = false
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
-## and SUPER introductions are deliberately absent.
+## and SUPER introductions are deliberately absent. Retaining only the latest
+## stretch keeps a very long, hitless match from growing memory without limit.
 @export_range(0.25, 4.0, 0.05) var replay_speed: float = 1.5
+@export_range(10.0, 120.0, 5.0) var replay_history_seconds: float = 30.0
 
 @export_group("Loop Timing")
 @export var planning_duration: float = 5.0
@@ -116,10 +121,45 @@ enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
 ## Ghost piloting runs at this fraction of real time — below 1.0 for precision.
 @export var pilot_time_scale: float = 0.5
 @export var player_move_speed: float = 260.0
-## Locomotion is part of each prototype's identity. Acceleration and vertical
-## jump physics stay shared; these only change the horizontal speed target.
-@export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.75
-@export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 1.10
+## Locomotion is part of each prototype's identity. These scales multiply the
+## shared authored values above/below so the free-play tuning sandbox still
+## moves the whole roster together while preserving the differences between
+## fighters.
+##
+## Approximate full-jump rises at the default 780 impulse / 1400 gravity:
+## Dagger 217px, Velocity 0px, Static Witch 176px, Broodtail 263px.
+@export_group("Class Movement")
+@export_subgroup("Dagger Duelist")
+@export_range(0.1, 2.0, 0.05) var dagger_move_speed_scale: float = 1.0
+@export_range(0.0, 2.0, 0.05) var dagger_jump_impulse_scale: float = 1.0
+@export_range(0.0, 2.0, 0.05) var dagger_air_jump_impulse_scale: float = 0.82
+@export_range(0, 2, 1) var dagger_air_jumps: int = 1
+@export_range(0.1, 2.0, 0.05) var dagger_fall_speed_scale: float = 1.0
+
+@export_subgroup("The Velocity")
+@export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.90
+## Velocity has no ordinary jump. Her freely aimed CUT TO END is her vertical
+## traversal verb, and the faster fall keeps a missed aerial cut committal.
+@export_range(0.0, 2.0, 0.05) var velocity_jump_impulse_scale: float = 0.0
+@export_range(0.0, 2.0, 0.05) var velocity_air_jump_impulse_scale: float = 0.0
+@export_range(0, 2, 1) var velocity_air_jumps: int = 0
+@export_range(0.1, 2.0, 0.05) var velocity_fall_speed_scale: float = 1.10
+
+@export_subgroup("The Static Witch")
+@export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 0.90
+@export_range(0.0, 2.0, 0.05) var shock_jump_impulse_scale: float = 0.90
+@export_range(0.0, 2.0, 0.05) var shock_air_jump_impulse_scale: float = 0.0
+@export_range(0, 2, 1) var shock_air_jumps: int = 0
+@export_range(0.1, 2.0, 0.05) var shock_fall_speed_scale: float = 0.85
+
+@export_subgroup("Broodtail")
+@export_range(0.1, 2.0, 0.05) var chakram_move_speed_scale: float = 1.05
+@export_range(0.0, 2.0, 0.05) var chakram_jump_impulse_scale: float = 1.10
+@export_range(0.0, 2.0, 0.05) var chakram_air_jump_impulse_scale: float = 0.72
+@export_range(0, 2, 1) var chakram_air_jumps: int = 1
+@export_range(0.1, 2.0, 0.05) var chakram_fall_speed_scale: float = 0.90
+
+@export_group("Movement")
 @export var player_acceleration: float = 1800.0
 @export var player_air_acceleration: float = 900.0
 @export var jump_impulse: float = 780.0
@@ -176,11 +216,11 @@ enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
 @export var dash_duration_ticks_max: int = 15
 @export var dash_guard_durability: int = 2
 @export_range(0.0, 1.0, 0.01) var dash_exit_momentum_retention: float = 0.28
-## Velocity moves at three quarters of the shared pace. The horizontal distance
+## Velocity moves at nine tenths of the shared pace. The horizontal distance
 ## denied by that ratio becomes Frame Debt: every completed cell adds one dash
 ## tick, and a full three-cell cut adds one front-parry point.
 @export_range(1, 6, 1) var frame_debt_max_cells: int = 3
-@export_range(1.0, 32.0, 0.5) var frame_debt_distance_per_cell: float = 8.0
+@export_range(1.0, 32.0, 0.25) var frame_debt_distance_per_cell: float = 2.75
 @export_range(0, 4, 1) var frame_debt_dash_ticks_per_cell: int = 1
 @export_range(0, 3, 1) var frame_debt_full_guard_bonus: int = 1
 @export var chakram_speed_min: float = 200.0
@@ -358,6 +398,7 @@ var _replay_frames: Array[Dictionary] = []
 var _replay_terminal_frame: Dictionary = {}
 var _replay_frame_index: int = 0
 var _replay_accum: float = 0.0
+const REPLAY_COMPACTION_SLACK_SECONDS := 2.0
 
 var platforms: Array = []
 var solid_rects: Array[Rect2] = []
@@ -465,6 +506,9 @@ var ghost_dash: Array = [null, null, null, null]
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
 ]
+## A player's prediction depends only on frozen world state and that player's
+## recorded movement. Most planning frames change neither, so rebuild lazily.
+var _ghost_path_dirty: Array[bool] = [true, true, true, true]
 
 var _pads: Array[int] = [-1, -1, -1, -1]
 var _pad_btn_prev: Array[Dictionary] = [{}, {}, {}, {}]
@@ -524,6 +568,9 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
+	if "--simplified-fighter-proto" in OS.get_cmdline_user_args():
+		simplified_fighter_proto_enabled = true
+		fighter_visuals_enabled = true
 	_backdrop = BACKDROP_SCRIPT.new()
 	add_child(_backdrop)
 
@@ -876,20 +923,12 @@ func _on_menu_tutorial() -> void:
 	tutorial_mode = true
 	online_mode = false
 	online_player = -1
-	_apply_ruleset(0)
-	vs_ai = false
-	player_weapons.fill(Weapon.KNIVES)
-	_set_player_count(1)
-	_ui.visible = true
-	_ui.show_controls(true)
+	state = Phase.TUTORIAL
+	_ui.visible = false
 	_tuning.visible = false
 	_menu.close()
-	_load_level(0)
-	restart()
 	_tutorial.start(self)
-	_sfx.play("title")
-	_begin_match_telemetry("tutorial")
-	_transition.play("TRAINING // NO TIMER", "LEARN TO STOP TIME", PLAYER_COLORS[0], reduced_flashes)
+	_transition.visible = false
 
 
 func _on_menu_online(lvl: int) -> void:
@@ -900,17 +939,17 @@ func _on_menu_online(lvl: int) -> void:
 	_ui.visible = false
 	_tuning.visible = false
 	state = Phase.ONLINE_LOBBY
-	_online_lobby.open(lvl)
+	_online_lobby.open(lvl, local_weapon_choices[0])
 	_transition.play("ONLINE DUEL", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
 
 
-func _on_online_create(lvl: int) -> void:
+func _on_online_create(lvl: int, weapon: int) -> void:
 	_online_lobby.set_status("CREATING PRIVATE ROOM…", false)
-	_online_client.create_room(lvl)
+	_online_client.create_room(lvl, weapon)
 
 
-func _on_online_join(code: String) -> void:
-	_online_client.join_room(code)
+func _on_online_join(code: String, weapon: int) -> void:
+	_online_client.join_room(code, weapon)
 
 
 func _on_online_room_ready(code: String, player_slot: int) -> void:
@@ -964,7 +1003,8 @@ func _on_online_message(message: Dictionary) -> void:
 					banner_time = 2.0
 		"match_start":
 			_start_online_match(int(message.get("level", 0)),
-				int(message.get("seed", 0)), int(message.get("turn", 1)))
+				int(message.get("seed", 0)), int(message.get("turn", 1)),
+				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]))
 		"plan_ack":
 			banner_text = "PLAN LOCKED — WAITING FOR OPPONENT"
 			banner_color = PLAYER_COLORS[online_player].lightened(0.3)
@@ -1002,7 +1042,8 @@ func _on_online_message(message: Dictionary) -> void:
 			banner_time = 2.4
 
 
-func _start_online_match(lvl: int, seed_value: int, server_turn: int) -> void:
+func _start_online_match(lvl: int, seed_value: int, server_turn: int,
+		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES]) -> void:
 	if server_turn != 1:
 		# Live reconnects retain their local simulation. A full page reload cannot
 		# safely reconstruct an in-progress match from only the current turn.
@@ -1014,6 +1055,8 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int) -> void:
 	vs_ai = false
 	hits_to_win = DEFAULT_HITS_TO_WIN
 	player_weapons.fill(Weapon.KNIVES)
+	for i in mini(2, weapons.size()):
+		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
 	_set_player_count(2)
 	_online_seed = seed_value
 	rng.seed = _online_seed
@@ -1063,6 +1106,9 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	var jumps: Array = data.get("jumps", [])
 	var holds: Array = data.get("holds", [])
 	var drops: Array = data.get("drops", [])
+	if not data.has("drops"):
+		drops.resize(dirs.size())
+		drops.fill(0)
 	if dirs.size() != jumps.size() or dirs.size() != holds.size() or dirs.size() != drops.size():
 		return "recording arrays have different lengths"
 	# Builds published before the integer cap could emit one extra tick when
@@ -1074,6 +1120,12 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	var shot_tick := int(data.get("shot_tick", -1))
 	if shot_tick < -1 or shot_tick > dirs.size():
 		return "shot tick %d is outside the recording" % shot_tick
+	var grenade_fuse := int(data.get("grenade_fuse_seconds", 2))
+	var attack_mode := int(data.get("attack_mode", 0))
+	if grenade_fuse < 1 or grenade_fuse > 3:
+		return "grenade fuse %d is outside 1..3" % grenade_fuse
+	if attack_mode < 0 or attack_mode > 1:
+		return "attack mode %d is outside 0..1" % attack_mode
 	if bool(data.get("super_shot", false)) and (shot_tick < 0 or super_meter[i] < 1.0):
 		return "SUPER was requested without a legal charged shot"
 	return ""
@@ -1178,7 +1230,7 @@ func _reset_freeplay() -> void:
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
 		p.on_ground = true
-		p.air_jumps_left = Player.MAX_AIR_JUMPS
+		p.air_jumps_left = air_jumps_for(i)
 		p.drop_ticks = 0
 		p.drop_from_y = 0.0
 		p.alive = true
@@ -1508,14 +1560,16 @@ func _add_player(i: int) -> void:
 	p.color = PLAYER_COLORS[i]
 	p.position = spawns[i]
 	p.on_ground = true
-	p.air_jumps_left = Player.MAX_AIR_JUMPS
+	p.air_jumps_left = air_jumps_for(i)
 	p.plan.set_aim_from_vector(_default_aim_vector(i), aim_min_angle, aim_max_angle)
 	p.plan.power = 0.55
 	_player_layer.add_child(p)
-	if fighter_visuals_enabled:
+	if fighter_visuals_enabled and (not simplified_fighter_proto_enabled or i == 0):
 		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
 		fighter_visual.name = "FighterVisual"
-		fighter_visual.configure(p, FIGHTER_SKIN_SCRIPT.executor_prototype(i))
+		var fighter_skin = FIGHTER_SKIN_SCRIPT.simplified_executor_proof() \
+			if simplified_fighter_proto_enabled else FIGHTER_SKIN_SCRIPT.executor_prototype(i)
+		fighter_visual.configure(p, fighter_skin)
 		p.add_child(fighter_visual)
 		p.draw_legacy_visual = false
 	players.append(p)
@@ -1585,14 +1639,63 @@ func can_pilot_move(i: int) -> bool:
 
 func movement_speed_scale(i: int) -> float:
 	if i < 0 or i >= player_weapons.size():
-		return 1.0
+		return dagger_move_speed_scale
 	match player_weapons[i]:
 		Weapon.DASHBLADE:
 			return velocity_move_speed_scale
+		Weapon.CHAKRAM:
+			return chakram_move_speed_scale
 		Weapon.SHOCK:
 			return shock_move_speed_scale
 		_:
-			return 1.0
+			return dagger_move_speed_scale
+
+
+func jump_impulse_for(i: int) -> float:
+	return jump_impulse * _class_movement_scale(i, "jump")
+
+
+func air_jump_impulse_for(i: int) -> float:
+	return jump_impulse * _class_movement_scale(i, "air_jump")
+
+
+func air_jumps_for(i: int) -> int:
+	if i < 0 or i >= player_weapons.size():
+		return dagger_air_jumps
+	match player_weapons[i]:
+		Weapon.DASHBLADE: return velocity_air_jumps
+		Weapon.CHAKRAM: return chakram_air_jumps
+		Weapon.SHOCK: return shock_air_jumps
+		_: return dagger_air_jumps
+
+
+func max_fall_speed_for(i: int) -> float:
+	return max_fall_speed * _class_movement_scale(i, "fall")
+
+
+func _class_movement_scale(i: int, stat: String) -> float:
+	var weapon := player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES
+	match weapon:
+		Weapon.DASHBLADE:
+			match stat:
+				"jump": return velocity_jump_impulse_scale
+				"air_jump": return velocity_air_jump_impulse_scale
+				_: return velocity_fall_speed_scale
+		Weapon.CHAKRAM:
+			match stat:
+				"jump": return chakram_jump_impulse_scale
+				"air_jump": return chakram_air_jump_impulse_scale
+				_: return chakram_fall_speed_scale
+		Weapon.SHOCK:
+			match stat:
+				"jump": return shock_jump_impulse_scale
+				"air_jump": return shock_air_jump_impulse_scale
+				_: return shock_fall_speed_scale
+		_:
+			match stat:
+				"jump": return dagger_jump_impulse_scale
+				"air_jump": return dagger_air_jump_impulse_scale
+				_: return dagger_fall_speed_scale
 
 
 func _frame_debt_threshold_units() -> int:
@@ -1600,7 +1703,7 @@ func _frame_debt_threshold_units() -> int:
 
 
 ## Convert real horizontal displacement into the distance Velocity was denied
-## by her class multiplier. At 75%, every three travelled pixels represent one
+## by her class multiplier. At 90%, every nine travelled pixels represent one
 ## deleted pixel. Pressing into a wall earns nothing because no movement exists
 ## to edit out of the sequence.
 func _frame_debt_units_between(i: int, from: Vector2, to: Vector2) -> int:
@@ -1767,9 +1870,15 @@ func knife_offsets(power: float) -> PackedFloat32Array:
 	var n: int = maxi(1, prototype_knives_per_shot if prototype_mode else knives_per_shot)
 	var out := PackedFloat32Array()
 	if prototype_mode:
-		out.append(0.0)
-		if n > 1:
+		if n == 1:
+			out.append(0.0)
+		elif n == 2:
+			out.append(0.0)
 			out.append(prototype_secondary_lob_angle)
+		else:
+			for i in n:
+				out.append((float(i) / float(n - 1) - 0.5) \
+					* prototype_secondary_lob_angle * 2.0)
 		return out
 	if n == 1:
 		out.append(0.0)
@@ -1855,7 +1964,7 @@ func _physics_process(delta: float) -> void:
 			_auto_ready_finished_plans(delta)
 			_tick_ai(delta)
 			_update_facing()
-			_rebuild_ghost_paths()
+			_refresh_dirty_ghost_paths()
 			if not tutorial_waiting:
 				planning_time_left -= delta
 			if not tutorial_waiting and planning_time_left <= 0.0:
@@ -3288,11 +3397,32 @@ func _capture_replay_frame() -> void:
 		"core_time": _temporal_core._time if _temporal_core != null else 0.0,
 		"effects": _effects._fx.duplicate(true) if _effects != null else [],
 	})
+	_trim_replay_history()
+
+
+func replay_frame_capacity() -> int:
+	return maxi(1, int(ceil(replay_history_seconds * float(Engine.physics_ticks_per_second))))
+
+
+## Compact in batches rather than shifting a large Array every simulation tick.
+## The small slack is still a hard, predictable upper bound during a match; a
+## replay request forces the exact configured limit before playback begins.
+func _trim_replay_history(force: bool = false) -> void:
+	var capacity := replay_frame_capacity()
+	var slack := maxi(1, int(ceil(REPLAY_COMPACTION_SLACK_SECONDS \
+		* float(Engine.physics_ticks_per_second))))
+	if _replay_frames.size() <= capacity \
+			or (not force and _replay_frames.size() <= capacity + slack):
+		return
+	var compacted: Array[Dictionary] = []
+	compacted.assign(_replay_frames.slice(_replay_frames.size() - capacity))
+	_replay_frames = compacted
 
 
 func _start_match_replay() -> void:
 	if state != Phase.GAME_OVER or _replay_frames.is_empty():
 		return
+	_trim_replay_history(true)
 	_replay_terminal_frame = _replay_frames.back().duplicate(true)
 	_replay_frame_index = 0
 	_replay_accum = 0.0
@@ -3335,7 +3465,7 @@ func _apply_replay_frame(frame: Dictionary) -> void:
 		p.position = data["position"]
 		p.vel = data["vel"]
 		p.on_ground = bool(data["on_ground"])
-		p.air_jumps_left = int(data.get("air_jumps_left", Player.MAX_AIR_JUMPS))
+		p.air_jumps_left = int(data.get("air_jumps_left", air_jumps_for(i)))
 		p.drop_ticks = int(data.get("drop_ticks", 0))
 		p.drop_from_y = float(data.get("drop_from_y", 0.0))
 		p.alive = bool(data["alive"])
@@ -3488,7 +3618,7 @@ func _respawn(i: int) -> void:
 	p.position = _choose_respawn_point(i)
 	p.vel = Vector2.ZERO
 	p.on_ground = true
-	p.air_jumps_left = Player.MAX_AIR_JUMPS
+	p.air_jumps_left = air_jumps_for(i)
 	p.drop_ticks = 0
 	p.drop_from_y = 0.0
 	p.alive = true
@@ -3817,7 +3947,7 @@ func restart() -> void:
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
 		p.on_ground = true
-		p.air_jumps_left = Player.MAX_AIR_JUMPS
+		p.air_jumps_left = air_jumps_for(i)
 		p.alive = true
 		p.invuln_turns = 0
 		p.plan = PlayerPlan.new()
@@ -3867,6 +3997,7 @@ func _reset_pilot(i: int) -> void:
 	# Planning may resume long after the previous input poll. Sampling the actual
 	# button prevents a stale edge from swallowing an airborne jump.
 	_jump_prev[i] = _jump_input_held(i)
+	_mark_ghost_path_dirty(i)
 
 
 ## Records exactly one tick of piloted input onto the ghost.
@@ -3889,6 +4020,7 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 		if not pending_dash.active:
 			pending_dash.free()
 			ghost_dash[i] = null
+		_mark_ghost_path_dirty(i)
 		return true
 	var drop_result := Player.apply_drop(ghost_pos[i].y, ghost_vel[i], ghost_ground[i],
 		ghost_drop[i], ghost_drop_from[i], drop)
@@ -3897,7 +4029,7 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	ghost_drop[i] = drop_result[2]
 	ghost_drop_from[i] = drop_result[3]
 	var jump_result := Player.apply_jump(ghost_vel[i], ghost_ground[i], ghost_air_jumps[i],
-		jump, jump_impulse)
+		jump, jump_impulse_for(i), air_jump_impulse_for(i), air_jumps_for(i))
 	ghost_vel[i] = jump_result[0]
 	ghost_ground[i] = jump_result[1]
 	ghost_air_jumps[i] = jump_result[2]
@@ -3905,13 +4037,14 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	pl.record(dir, jumped, hold or jumped, drop)
 	var st := Player.step_state(ghost_pos[i], ghost_vel[i], ghost_ground[i], dir,
 		hold or jumped, tick_dt(), self, from_tick, ghost_drop[i], ghost_drop_from[i],
-		movement_speed_scale(i))
+		movement_speed_scale(i), jump_impulse_for(i), max_fall_speed_for(i))
 	ghost_pos[i] = st[0]
 	ghost_vel[i] = st[1]
 	ghost_ground[i] = st[2]
 	if ghost_ground[i]:
-		ghost_air_jumps[i] = Player.MAX_AIR_JUMPS
+		ghost_air_jumps[i] = air_jumps_for(i)
 	stamina[i] = maxf(0.0, stamina[i] - tick_dt())
+	_mark_ghost_path_dirty(i)
 	return true
 
 
@@ -3919,45 +4052,65 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 ## end of the window rather than just where the stamina ran out.
 func _rebuild_ghost_paths() -> void:
 	for i in players.size():
-		var p: Player = players[i]
-		var pl: PlayerPlan = p.plan
-		var path := PackedVector2Array()
-		# replay the recording from the live body state
-		var pos: Vector2 = p.position
-		var vel: Vector2 = p.vel
-		var og: bool = p.on_ground
-		var air_jumps: int = p.air_jumps_left
-		var drop: int = p.drop_ticks
-		var drop_from: float = p.drop_from_y
-		var pending_dash = _dash_prediction_copy(i)
-		path.append(pos)
-		for t in exec_ticks():
-			if pending_dash != null and pending_dash.active:
-				var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
-				pos = wrap_point(dash_result["position"])
-				vel = dash_result["velocity"]
-				path.append(pos)
-				continue
-			var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
-			vel = drop_result[0]
-			og = drop_result[1]
-			drop = drop_result[2]
-			drop_from = drop_result[3]
-			var jump_result := Player.apply_jump(vel, og, air_jumps, pl.jump_at(t), jump_impulse)
-			vel = jump_result[0]
-			og = jump_result[1]
-			air_jumps = jump_result[2]
-			var st := Player.step_state(pos, vel, og, pl.dir_at(t), pl.hold_at(t), tick_dt(),
-				self, world_tick + t, drop, drop_from, movement_speed_scale(i))
-			pos = st[0]
-			vel = st[1]
-			og = st[2]
-			if og:
-				air_jumps = Player.MAX_AIR_JUMPS
+		_rebuild_ghost_path(i)
+
+
+func _mark_ghost_path_dirty(i: int) -> void:
+	if i >= 0 and i < _ghost_path_dirty.size():
+		_ghost_path_dirty[i] = true
+
+
+func _refresh_dirty_ghost_paths() -> void:
+	for i in players.size():
+		if _ghost_path_dirty[i]:
+			_rebuild_ghost_path(i)
+
+
+func _rebuild_ghost_path(i: int) -> void:
+	if i < 0 or i >= players.size():
+		return
+	var p: Player = players[i]
+	var pl: PlayerPlan = p.plan
+	var path := PackedVector2Array()
+	# Replay the recording from the live body state.
+	var pos: Vector2 = p.position
+	var vel: Vector2 = p.vel
+	var og: bool = p.on_ground
+	var air_jumps: int = p.air_jumps_left
+	var drop: int = p.drop_ticks
+	var drop_from: float = p.drop_from_y
+	var pending_dash = _dash_prediction_copy(i)
+	path.append(pos)
+	for t in exec_ticks():
+		if pending_dash != null and pending_dash.active:
+			var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
+			pos = wrap_point(dash_result["position"])
+			vel = dash_result["velocity"]
 			path.append(pos)
-		if pending_dash != null:
-			pending_dash.free()
-		ghost_path[i] = path
+			continue
+		var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
+		vel = drop_result[0]
+		og = drop_result[1]
+		drop = drop_result[2]
+		drop_from = drop_result[3]
+		var jump_result := Player.apply_jump(vel, og, air_jumps, pl.jump_at(t),
+			jump_impulse_for(i), air_jump_impulse_for(i), air_jumps_for(i))
+		vel = jump_result[0]
+		og = jump_result[1]
+		air_jumps = jump_result[2]
+		var st := Player.step_state(pos, vel, og, pl.dir_at(t), pl.hold_at(t), tick_dt(),
+			self, world_tick + t, drop, drop_from, movement_speed_scale(i),
+			jump_impulse_for(i), max_fall_speed_for(i))
+		pos = st[0]
+		vel = st[1]
+		og = st[2]
+		if og:
+			air_jumps = air_jumps_for(i)
+		path.append(pos)
+	if pending_dash != null:
+		pending_dash.free()
+	ghost_path[i] = path
+	_ghost_path_dirty[i] = false
 
 
 func _dash_prediction_copy(i: int):
@@ -4000,7 +4153,7 @@ func ghost_end(i: int) -> Vector2:
 #   Reset path : throws the recorded movement away and refills stamina
 
 const K_P1 := {
-	"left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE], "wait": [KEY_S],
+	"left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE, KEY_W, KEY_UP], "wait": [KEY_S],
 	"charge": [], "rollback": [KEY_R], "reset": [KEY_F],
 	"super": [KEY_T],
 	"aim_up": [KEY_Q], "aim_down": [KEY_E],
@@ -4142,6 +4295,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		else:
 			_character_select.handle_key(k.keycode)
 		return
+	if state == Phase.TUTORIAL:
+		_tutorial.handle_key(k.keycode)
+		return
 
 	if state == Phase.MENU:
 		_menu.handle_key(k.keycode)
@@ -4229,6 +4385,25 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			return
 		if state != Phase.PLANNING:
 			return
+		if uses_grenade(online_player):
+			match k.keycode:
+				KEY_1:
+					_set_grenade_fuse(online_player, 1)
+					return
+				KEY_2:
+					_set_grenade_fuse(online_player, 2)
+					return
+				KEY_3:
+					_set_grenade_fuse(online_player, 3)
+					return
+		elif uses_shock(online_player):
+			match k.keycode:
+				KEY_1:
+					_set_shock_attack_mode(online_player, 0)
+					return
+				KEY_2:
+					_set_shock_attack_mode(online_player, 1)
+					return
 		var online_map := K_P1
 		if k.keycode in online_map["super"]:
 			_toggle_super(online_player)
@@ -4850,11 +5025,14 @@ func _online_state_digest() -> String:
 	var parts := PackedStringArray()
 	parts.append("turn:%d" % turn)
 	parts.append("score:%d,%d" % [score[0], score[1]])
-	parts.append("ids:%d,%d,%d" % [_next_volley, _next_arrow_id, _next_grenade_id])
+	parts.append("ids:%d,%d,%d,%d" % [
+		_next_volley, _next_arrow_id, _next_grenade_id, _next_character_projectile_id,
+	])
+	parts.append("kits:%d,%d" % [player_weapons[0], player_weapons[1]])
 	parts.append("rng:%d" % rng.state)
 	for i in players.size():
 		var p: Player = players[i]
-		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			i,
 			int(round(p.position.x * 10000.0)), int(round(p.position.y * 10000.0)),
 			int(round(p.vel.x * 10000.0)), int(round(p.vel.y * 10000.0)),
@@ -4862,6 +5040,7 @@ func _online_state_digest() -> String:
 			p.drop_ticks, int(round(p.drop_from_y * 10000.0)),
 			1 if p.alive else 0, p.invuln_turns,
 			int(round(super_meter[i] * 1000000.0)), 1 if super_armed[i] else 0,
+			p.plan.grenade_fuse_seconds, p.plan.attack_mode,
 		])
 		parts.append("fd%d:%d,%d" % [i, frame_debt_cells[i], frame_debt_units[i]])
 		parts.append("fdl%d:%d" % [i, 1 if frame_debt_locked[i] else 0])
@@ -4873,6 +5052,22 @@ func _online_state_digest() -> String:
 	ordered_grenades.sort_custom(func(a, b): return a.network_id < b.network_id)
 	for g in ordered_grenades:
 		parts.append("g:" + g.lockstep_digest_fragment())
+	var ordered_dashes: Array = dashblades.duplicate()
+	ordered_dashes.sort_custom(func(a, b): return a.owner_index < b.owner_index)
+	for dash in ordered_dashes:
+		parts.append("d:" + dash.lockstep_digest_fragment())
+	var ordered_chakrams: Array = chakrams.duplicate()
+	ordered_chakrams.sort_custom(func(a, b): return a.network_id < b.network_id)
+	for chakram in ordered_chakrams:
+		parts.append("c:" + chakram.lockstep_digest_fragment())
+	var ordered_plasmas: Array = shock_plasmas.duplicate()
+	ordered_plasmas.sort_custom(func(a, b): return a.network_id < b.network_id)
+	for plasma in ordered_plasmas:
+		parts.append("sp:" + plasma.lockstep_digest_fragment())
+	var ordered_orbs: Array = shock_orbs.duplicate()
+	ordered_orbs.sort_custom(func(a, b): return a.network_id < b.network_id)
+	for orb in ordered_orbs:
+		parts.append("so:" + orb.lockstep_digest_fragment())
 	for i in platforms.size():
 		var pf: Dictionary = platforms[i]
 		var rect: Rect2 = pf["rect"]

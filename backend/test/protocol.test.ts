@@ -5,9 +5,12 @@ const validPlan = {
   dirs: [0, 1, 2],
   jumps: [0, 1, 0],
   holds: [0, 1, 1],
+  drops: [0, 0, 1],
   shot_tick: 2,
   aim_angle: 42.5,
   power: 0.75,
+  grenade_fuse_seconds: 3,
+  attack_mode: 1,
   super_shot: false,
 };
 
@@ -20,8 +23,21 @@ describe("plan protocol", () => {
 
   it("rejects mismatched recordings and invalid bytes", () => {
     expect(parsePlan({ ...validPlan, jumps: [0] })).toBeNull();
+    expect(parsePlan({ ...validPlan, drops: [0] })).toBeNull();
     expect(parsePlan({ ...validPlan, dirs: [3] })).toBeNull();
     expect(parsePlan({ ...validPlan, power: 1.01 })).toBeNull();
+    expect(parsePlan({ ...validPlan, grenade_fuse_seconds: 4 })).toBeNull();
+    expect(parsePlan({ ...validPlan, attack_mode: 2 })).toBeNull();
+  });
+
+  it("normalizes plans from clients that predate drops and character settings", () => {
+    const { drops: _drops, grenade_fuse_seconds: _fuse, attack_mode: _mode, ...legacy } = validPlan;
+    expect(parsePlan(legacy)).toEqual({
+      ...legacy,
+      drops: [0, 0, 0],
+      grenade_fuse_seconds: 2,
+      attack_mode: 0,
+    });
   });
 
   it("rejects unknown and malformed messages", () => {

@@ -34,11 +34,11 @@ func _test_live_double_jump() -> void:
 		"the ground jump must preserve one mid-air jump")
 	p.sim_free(dt, 0, false, false)
 	p.sim_free(dt, 0, true, true)
-	_check(p.air_jumps_left == 0 and p.vel.y < -gm.jump_impulse * 0.9,
+	_check(p.air_jumps_left == 0 and p.vel.y < -gm.air_jump_impulse_for(0) * 0.9,
 		"the second press must reset upward speed and spend the air jump")
 	p.sim_free(dt, 0, false, false)
 	p.sim_free(dt, 0, true, true)
-	_check(p.air_jumps_left == 0 and p.vel.y > -gm.jump_impulse * 0.8,
+	_check(p.air_jumps_left == 0 and p.vel.y > -gm.air_jump_impulse_for(0) * 0.8,
 		"a third press before landing must not add another impulse")
 
 	var floor_rects: Array[Rect2] = [Rect2(-100.0, 100.0, 200.0, 20.0)]
@@ -87,7 +87,7 @@ func _test_planned_double_jump() -> void:
 	p.air_jumps_left = Player.MAX_AIR_JUMPS
 	for tick in 3:
 		p.sim_step(gm.tick_dt(), tick)
-	_check(p.air_jumps_left == 0 and p.vel.y < -gm.jump_impulse * 0.9,
+	_check(p.air_jumps_left == 0 and p.vel.y < -gm.air_jump_impulse_for(0) * 0.9,
 		"execution must replay the recorded air jump exactly")
 
 	p.free()
