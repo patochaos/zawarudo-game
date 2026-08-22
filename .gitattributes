@@ -1,0 +1,17 @@
+# Normalise everything to LF in the repository and the worktree, so the
+# Windows checkout and the Linux CI agree byte for byte.
+* text=auto eol=lf
+
+# Windows batch launchers need CRLF to stay reliable under cmd.exe.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets git must never touch.
+*.png binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.ttf binary
+*.exe binary
+*.zip binary
+*.blend binary
