@@ -298,8 +298,8 @@ class ControlsSheet:
 		label.add_theme_font_size_override("font_size", font_size)
 		label.add_theme_color_override("font_color", color)
 		label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.88))
-		label.add_theme_constant_override("shadow_offset_x", 2)
-		label.add_theme_constant_override("shadow_offset_y", 2)
+		label.add_theme_constant_override("shadow_offset_x", 1)
+		label.add_theme_constant_override("shadow_offset_y", 1)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(label)
 		return label
@@ -491,9 +491,12 @@ func _label(pos: Vector2, w: float, size: int, col: Color) -> Label:
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	# A shadow has to read as depth, not as a second copy of the word. At the
+	# 11-16px sizes this helper is used at, a 3x4 offset is a third of the glyph
+	# height and every menu row rendered doubled. The 31px title keeps its own.
 	l.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.92))
-	l.add_theme_constant_override("shadow_offset_x", 3)
-	l.add_theme_constant_override("shadow_offset_y", 4)
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 2)
 	add_child(l)
 	return l
 
@@ -727,7 +730,12 @@ func _refresh_context_dossier(names: Array[String]) -> void:
 	_footer.text = ""
 	_context_title.text = names[_cursor] if not names.is_empty() else ""
 	_context_title.add_theme_font_size_override("font_size", 22 if _is_setup_page() else 30)
-	_footer_kicker.text = "FIGHT DOSSIER // CONTEXT"
+	# The panel names whatever the cursor is on. Only the fight setup is a fight
+	# dossier; labelling the options list one was simply wrong.
+	match _page:
+		MenuPage.OPTIONS: _footer_kicker.text = "OPTIONS // ACCESSIBILITY"
+		MenuPage.SETUP: _footer_kicker.text = "FIGHT DOSSIER // CONTEXT"
+		_: _footer_kicker.text = "COMMAND // SELECT"
 
 	if _page != MenuPage.SETUP:
 		_footer.position.y = 330.0

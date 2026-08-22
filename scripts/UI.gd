@@ -113,13 +113,15 @@ class FighterSeal:
 				draw_colored_polygon(diamond, EMPTY_PIP)
 			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.0, true)
 
-		var label_x := 284.0 if not mirrored else 76.0
 		var bar_x := 306.0 if not mirrored else 14.0
-		draw_string(font, Vector2(label_x, 45.0), "SUPER",
-			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
-			48.0, 8, accent.lightened(0.08))
 		var bar_width := 110.0
 		var bar_rect := Rect2(bar_x, 39.0, bar_width, 4.0)
+		# Directly above the bar, never beside it: at 284 the label ran from 284 to
+		# 332 while the bar started at 306, so the fill painted over its own name —
+		# and on the mirrored side it covered the label completely.
+		draw_string(font, Vector2(bar_x, 35.0), "SUPER",
+			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
+			bar_width, 8, accent.lightened(0.08))
 		draw_rect(bar_rect, Color(0.10, 0.09, 0.14, 0.92))
 		draw_rect(bar_rect, Color(accent.r, accent.g, accent.b, 0.62), false, 1.0)
 		if super_meter > 0.0:
@@ -243,10 +245,13 @@ func build(manager) -> void:
 		"application/config/version", "DEV"))
 	_build_label.add_theme_color_override("font_color", Color(0.38, 0.42, 0.50))
 	_build_label.visible = false
-	_turn_label = _mk_label(Vector2(438.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
-	_timer_label = _mk_label(Vector2(548.0, 2.0), 184.0, 34, HORIZONTAL_ALIGNMENT_CENTER)
+	# Which phase you are in decides whether your input matters at all, so it
+	# should not be the smallest text on screen while the clock is the largest.
+	# The seals own x < 438 and x > 842, so these widths cannot grow.
+	_turn_label = _mk_label(Vector2(438.0, 20.0), 92.0, 13, HORIZONTAL_ALIGNMENT_RIGHT)
+	_timer_label = _mk_label(Vector2(548.0, 6.0), 184.0, 26, HORIZONTAL_ALIGNMENT_CENTER)
 	_timer_label.size.y = 48.0
-	_phase_label = _mk_label(Vector2(750.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_LEFT)
+	_phase_label = _mk_label(Vector2(750.0, 18.0), 92.0, 14, HORIZONTAL_ALIGNMENT_LEFT)
 	_phase_track = ColorRect.new()
 	_phase_track.position = Vector2(480.0, 53.0)
 	_phase_track.size = Vector2(320.0, 3.0)
