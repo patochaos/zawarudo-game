@@ -236,12 +236,52 @@ func _run() -> void:
 	_check(float(counter_ai._best.get("velocity_parry_risk", 0.0)) < 0.8,
 		"AI must reject a high-risk frontal shot when evasion or an off-angle attack exists")
 
+	_test_plasma_planner_respects_its_range(game)
+
 	game.free()
 	if _failures == 0:
 		print("Character kits: all tests passed")
 	else:
 		push_error("Character kits: %d test(s) failed" % _failures)
 	quit(_failures)
+
+
+## The Witch's planner walks her bolt forward tick by tick to see what it covers.
+## It used to walk as far as the search window allowed and ignore the weapon's
+## authored range entirely, so it scored shots that expire in mid-air as though
+## they had arrived. Harmless only while the range exceeded the arena; the moment
+## the range is tuned below it, the planner starts lying to itself.
+func _test_plasma_planner_respects_its_range(game) -> void:
+	var original_weapons: Array[int] = game.player_weapons.duplicate()
+	var original_range: float = game.shock_plasma_range_full
+	var original_positions := [game.players[0].position, game.players[1].position]
+
+	game.player_weapons[0] = game.Weapon.SHOCK
+	game.player_weapons[1] = game.Weapon.KNIVES
+	game.players[0].position = Vector2(200.0, 560.0)
+	game.players[1].position = Vector2(1000.0, 560.0)
+	var separation: float = game.wrap_delta(
+		game.players[0].position, game.players[1].position).length()
+
+	game.shock_plasma_range_full = separation * 2.0
+	var reaching := Ai.new()
+	reaching.begin(game, 0, 1)
+	reaching.finish()
+	var reaching_score: float = float(reaching._best.get("score", -INF))
+
+	game.shock_plasma_range_full = separation * 0.35
+	var short := Ai.new()
+	short.begin(game, 0, 1)
+	short.finish()
+	var short_score: float = float(short._best.get("score", -INF))
+
+	_check(reaching_score > short_score,
+		"a bolt that cannot physically arrive must score below one that can")
+
+	game.shock_plasma_range_full = original_range
+	game.player_weapons = original_weapons
+	game.players[0].position = original_positions[0]
+	game.players[1].position = original_positions[1]
 
 
 func _test_class_movement_profiles(game) -> void:

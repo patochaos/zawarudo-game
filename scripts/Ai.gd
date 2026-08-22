@@ -693,8 +693,13 @@ func _fire_shock(origin: Vector2, fire_tick: int,
 	var target: Vector2 = combo["orb"].position if combo_ready else \
 		(_shock_setup_target() if establish_orb else foe_target)
 	var distance: float = _gm.wrap_delta(origin, target).length()
+	# Out of reach counts as blocked. A combo the lance cannot physically arrive
+	# at is not a plan, and scoring it as one made the Witch commit to detonations
+	# from across the arena that were never going to land.
+	var out_of_reach: bool = not establish_orb \
+		and distance > _gm.shock_plasma_range_for_power(1.0)
 	var blocked: bool = false if establish_orb else \
-		_line_blocked(origin, target, ShockPlasma.COLLISION_RADIUS, fire_tick)
+		(out_of_reach or _line_blocked(origin, target, ShockPlasma.COLLISION_RADIUS, fire_tick))
 	var payoff := 520.0 if establish_orb else (1600.0 if combo_ready else 1000.0)
 	return {"score": (payoff if not blocked else 0.0) \
 		- distance * 0.035 - float(fire_tick) * 0.2,
@@ -715,8 +720,16 @@ func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
 		var pos: Vector2 = Player.shoulder_at(origin) + direction * 24.0
 		var covered := [false, false, false]
 		var closest := INF
+		# The bolt expires at its authored range, not at the edge of the search.
+		# Walking it further would let the AI plan shots that die in mid-air and
+		# then score them as though they had arrived.
+		var step: float = float(_gm.shock_plasma_speed) * _dt
+		var reach_left: float = _gm.shock_plasma_range_for_power(1.0)
 		for t in mini(72, _gm.exec_ticks() - fire_tick):
-			var raw: Vector2 = pos + direction * float(_gm.shock_plasma_speed) * _dt
+			if reach_left < step:
+				break
+			reach_left -= step
+			var raw: Vector2 = pos + direction * step
 			var blocked := false
 			for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
 				if Arrow.seg_hits_rect(pos, raw, solid.grow(ShockPlasma.COLLISION_RADIUS)):
