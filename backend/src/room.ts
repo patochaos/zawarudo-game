@@ -18,6 +18,10 @@ const MAX_MESSAGES_PER_WINDOW = 20;
 const JOIN_WINDOW_MS = 60_000;
 const MAX_JOIN_ATTEMPTS_PER_WINDOW = 10;
 
+// A forfeited match has no simulated result to agree on, so the stored report carries a marker
+// instead of a digest. Nothing compares it: the room is already game_over when it is written.
+const FORFEIT_DIGEST = "forfeit";
+
 type RoomPhase = "waiting" | "planning" | "executing" | "game_over" | "desync";
 
 type RoomRow = {
@@ -302,6 +306,9 @@ export class Room extends DurableObject<Env> {
         case "rematch":
           await this.receiveRematch(ws, attachment.slot, parsed.level);
           break;
+        case "forfeit":
+          this.receiveForfeit(ws, attachment.slot);
+          break;
       }
     } catch (error) {
       log("error", "websocket_message_failed", {
@@ -509,6 +516,32 @@ export class Room extends DurableObject<Env> {
     }
     this.ctx.storage.sql.exec("UPDATE room SET phase = 'game_over' WHERE singleton = 1");
     this.broadcast({ type: "match_over", turn, winner });
+  }
+
+  private receiveForfeit(ws: WebSocket, slot: PlayerSlot): void {
+    const room = this.room();
+    if (room === null || (room.phase !== "planning" && room.phase !== "executing")) {
+      this.sendError(ws, "wrong_phase", "A forfeit can only be claimed during a live match");
+      return;
+    }
+    // The only anti-abuse gate: the win is granted against a peer that is gone right now, never
+    // against one who is still connected. No timer, so the 24h alarm stays the room's only one.
+    const peer: PlayerSlot = slot === 0 ? 1 : 0;
+    if (this.isConnected(peer)) {
+      this.sendError(ws, "peer_present", "The other player is still connected");
+      return;
+    }
+    this.ctx.storage.sql.exec(
+      `INSERT OR REPLACE INTO match_reports (turn, slot, winner, digest)
+       VALUES (?, ?, ?, ?)`,
+      room.turn,
+      slot,
+      slot,
+      FORFEIT_DIGEST,
+    );
+    this.ctx.storage.sql.exec("UPDATE room SET phase = 'game_over' WHERE singleton = 1");
+    log("info", "forfeit_granted", { room: room.code, slot, turn: room.turn });
+    this.broadcast({ type: "opponent_left", winner: slot, turn: room.turn });
   }
 
   private async receiveRematch(

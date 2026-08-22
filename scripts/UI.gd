@@ -199,6 +199,8 @@ const _HINT_AI := "P2  AI · PLAN HIDDEN"
 const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
 const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_RIVAL := "P%d  ONLINE · PLAN HIDDEN"
+const _HINT_ONLINE_ABANDONED := "OPPONENT DISCONNECTED  ·  ENTER CLAIMS THE MATCH  ·  ESC LEAVES"
+const _HINT_ONLINE_BROKEN := "MATCH STOPPED  ·  ESC RETURNS TO THE MENU"
 const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
 var _banner_bg: ColorRect
 var _banner_rule: ColorRect
@@ -476,6 +478,11 @@ func refresh() -> void:
 			if gm.online_player == 0 else _HINT_ONLINE_RIVAL % 1
 		_hint_p2.text = ((_HINT_PAD % 2) if gm._pads[1] >= 0 else (_HINT_ONLINE_YOU % 2)) \
 			if gm.online_player == 1 else _HINT_ONLINE_RIVAL % 2
+		# Being stranded outlasts any banner, so the way out stays on screen.
+		if gm.online_match_broken:
+			_hint_p2.text = _HINT_ONLINE_BROKEN
+		elif gm.online_peer_lost:
+			_hint_p2.text = _HINT_ONLINE_ABANDONED
 	elif gm.tutorial_mode:
 		_hint_p1.text = ""
 		_hint_p2.text = ""

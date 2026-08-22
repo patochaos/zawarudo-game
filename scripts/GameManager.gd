@@ -388,6 +388,13 @@ var online_mode: bool = false
 var online_player: int = -1
 var online_room: String = ""
 var online_peer_connected: bool = false
+## True from the moment an opponent drops out of a live match until they come
+## back or the match is claimed. banner_time expires; being stranded does not,
+## so the way out has to stay on screen rather than flash past.
+var online_peer_lost: bool = false
+## Set when the room reports a desync or rejects a plan. Neither side can be
+## trusted as the winner, so the only honest exit is back to the menu.
+var online_match_broken: bool = false
 var _online_seed: int = 0
 var _online_plan_sent: bool = false
 var _online_match_reported: bool = false
@@ -891,6 +898,8 @@ func _leave_online() -> void:
 	online_player = -1
 	online_room = ""
 	online_peer_connected = false
+	online_peer_lost = false
+	online_match_broken = false
 	_online_lobby.close()
 	_open_menu()
 
@@ -915,7 +924,9 @@ func _on_online_message(message: Dictionary) -> void:
 					_online_lobby.set_status("OPPONENT CONNECTED — STARTING…" if connected \
 						else "WAITING FOR PLAYER 2…", false)
 				elif online_mode:
-					banner_text = "OPPONENT RECONNECTED" if connected else "OPPONENT DISCONNECTED — WAITING"
+					online_peer_lost = not connected
+					banner_text = "OPPONENT RECONNECTED" if connected \
+						else "OPPONENT DISCONNECTED — ENTER CLAIMS THE MATCH"
 					banner_color = Color(0.52, 0.95, 0.70) if connected else Color(1.0, 0.45, 0.35)
 					banner_time = 2.0
 		"match_start":
@@ -948,9 +959,12 @@ func _on_online_message(message: Dictionary) -> void:
 			banner_text = "REMATCH %d / 2 READY" % ready.size()
 			banner_color = Color(0.86, 0.68, 1.0)
 			banner_time = 1.4
+		"opponent_left":
+			_finish_abandoned_match(int(message.get("winner", online_player)))
 		"desync":
 			state = Phase.ONLINE_WAIT
-			banner_text = "MATCH DESYNC DETECTED — RETURN TO MENU"
+			online_match_broken = true
+			banner_text = "MATCH DESYNC DETECTED — ESC RETURNS TO THE MENU"
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 		"error":
@@ -980,6 +994,8 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	_online_plan_sent = false
 	_online_match_reported = false
 	_online_waiting_rematch = false
+	online_peer_lost = false
+	online_match_broken = false
 	_online_lobby.close()
 	_ui.visible = true
 	_tuning.visible = false
@@ -1001,8 +1017,9 @@ func _apply_online_turn_plans(message: Dictionary) -> void:
 		var invalid_reason := _online_plan_invalid_reason(i, plans[i])
 		if not invalid_reason.is_empty():
 			state = Phase.ONLINE_WAIT
+			online_match_broken = true
 			var owner := "YOUR" if i == online_player else "OPPONENT"
-			banner_text = "%s PLAN FAILED VALIDATION — MATCH STOPPED" % owner
+			banner_text = "%s PLAN FAILED VALIDATION — ESC RETURNS TO THE MENU" % owner
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 			push_error("Online plan rejected for player %d: %s" % [i + 1, invalid_reason])
@@ -3754,6 +3771,42 @@ func _request_rematch() -> void:
 			("ai_wide" if vs_ai else "local_2p"))
 
 
+## An opponent who reloads the page cannot rejoin: a match in progress cannot
+## be rebuilt from one turn of state. Rather than leave the survivor watching
+## an empty room until it expires, let them claim it. The room refuses unless
+## the opponent really is gone, so this is never a way to end a live match.
+func _claim_abandoned_match() -> void:
+	if not online_mode or online_peer_lost == false or state == Phase.GAME_OVER:
+		return
+	if not _online_client.send_forfeit():
+		banner_text = "COULD NOT REACH THE ROOM — RECONNECTING"
+		banner_color = Color(1.0, 0.45, 0.35)
+		banner_time = 2.0
+		return
+	banner_text = "CLAIMING THE MATCH…"
+	banner_color = Color(0.86, 0.68, 1.0)
+	banner_time = 1.6
+
+
+## The room has ruled: the abandoned match is over. Land on the ordinary
+## result screen so the rematch handshake still works if they come back.
+func _finish_abandoned_match(claimed_by: int) -> void:
+	if not online_mode:
+		return
+	online_peer_lost = false
+	winner = clampi(claimed_by, 0, 1)
+	winning_team = -1
+	_online_match_reported = true
+	state = Phase.GAME_OVER
+	# The same arrival every other win uses, so the result screen's gamepad
+	# edges are primed and a held button cannot instantly skip past it.
+	_prime_game_over_pad_state()
+	_finish_match_telemetry()
+	banner_text = "OPPONENT LEFT — PLAYER %d TAKES THE MATCH" % (winner + 1)
+	banner_color = PLAYER_COLORS[winner].lightened(0.3)
+	banner_time = 3.0
+
+
 func _cycle_rematch_level(direction: int) -> void:
 	if state != Phase.GAME_OVER or direction == 0 \
 			or (online_mode and (online_player != 0 or _online_waiting_rematch)):
@@ -3878,6 +3931,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				copy_match_report()
 			return
 
+		if k.keycode in [KEY_ENTER, KEY_KP_ENTER] and online_peer_lost:
+			_claim_abandoned_match()
+			return
 		if k.keycode == KEY_SHIFT:
 			_confirm(online_player)
 			return

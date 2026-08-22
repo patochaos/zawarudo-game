@@ -33,7 +33,8 @@ export type ClientMessage =
   | { type: "plan"; turn: number; plan: PlayerPlanPayload }
   | { type: "turn_complete"; turn: number; digest: string }
   | { type: "match_over"; turn: number; winner: PlayerSlot; digest: string }
-  | { type: "rematch"; level: number };
+  | { type: "rematch"; level: number }
+  | { type: "forfeit" };
 
 export interface ConnectionAttachment {
   slot: PlayerSlot;
@@ -156,6 +157,9 @@ export function parseClientMessage(text: string): ClientMessage | null {
       return null;
     }
     return { type: "rematch", level: value.level };
+  }
+  if (value.type === "forfeit") {
+    return { type: "forfeit" };
   }
   return null;
 }

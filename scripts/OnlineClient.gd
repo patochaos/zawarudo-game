@@ -95,6 +95,12 @@ func send_rematch(level: int) -> bool:
 	return _send({"type": "rematch", "level": level})
 
 
+## Claim an abandoned match. The room grants it only while the opponent is
+## actually disconnected, so this cannot be used to rage-quit a live rival.
+func send_forfeit() -> bool:
+	return _send({"type": "forfeit"})
+
+
 func is_socket_open() -> bool:
 	return _peer != null and _peer.get_ready_state() == WebSocketPeer.STATE_OPEN
 

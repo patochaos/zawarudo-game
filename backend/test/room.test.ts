@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   createRoom,
   digest,
+  joinRoom,
+  type MatchFixture,
   playTurn,
   post,
   settle,
@@ -303,5 +305,153 @@ describe("lockstep turn cycle", () => {
 
     fixture.host.close();
     fixture.guest.close();
+  });
+});
+
+describe("forfeit", () => {
+  /** Leaves the host alone in a live match and grants it the win. */
+  async function forfeitedMatch(level = 1): Promise<MatchFixture> {
+    const fixture = await startMatch(level);
+    fixture.guest.close();
+    await settle();
+    fixture.host.send({ type: "forfeit" });
+    await fixture.host.waitFor("opponent_left");
+    return fixture;
+  }
+
+  it("refuses a forfeit while the peer is still connected", async () => {
+    const fixture = await startMatch();
+
+    fixture.host.send({ type: "forfeit" });
+    expect(await fixture.host.waitForError("peer_present")).toMatchObject({ type: "error" });
+    await settle();
+    expect(fixture.guest.types()).not.toContain("opponent_left");
+    expect((await env.ROOMS.getByName(fixture.room).getInfo()).phase).toBe("planning");
+
+    // No match report was written for the claiming slot: a lone report from the peer is still
+    // the only row for this turn, so it is acknowledged instead of counting as a disagreement.
+    fixture.host.sendPlan(1);
+    fixture.guest.sendPlan(1);
+    await fixture.host.waitFor("turn_plans");
+    await fixture.guest.waitFor("turn_plans");
+    fixture.guest.send({ type: "match_over", turn: 1, winner: 1, digest: digest("e") });
+    expect(await fixture.guest.waitFor("match_over_ack")).toMatchObject({ turn: 1 });
+    await settle();
+    expect(fixture.guest.types()).not.toContain("desync");
+    expect((await env.ROOMS.getByName(fixture.room).getInfo()).phase).toBe("executing");
+
+    fixture.host.close();
+    fixture.guest.close();
+  });
+
+  it("grants the win to the claiming slot once the peer is gone", async () => {
+    const fixture = await startMatch();
+    fixture.host.close();
+    await settle();
+
+    fixture.guest.send({ type: "forfeit" });
+    expect(await fixture.guest.waitFor("opponent_left")).toEqual({
+      type: "opponent_left", winner: 1, turn: 1,
+    });
+    expect((await env.ROOMS.getByName(fixture.room).getInfo()).phase).toBe("game_over");
+
+    fixture.guest.close();
+  });
+
+  it("lets the abandoned player reconnect to the finished match", async () => {
+    const fixture = await startMatch(2);
+    fixture.host.sendPlan(1);
+    fixture.guest.sendPlan(1);
+    await fixture.host.waitFor("turn_plans");
+    await fixture.guest.waitFor("turn_plans");
+
+    // Claimed from `executing`, the phase a mid-turn reload leaves behind.
+    fixture.guest.close();
+    await settle();
+    fixture.host.send({ type: "forfeit" });
+    expect(await fixture.host.waitFor("opponent_left")).toEqual({
+      type: "opponent_left", winner: 0, turn: 1,
+    });
+
+    const back = await TestSocket.open(fixture.room, fixture.guestToken);
+    expect(await back.waitFor("connected")).toMatchObject({ player: 1 });
+    expect(await back.waitFor("room_state")).toMatchObject({
+      phase: "game_over", turn: 1, level: 2,
+    });
+    await settle();
+    expect(back.types()).not.toContain("error");
+
+    fixture.host.close();
+    back.close();
+  });
+
+  it("still runs the rematch handshake after a forfeit", async () => {
+    const fixture = await forfeitedMatch(1);
+    const back = await TestSocket.open(fixture.room, fixture.guestToken);
+    await back.waitFor("room_state");
+
+    back.send({ type: "rematch", level: 7 });
+    expect(await fixture.host.waitFor("rematch_status")).toMatchObject({ ready: [1], level: 1 });
+    fixture.host.send({ type: "rematch", level: 5 });
+    expect(await fixture.host.waitFor("match_start")).toMatchObject({ level: 5, turn: 1 });
+    expect(await back.waitFor("match_start")).toMatchObject({ level: 5, turn: 1 });
+    expect(await env.ROOMS.getByName(fixture.room).getInfo()).toMatchObject({
+      phase: "planning", turn: 1, level: 5,
+    });
+
+    fixture.host.close();
+    back.close();
+  });
+
+  it("refuses a forfeit before the match has started", async () => {
+    const created = await createRoom(1, 0);
+    await joinRoom(created.room, 0);
+    const host = await TestSocket.open(created.room, created.token);
+    expect(await host.waitFor("room_state")).toMatchObject({ phase: "waiting" });
+
+    host.send({ type: "forfeit" });
+    await host.waitForError("wrong_phase");
+    expect((await env.ROOMS.getByName(created.room).getInfo()).phase).toBe("waiting");
+
+    host.close();
+  });
+
+  it("refuses a forfeit once the match is over", async () => {
+    const fixture = await startMatch();
+    fixture.host.sendPlan(1);
+    fixture.guest.sendPlan(1);
+    await fixture.host.waitFor("turn_plans");
+    await fixture.guest.waitFor("turn_plans");
+    fixture.host.send({ type: "match_over", turn: 1, winner: 0, digest: digest("f") });
+    fixture.guest.send({ type: "match_over", turn: 1, winner: 0, digest: digest("f") });
+    await fixture.host.waitFor("match_over");
+
+    fixture.guest.close();
+    await settle();
+    fixture.host.send({ type: "forfeit" });
+    await fixture.host.waitForError("wrong_phase");
+    await settle();
+    expect(fixture.host.types()).not.toContain("opponent_left");
+
+    fixture.host.close();
+  });
+
+  it("refuses a forfeit after a desync", async () => {
+    const fixture = await startMatch();
+    fixture.host.sendPlan(1);
+    fixture.guest.sendPlan(1);
+    await fixture.host.waitFor("turn_plans");
+    await fixture.guest.waitFor("turn_plans");
+    fixture.host.send({ type: "turn_complete", turn: 1, digest: digest("a") });
+    fixture.guest.send({ type: "turn_complete", turn: 1, digest: digest("b") });
+    await fixture.host.waitFor("desync");
+
+    fixture.guest.close();
+    await settle();
+    fixture.host.send({ type: "forfeit" });
+    await fixture.host.waitForError("wrong_phase");
+    expect((await env.ROOMS.getByName(fixture.room).getInfo()).phase).toBe("desync");
+
+    fixture.host.close();
   });
 });

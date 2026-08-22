@@ -8,6 +8,7 @@ func _init() -> void:
 	_test_plan_roundtrip()
 	_test_remote_slot_uses_local_controls()
 	_test_plan_legality()
+	_test_abandoned_match_claim()
 	if _failures == 0:
 		print("Online lockstep: all tests passed")
 	else:
@@ -103,6 +104,43 @@ func _test_plan_legality() -> void:
 	bad_kit["attack_mode"] = 2
 	_check(not gm._online_plan_is_legal(0, bad_kit),
 		"a remote plan cannot inject an unknown character attack mode")
+	gm.free()
+
+
+## A player whose browser reloads cannot rejoin a match in progress, so the
+## survivor has to be able to end it. The claim is only offered while the room
+## has actually reported the opponent gone.
+func _test_abandoned_match_claim() -> void:
+	var gm = GAME_MANAGER.new()
+	gm.online_mode = true
+	gm.online_player = 0
+	_check(not gm.online_peer_lost,
+		"a fresh online match must not start out looking abandoned")
+	gm._on_online_message({"type": "peer_status", "player": 1, "connected": false})
+	_check(gm.online_peer_lost,
+		"a peer dropping out of a live match must latch, not just flash a banner")
+	gm._on_online_message({"type": "peer_status", "player": 1, "connected": true})
+	_check(not gm.online_peer_lost,
+		"a reconnecting opponent must clear the claim offer")
+	gm._on_online_message({"type": "peer_status", "player": 0, "connected": false})
+	_check(not gm.online_peer_lost,
+		"our own socket status must never be mistaken for the opponent leaving")
+
+	gm._on_online_message({"type": "peer_status", "player": 1, "connected": false})
+	gm._on_online_message({"type": "opponent_left", "winner": 0, "turn": 4})
+	_check(gm.state == Phase.GAME_OVER and gm.winner == 0,
+		"a granted claim must land on the ordinary result screen")
+	_check(not gm.online_peer_lost,
+		"the claim offer must go away once the room has ruled")
+
+	# Desync is not claimable: neither side can be trusted as the winner.
+	var broken = GAME_MANAGER.new()
+	broken.online_mode = true
+	broken.online_player = 1
+	broken._on_online_message({"type": "desync", "turn": 2})
+	_check(broken.online_match_broken and not broken.online_peer_lost,
+		"a desync must offer the menu, never a claimed win")
+	broken.free()
 	gm.free()
 
 
