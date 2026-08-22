@@ -127,9 +127,6 @@ activation, and playtest shortcuts.
 
 * **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose an authored arena,
   then configure both the human fighter and AI rival from the full roster.
-* **VS AI — GRENADIER** — Player 1 replaces the normal knife fan with one
-  bouncing timed grenade. The opponent remains the established knife-only AI.
-  Choose an authored arena from the same submenu.
 * **VS HUMAN** — opens character selection first. P1 and P2 independently pick
   **Dagger Duelist**, **The Velocity** (Dashblade), **The Static Witch**
   (Shock), or **Broodtail** (Chakram), then play with **open information**:
@@ -266,9 +263,7 @@ touch it on the same physics tick, both earn the reward. A hit during the warnin
 turn cancels the incoming Core; once materialized, it persists for its full
 lifetime unless collected.
 
-Score pips sit under the timer. `F10` cycles levels and resets the score. The
-close-camera prototype remains available to internal tests but is hidden from
-the player-facing mode menu.
+Score pips sit under the timer. `F10` cycles levels and resets the score.
 
 ## Movement: pilot the ghost on a stamina budget
 
@@ -322,7 +317,7 @@ Key properties:
 | Aim | **Mouse** — free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
-| Grenadier fuse | `1`, `2`, or `3` during planning | `L1` / `R1` |
+| Static Witch plasma / orb | `1` / `2` during planning | `L1` / `R1` |
 | Toggle SUPER | `T` | `Y` |
 | Confirm | `Left Shift` | `Start` |
 | Rollback shot | `R`, or `RMB` except as Static Witch | `B` or `Select` |
@@ -336,17 +331,7 @@ Global: `F9` restart · `F10` next level · `M` mute · `H` hide the control bar
 `R` watch replay · `C` copy the match report · `←`/`→` choose the rematch level
 · `Enter` rematch.
 
-In local Vs Human, a Player 2 Grenadier cycles the 1/2/3-second fuse with
-`L1`/`R1`. In Vs AI the Player 2 column is inert — the AI ignores it.
-
-The Grenadier is retained only as its explicit **VS AI — GRENADIER** legacy
-playtest; it is no longer part of character selection. Each normal throw
-launches one grenade; its selected 1/2/3-second fuse
-counts execution time from launch and pauses whenever time is frozen. A dagger
-hit or a collision with another grenade detonates it immediately. Explosions
-damage fighters in the visible blast radius, consume nearby daggers, respect
-hard cover, and can chain into other grenades. A Grenadier SUPER still uses the
-existing knife barrage for this first balance slice.
+In Vs AI the Player 2 column is inert — the AI ignores it.
 
 ### Character prototype roster
 
@@ -515,43 +500,6 @@ Nothing is damaged — knives remain the only source of damage — but position,
 momentum and every firing line inside the ring change, and the knives blown
 outward stay in the world on ordinary throw gravity. Outward arrowheads and the
 `DAGGERS OUT` label make that consequence public during planning.
-
-### Close Camera mode
-
-Disposable. It tests one coherent variant:
-
-* a camera that pushes in while time is stopped and pulls out when it runs
-* **Knife Court V3**, raised side shelves that leave the lower middle open, one
-  high platform that moves only during execution, a jumpable centre blocker,
-  low physical edge gates and horizontal wrap for fighters and knives
-* a fixed two-knife throw: one follows the chosen aim exactly and the second
-  leaves at the same speed with a small upward angle
-* a lower ~129px jump, retaining the authored speed, air control and double jump
-* a faster knife catching a slower one from behind transfers momentum into it
-  and restores one spent ricochet
-* the global HARD-surface ricochet rule remains active
-* a 3.5s planning window instead of 5s, with the AI's deliberation scaled to fit
-* **auto-ready**: finishing your action is the commitment, with no separate
-  confirm press. A green `READY` badge appears over the fighter, drawn in world
-  space so it survives the pushed-in camera. Execution begins as soon as
-  everyone is ready, so a turn lasts as long as the slower player takes rather
-  than as long as the timer allows.
-
-  "Finished" deliberately means *the shot is placed and you have stopped
-  driving for `prototype_ready_grace` seconds*, not *you have thrown*. Piloting
-  after the shot — firing early, then running for cover behind your own knife —
-  is one of the better moves in the game, and a confirmed plan stops accepting
-  pilot input, so readying on the throw itself would silently delete it.
-  Rollback still works and still un-readies: it un-fires the shot, so the plan
-  stops being finished and the badge goes with it.
-
-Select **RULESET · CLOSE CAMERA** from the main menu. Auto-ready deliberately
-softens the explicit commitment beat that
-§4.3 of the design document calls for; the short `prototype_commit_delay` is what
-is left of it.
-
-Delete `prototype_mode`, `scripts/DuelCamera.gd` and `Levels._proving_ground()`
-together once it has answered its question, whichever way it answers.
 
 ### Wrapping
 

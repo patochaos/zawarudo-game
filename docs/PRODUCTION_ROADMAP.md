@@ -13,8 +13,8 @@ event-driven presentation in Godot.
 ## Direction decisions
 
 - Stay in Godot. A Unity migration is out of scope.
-- Use the standard match camera as the working target. `Close Camera` remains
-  an experiment until silhouette tests justify promoting it.
+- Use the standard match camera as the working target. The `Close Camera`
+  experiment has been retired and removed.
 - Keep `Player` authoritative for simulation, position, collision and aim.
 - Treat every new character, shader and cut-in as a cosmetic observer.
 - Use pre-rendered 3D for match characters. Do not use live 3D viewports in
