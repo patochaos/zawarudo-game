@@ -10,6 +10,14 @@ import {
 
 const ROOM_LIFETIME_MS = 24 * 60 * 60 * 1_000;
 
+// Rate limits. A healthy client sends two messages per turn (plan, turn_complete), so twenty per
+// second per socket is far above real play while still capping a flooding peer. Join attempts are
+// bounded per room code so a leaked code cannot be hammered.
+const MESSAGE_WINDOW_MS = 1_000;
+const MAX_MESSAGES_PER_WINDOW = 20;
+const JOIN_WINDOW_MS = 60_000;
+const MAX_JOIN_ATTEMPTS_PER_WINDOW = 10;
+
 type RoomPhase = "waiting" | "planning" | "executing" | "game_over" | "desync";
 
 type RoomRow = {
@@ -38,8 +46,13 @@ type StoredMatchReportRow = StoredResultRow & {
 
 export interface JoinResult {
   ok: boolean;
-  reason?: "missing" | "full";
+  reason?: "missing" | "full" | "rate_limited";
   player?: PlayerSlot;
+}
+
+interface RateWindow {
+  startedAt: number;
+  count: number;
 }
 
 export interface RoomInfo {
@@ -70,6 +83,10 @@ function log(level: "info" | "warn" | "error", message: string, data: Record<str
 }
 
 export class Room extends DurableObject<Env> {
+  // In-memory only: both windows reset when the object is evicted, which is fine for a throttle.
+  private readonly messageRates = new Map<WebSocket, RateWindow>();
+  private joinRate: RateWindow = { startedAt: 0, count: 0 };
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.ctx.blockConcurrencyWhile(async () => {
@@ -119,22 +136,11 @@ export class Room extends DurableObject<Env> {
       );
       CREATE TABLE IF NOT EXISTS fighters (
         slot INTEGER PRIMARY KEY,
-        weapon INTEGER NOT NULL
+        weapon INTEGER NOT NULL,
+        protocol INTEGER NOT NULL DEFAULT 1
       );
       INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at)
       VALUES (1, unixepoch());
-    `);
-    const fighterColumns = this.ctx.storage.sql.exec<{ name: string }>(
-      "PRAGMA table_info(fighters)",
-    ).toArray();
-    if (!fighterColumns.some((column) => column.name === "protocol")) {
-      this.ctx.storage.sql.exec(
-        "ALTER TABLE fighters ADD COLUMN protocol INTEGER NOT NULL DEFAULT 1",
-      );
-    }
-    this.ctx.storage.sql.exec(`
-      INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at)
-      VALUES (2, unixepoch());
     `);
   }
 
@@ -144,8 +150,13 @@ export class Room extends DurableObject<Env> {
     ).toArray()[0] ?? null;
   }
 
-  async reserve(code: string, hostToken: string, level: number, seed: number,
-    hostWeapon = 0, hostProtocol = 1): Promise<boolean> {
+  async reserve(
+    code: string,
+    hostToken: string,
+    level: number,
+    seed: number,
+    hostWeapon: number,
+  ): Promise<boolean> {
     if (this.room() !== null) {
       return false;
     }
@@ -160,15 +171,17 @@ export class Room extends DurableObject<Env> {
       Date.now(),
     );
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO fighters (slot, weapon, protocol) VALUES (0, ?, ?)",
+      "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (0, ?)",
       hostWeapon,
-      hostProtocol,
     );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return true;
   }
 
-  async join(guestToken: string, guestWeapon = 0, guestProtocol = 1): Promise<JoinResult> {
+  async join(guestToken: string, guestWeapon: number): Promise<JoinResult> {
+    if (!this.allowJoinAttempt()) {
+      return { ok: false, reason: "rate_limited" };
+    }
     const room = this.room();
     if (room === null) {
       return { ok: false, reason: "missing" };
@@ -181,12 +194,25 @@ export class Room extends DurableObject<Env> {
       guestToken,
     );
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO fighters (slot, weapon, protocol) VALUES (1, ?, ?)",
+      "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (1, ?)",
       guestWeapon,
-      guestProtocol,
     );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return { ok: true, player: 1 };
+  }
+
+  private allowJoinAttempt(): boolean {
+    const now = Date.now();
+    if (now - this.joinRate.startedAt >= JOIN_WINDOW_MS) {
+      this.joinRate = { startedAt: now, count: 1 };
+      return true;
+    }
+    this.joinRate.count += 1;
+    if (this.joinRate.count > MAX_JOIN_ATTEMPTS_PER_WINDOW) {
+      log("warn", "join_rate_limited", { attempts: this.joinRate.count });
+      return false;
+    }
+    return true;
   }
 
   getInfo(): RoomInfo {
@@ -242,6 +268,9 @@ export class Room extends DurableObject<Env> {
   }
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (!this.allowMessage(ws)) {
+      return;
+    }
     if (typeof message !== "string") {
       this.sendError(ws, "binary_not_supported", "Only text messages are supported");
       return;
@@ -283,7 +312,28 @@ export class Room extends DurableObject<Env> {
     }
   }
 
+  private allowMessage(ws: WebSocket): boolean {
+    const now = Date.now();
+    const window = this.messageRates.get(ws);
+    if (window === undefined || now - window.startedAt >= MESSAGE_WINDOW_MS) {
+      this.messageRates.set(ws, { startedAt: now, count: 1 });
+      return true;
+    }
+    window.count += 1;
+    if (window.count <= MAX_MESSAGES_PER_WINDOW) {
+      return true;
+    }
+    // Warn once per window, then drop silently so the flood cannot amplify into replies.
+    if (window.count === MAX_MESSAGES_PER_WINDOW + 1) {
+      const attachment = parseConnectionAttachment(ws.deserializeAttachment());
+      log("warn", "message_rate_limited", { slot: attachment?.slot ?? -1, count: window.count });
+      this.sendError(ws, "rate_limited", "Too many messages, slow down");
+    }
+    return false;
+  }
+
   override webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): void {
+    this.messageRates.delete(ws);
     const attachment = parseConnectionAttachment(ws.deserializeAttachment());
     if (attachment !== null) {
       this.broadcast({
@@ -464,7 +514,7 @@ export class Room extends DurableObject<Env> {
   private async receiveRematch(
     ws: WebSocket,
     slot: PlayerSlot,
-    requestedLevel: number | null,
+    requestedLevel: number,
   ): Promise<void> {
     const room = this.room();
     if (room === null || room.phase !== "game_over") {
@@ -472,8 +522,8 @@ export class Room extends DurableObject<Env> {
       return;
     }
     // Player 1 owns room-level choices, just as they did when creating the room.
-    // Old clients omit `level`; keeping null as "unchanged" preserves compatibility.
-    if (slot === 0 && requestedLevel !== null) {
+    // Slot 1 still sends a level; it is ignored.
+    if (slot === 0) {
       this.ctx.storage.sql.exec("UPDATE room SET level = ? WHERE singleton = 1", requestedLevel);
     }
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO rematch_ready (slot) VALUES (?)", slot);
@@ -543,13 +593,10 @@ export class Room extends DurableObject<Env> {
   }
 
   private weapons(): number[] {
-    const rows = this.ctx.storage.sql.exec<{ slot: number; weapon: number; protocol: number }>(
-      "SELECT slot, weapon, protocol FROM fighters ORDER BY slot",
+    const rows = this.ctx.storage.sql.exec<{ slot: number; weapon: number }>(
+      "SELECT slot, weapon FROM fighters ORDER BY slot",
     ).toArray();
     const weapons = [0, 0];
-    if (rows.length !== 2 || rows.some((row) => Number(row.protocol) < 2)) {
-      return weapons;
-    }
     for (const row of rows) {
       if (row.slot === 0 || row.slot === 1) {
         weapons[row.slot] = Number(row.weapon);

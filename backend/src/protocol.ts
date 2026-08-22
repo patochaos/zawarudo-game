@@ -1,4 +1,16 @@
-export const MAX_PLAN_TICKS = 180;
+// The wire contract version. The Worker requires an exact match on create and join so a stale
+// browser tab is told to reload instead of joining a match it cannot simulate.
+export const PROTOCOL_VERSION = 2;
+
+// The client records at most `movement_tick_budget()` ticks of movement, which is
+// ceil(movement_budget * physics_ticks_per_second) = ceil(0.50 * 60) = 30, and it hard-stops the
+// match when a peer plan is longer than that budget. The server must reject over-long plans for
+// the same reason: relaying one is a denial-of-match against the honest client.
+// MUST stay in sync with GameManager.movement_tick_budget() / movement_budget on the client.
+export const MOVEMENT_BUDGET_SECONDS = 0.50;
+export const PHYSICS_TICKS_PER_SECOND = 60;
+export const MAX_PLAN_TICKS = Math.ceil(MOVEMENT_BUDGET_SECONDS * PHYSICS_TICKS_PER_SECOND);
+
 export const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 export const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 export const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
@@ -13,7 +25,6 @@ export interface PlayerPlanPayload {
   shot_tick: number;
   aim_angle: number;
   power: number;
-  grenade_fuse_seconds: number;
   attack_mode: number;
   super_shot: boolean;
 }
@@ -22,7 +33,7 @@ export type ClientMessage =
   | { type: "plan"; turn: number; plan: PlayerPlanPayload }
   | { type: "turn_complete"; turn: number; digest: string }
   | { type: "match_over"; turn: number; winner: PlayerSlot; digest: string }
-  | { type: "rematch"; level: number | null };
+  | { type: "rematch"; level: number };
 
 export interface ConnectionAttachment {
   slot: PlayerSlot;
@@ -61,15 +72,13 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
   const dirs = parseByteArray(value.dirs, 2);
   const jumps = parseByteArray(value.jumps, 1);
   const holds = parseByteArray(value.holds, 1);
-  const drops = value.drops === undefined
-    ? (dirs === null ? null : Array<number>(dirs.length).fill(0))
-    : parseByteArray(value.drops, 1);
+  const drops = parseByteArray(value.drops, 1);
   if (dirs === null || jumps === null || holds === null
       || drops === null || dirs.length !== jumps.length || dirs.length !== holds.length
       || dirs.length !== drops.length) {
     return null;
   }
-  if (!isIntegerInRange(value.shot_tick, -1, MAX_PLAN_TICKS)) {
+  if (!isIntegerInRange(value.shot_tick, -1, dirs.length)) {
     return null;
   }
   if (typeof value.aim_angle !== "number" || !Number.isFinite(value.aim_angle)
@@ -80,10 +89,7 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
       || value.power < 0 || value.power > 1) {
     return null;
   }
-  const grenadeFuseSeconds = value.grenade_fuse_seconds ?? 2;
-  const attackMode = value.attack_mode ?? 0;
-  if (!isIntegerInRange(grenadeFuseSeconds, 1, 3)
-      || !isIntegerInRange(attackMode, 0, 1)) {
+  if (!isIntegerInRange(value.attack_mode, 0, 1)) {
     return null;
   }
   if (typeof value.super_shot !== "boolean") {
@@ -98,8 +104,7 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
     shot_tick: value.shot_tick,
     aim_angle: value.aim_angle,
     power: value.power,
-    grenade_fuse_seconds: grenadeFuseSeconds,
-    attack_mode: attackMode,
+    attack_mode: value.attack_mode,
     super_shot: value.super_shot,
   };
 }
@@ -147,10 +152,10 @@ export function parseClientMessage(text: string): ClientMessage | null {
     };
   }
   if (value.type === "rematch") {
-    if (value.level !== undefined && !isIntegerInRange(value.level, 0, 63)) {
+    if (!isIntegerInRange(value.level, 0, 63)) {
       return null;
     }
-    return { type: "rematch", level: value.level ?? null };
+    return { type: "rematch", level: value.level };
   }
   return null;
 }
