@@ -3,7 +3,7 @@ extends SceneTree
 const ATLAS_PATH := "res://assets/art/fighters/gilded-executor-simplified-proof-v1/poses.png"
 const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 const CELL_SIZE := Vector2(256.0, 256.0)
-const DISPLAY_SCALE := Vector2(0.25, 0.25)
+const DISPLAY_SCALE := Vector2(0.2265625, 0.2265625)
 
 
 class ProofStage extends Node2D:
@@ -54,11 +54,11 @@ func _capture() -> void:
 		var sprite := Sprite2D.new()
 		sprite.texture = region
 		sprite.scale = DISPLAY_SCALE
-		sprite.position = Vector2(x_positions[index], 592.0)
+		sprite.position = Vector2(x_positions[index], 595.078125)
 		stage.add_child(sprite)
 
 	var title := Label.new()
-	title.text = "ARENA SPRITE PROOF  /  56 PX  /  FIVE FLAT COLOR FAMILIES"
+	title.text = "ARENA SPRITE PROOF  /  51 PX  /  FIVE FLAT COLOR FAMILIES"
 	title.position = Vector2(340.0, 145.0)
 	title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
 	title.add_theme_font_size_override("font_size", 18)

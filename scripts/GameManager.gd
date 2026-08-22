@@ -452,6 +452,14 @@ var ghost_dash: Array = [null, null, null, null]
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
 ]
+## Velocity and grounded samples parallel ghost_path, used only to select the
+## correct visual pose for each planning ghost. Simulation still owns the data.
+var ghost_velocity_path: Array[PackedVector2Array] = [
+	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
+]
+var ghost_ground_path: Array[PackedByteArray] = [
+	PackedByteArray(), PackedByteArray(), PackedByteArray(), PackedByteArray(),
+]
 ## A player's prediction depends only on frozen world state and that player's
 ## recorded movement. Most planning frames change neither, so rebuild lazily.
 var _ghost_path_dirty: Array[bool] = [true, true, true, true]
@@ -1407,7 +1415,7 @@ func _add_player(i: int) -> void:
 	if fighter_visuals_enabled and (not simplified_fighter_proto_enabled or i == 0):
 		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
 		fighter_visual.name = "FighterVisual"
-		var fighter_skin = FIGHTER_SKIN_SCRIPT.simplified_executor_proof() \
+		var fighter_skin = FIGHTER_SKIN_SCRIPT.animated_executor_proof() \
 			if simplified_fighter_proto_enabled else FIGHTER_SKIN_SCRIPT.executor_prototype(i)
 		fighter_visual.configure(p, fighter_skin)
 		p.add_child(fighter_visual)
@@ -3593,6 +3601,8 @@ func _rebuild_ghost_path(i: int) -> void:
 	var p: Player = players[i]
 	var pl: PlayerPlan = p.plan
 	var path := PackedVector2Array()
+	var velocity_path := PackedVector2Array()
+	var ground_path := PackedByteArray()
 	# Replay the recording from the live body state.
 	var pos: Vector2 = p.position
 	var vel: Vector2 = p.vel
@@ -3602,12 +3612,16 @@ func _rebuild_ghost_path(i: int) -> void:
 	var drop_from: float = p.drop_from_y
 	var pending_dash = _dash_prediction_copy(i)
 	path.append(pos)
+	velocity_path.append(vel)
+	ground_path.append(1 if og else 0)
 	for t in exec_ticks():
 		if pending_dash != null and pending_dash.active:
 			var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
 			pos = wrap_point(dash_result["position"])
 			vel = dash_result["velocity"]
 			path.append(pos)
+			velocity_path.append(vel)
+			ground_path.append(1 if og else 0)
 			continue
 		var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
 		vel = drop_result[0]
@@ -3628,9 +3642,13 @@ func _rebuild_ghost_path(i: int) -> void:
 		if og:
 			air_jumps = air_jumps_for(i)
 		path.append(pos)
+		velocity_path.append(vel)
+		ground_path.append(1 if og else 0)
 	if pending_dash != null:
 		pending_dash.free()
 	ghost_path[i] = path
+	ghost_velocity_path[i] = velocity_path
+	ghost_ground_path[i] = ground_path
 	_ghost_path_dirty[i] = false
 
 

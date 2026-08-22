@@ -5,7 +5,8 @@ Status: isolated art-direction prototype. Not wired into normal matches.
 ## Thesis
 
 Arena fighters are animated combat icons, not miniature versions of the HUD
-portraits. Identity must survive through a few large shapes at roughly 112 px:
+portraits. Identity must survive through a few large shapes at roughly 51 px,
+calibrated beside the legacy puppet in the same gameplay capture:
 
 - angular hair wedge;
 - oversized high collar;
@@ -40,7 +41,9 @@ py -3 tools/art/build_simplified_executor_proof.py `
 
 The generated source contained a baked pale checkerboard. The build step removes
 only that neutral background, reconstructs alpha, extracts the four poses and
-normalizes them into 256 px cells. Godot displays each cell at 0.5 scale.
+normalizes them into 256 px cells. The playable proof uses a 58 px destination
+rectangle, leaving roughly 51 px of visible character height. It also exports a
+monochrome `ghost.png` mask so planning uses the same silhouette as the fighter.
 
 ## Final generation prompt
 

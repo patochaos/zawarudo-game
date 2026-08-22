@@ -13,6 +13,8 @@ class_name FighterSkin
 @export var sprite_cell_size := Vector2i(256, 256)
 @export var sprite_draw_rect := Rect2(-64.0, -97.0, 128.0, 128.0)
 @export var sprite_tint := Color.WHITE
+@export var ghost_texture: Texture2D
+@export var ghost_atlases: Dictionary = {}
 @export var portrait: Texture2D
 @export var palette: Dictionary = {}
 @export var visual_bounds := Rect2(-32.0, -68.0, 64.0, 92.0)
@@ -22,6 +24,7 @@ class_name FighterSkin
 }
 @export var silhouette: Dictionary = {}
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
+@export var state_ticks_per_frame: Dictionary = {}
 @export var procedural_aim_arm_enabled: bool = true
 
 
@@ -52,6 +55,39 @@ const SIMPLIFIED_EXECUTOR_PATHS := {
 	&"LOCK": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/lock.png",
 }
 
+const ANIMATED_EXECUTOR_PATHS := {
+	&"IDLE": "res://assets/art/fighters/gilded-executor-animated-v1/idle.png",
+	&"WALK": "res://assets/art/fighters/gilded-executor-animated-v1/walk.png",
+	&"RUN": "res://assets/art/fighters/gilded-executor-animated-v1/run.png",
+	&"RISE": "res://assets/art/fighters/gilded-executor-animated-v1/rise.png",
+	&"FALL": "res://assets/art/fighters/gilded-executor-animated-v1/fall.png",
+	&"SHOT": "res://assets/art/fighters/gilded-executor-animated-v1/shoot.png",
+	&"LOCK": "res://assets/art/fighters/gilded-executor-animated-v1/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/gilded-executor-animated-v1/defeat.png",
+}
+
+const ANIMATED_EXECUTOR_COUNTS := {
+	&"IDLE": 4,
+	&"WALK": 6,
+	&"RUN": 6,
+	&"RISE": 2,
+	&"FALL": 2,
+	&"SHOT": 4,
+	&"LOCK": 2,
+	&"DEFEAT": 4,
+}
+
+const ANIMATED_EXECUTOR_GHOST_PATHS := {
+	&"IDLE": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-shoot.png",
+	&"LOCK": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-defeat.png",
+}
+
 
 func frame_count(state: StringName) -> int:
 	if sprite_counts.has(state):
@@ -63,6 +99,10 @@ func frame_count(state: StringName) -> int:
 func has_sprite(state: StringName) -> bool:
 	return sprite_atlases.has(state) and sprite_atlases[state] is Texture2D \
 		and frame_count(state) > 0
+
+
+func ticks_for_state(state: StringName) -> int:
+	return maxi(1, int(state_ticks_per_frame.get(state, ticks_per_frame)))
 
 
 static func executor_prototype(player_index: int) -> FighterSkin:
@@ -97,12 +137,56 @@ static func simplified_executor_proof() -> FighterSkin:
 		&"FALL": 1, &"SHOT": 1, &"LOCK": 1,
 	}
 	skin.sprite_cell_size = Vector2i(256, 256)
-	skin.sprite_draw_rect = Rect2(-64.0, -104.0, 128.0, 128.0)
+	# Calibrated against the legacy fighter in a shared gameplay capture. The
+	# source art occupies about 224/256 of the cell, producing ~51 visible pixels.
+	skin.sprite_draw_rect = Rect2(-29.0, -29.921875, 58.0, 58.0)
 	skin.sprite_tint = Color.WHITE
-	skin.visual_bounds = Rect2(-64.0, -104.0, 128.0, 128.0)
+	skin.visual_bounds = Rect2(-29.0, -30.0, 58.0, 54.0)
+	skin.ghost_texture = load(
+		"res://assets/art/fighters/gilded-executor-simplified-proof-v1/ghost.png"
+	) as Texture2D
 	skin.ticks_per_frame = 5
 	# The proof sprites still contain both arms. A layered aim arm belongs to the
 	# eventual production atlas; drawing the technical overlay now makes three.
+	skin.procedural_aim_arm_enabled = false
+	return skin
+
+
+static func animated_executor_proof() -> FighterSkin:
+	var skin := greybox(0)
+	skin.skin_id = &"gilded_executor_animated_v1"
+	skin.display_name = "The Gilded Executor — animated arena prototype"
+	skin.sprite_atlases = {}
+	for state: StringName in ANIMATED_EXECUTOR_PATHS:
+		var texture := load(ANIMATED_EXECUTOR_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = ANIMATED_EXECUTOR_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(384, 256)
+	# The 224 px authored body height maps to the same ~51 px perceived height
+	# as the accepted single-pose proof. The wider cell preserves cape and limbs.
+	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
+	skin.sprite_tint = Color.WHITE
+	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	skin.ghost_texture = load(
+		"res://assets/art/fighters/gilded-executor-animated-v1/ghost.png"
+	) as Texture2D
+	skin.ghost_atlases = {}
+	for state: StringName in ANIMATED_EXECUTOR_GHOST_PATHS:
+		var texture := load(ANIMATED_EXECUTOR_GHOST_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.ghost_atlases[state] = texture
+	skin.ticks_per_frame = 5
+	skin.state_ticks_per_frame = {
+		&"IDLE": 12,
+		&"WALK": 6,
+		&"RUN": 4,
+		&"RISE": 6,
+		&"FALL": 6,
+		&"SHOT": 3,
+		&"LOCK": 8,
+		&"DEFEAT": 5,
+	}
 	skin.procedural_aim_arm_enabled = false
 	return skin
 

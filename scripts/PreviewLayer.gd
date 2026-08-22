@@ -70,17 +70,17 @@ func _draw_player_preview(p: Player) -> void:
 	if recorded > 0 and recorded < path.size():
 		draw_circle(path[recorded], 3.5, Color(col.r, col.g, col.b, 0.9))
 
-	# Ghosts use the same stick-figure pose as the live body. This keeps the
-	# planning view expressive without hiding the exact collision-sized path.
+	# Each marker samples the predicted velocity/ground state at its own tick, so
+	# an airborne endpoint cannot keep wearing the idle silhouette.
 	var end_pos: Vector2 = path[path.size() - 1]
 	var here: Vector2 = gm.shot_origin(i)
 	var same_marker: bool = here.distance_to(end_pos) <= 2.0
 	_draw_destination(end_pos, p)
-	_draw_ghost_figure(end_pos, p, 0.85)
+	_draw_ghost_figure(end_pos, p, 0.85, path.size() - 1)
 
 	# live ghost head, i.e. the point the player is currently piloting
 	if not same_marker:
-		_draw_ghost_figure(here, p, 0.45)
+		_draw_ghost_figure(here, p, 0.45, gm.pilot_tick(i))
 
 	_draw_stamina(p, here)
 	_draw_shot_preview(p, here)
@@ -120,7 +120,12 @@ func _draw_destination(at: Vector2, p: Player) -> void:
 	_label(foot + Vector2(14.0, -8.0), "END", c, 11)
 
 
-func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
+func _draw_ghost_figure(at: Vector2, p: Player, alpha: float, tick: int = -1) -> void:
+	var visual := p.get_node_or_null("FighterVisual") as FighterVisual
+	if visual != null and visual.skin != null and visual.skin.ghost_texture != null:
+		var pose := _ghost_sprite_pose(p, visual.skin, tick)
+		_draw_sprite_ghost(at, p, visual.skin, alpha, pose["state"], pose["frame"])
+		return
 	var pose := Player.idle_pose_points(p.facing, p.aim_dir())
 	var base := _player_preview_color(p)
 	var c := Color(base.r, base.g, base.b, minf(1.0, alpha + (0.1 if high_contrast else 0.0)))
@@ -143,6 +148,78 @@ func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
 	draw_arc(at + pose["head"], 6.0, 0.0, TAU, 16, c, 2.0, true)
 	for joint in [pose["hip"], pose["knee_a"], pose["knee_b"], pose["grip"]]:
 		draw_circle(at + joint, 2.0, c)
+
+
+func _ghost_sprite_pose(p: Player, skin: FighterSkin, tick: int) -> Dictionary:
+	var state: StringName = FighterVisual.IDLE
+	var frame := 0
+	if tick < 0:
+		return {"state": state, "frame": frame}
+	if p.plan.has_shot() and tick == p.plan.shot_tick and skin.has_sprite(FighterVisual.SHOT):
+		# The release silhouette communicates the action more clearly than its
+		# preceding anticipation frame at the one pinned shot marker.
+		state = FighterVisual.SHOT
+		frame = mini(1, skin.frame_count(state) - 1)
+		return {"state": state, "frame": frame}
+
+	var i: int = p.index
+	var velocity := Vector2.ZERO
+	var grounded := p.on_ground
+	if i >= 0 and i < gm.ghost_velocity_path.size() \
+			and tick < gm.ghost_velocity_path[i].size() \
+			and tick < gm.ghost_ground_path[i].size():
+		velocity = gm.ghost_velocity_path[i][tick]
+		grounded = gm.ghost_ground_path[i][tick] == 1
+	else:
+		# Visual tests and hand-authored previews may replace only ghost_path.
+		# Recover a useful pose from its local tangent when no simulation samples
+		# accompany that path.
+		var path: PackedVector2Array = gm.ghost_path[i]
+		if path.size() > 1:
+			var sample := clampi(tick, 0, path.size() - 1)
+			var before := path[maxi(0, sample - 1)]
+			var after := path[mini(path.size() - 1, sample + 1)]
+			velocity = (after - before) / maxf(gm.tick_dt(), 0.0001)
+			grounded = absf(after.y - before.y) < 0.1
+
+	if not grounded:
+		state = FighterVisual.RISE if velocity.y < 0.0 else FighterVisual.FALL
+	elif absf(velocity.x) > 24.0:
+		state = FighterVisual.WALK if skin.has_sprite(FighterVisual.WALK) \
+			else FighterVisual.RUN
+	var count := skin.frame_count(state)
+	if count > 0:
+		frame = posmod(tick / skin.ticks_for_state(state), count)
+	return {"state": state, "frame": frame}
+
+
+func _draw_sprite_ghost(at: Vector2, p: Player, skin: FighterSkin, alpha: float,
+		state: StringName, frame: int) -> void:
+	var base := _player_preview_color(p)
+	var outline := Color(0.015, 0.02, 0.035, alpha * (0.9 if high_contrast else 0.62))
+	var fill := Color(base.r, base.g, base.b,
+		minf(1.0, alpha * (0.82 if high_contrast else 0.62)))
+	var scale := Vector2(float(p.facing), 1.0)
+	var atlas: Texture2D = skin.ghost_atlases.get(state) as Texture2D
+	var source := Rect2(
+		Vector2(float(frame * skin.sprite_cell_size.x), 0.0),
+		Vector2(skin.sprite_cell_size)
+	)
+	# The monochrome mask preserves the live fighter's exact outer contour while
+	# keeping the future position visually distinct from the full-color body.
+	for offset in [Vector2(-1.25, 0.0), Vector2(1.25, 0.0),
+			Vector2(0.0, -1.25), Vector2(0.0, 1.25)]:
+		draw_set_transform(at + offset, 0.0, scale)
+		if atlas != null:
+			draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, outline)
+		else:
+			draw_texture_rect(skin.ghost_texture, skin.sprite_draw_rect, false, outline)
+	draw_set_transform(at, 0.0, scale)
+	if atlas != null:
+		draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, fill)
+	else:
+		draw_texture_rect(skin.ghost_texture, skin.sprite_draw_rect, false, fill)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## One shot per turn. While the shot is still yours to place, the reticle tracks

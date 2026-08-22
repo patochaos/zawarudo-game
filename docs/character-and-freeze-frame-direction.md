@@ -164,9 +164,12 @@ time motifs rather than another franchise's hair, collars, emblems or catchphras
 ### Scale and readability rules
 
 - Keep the physics box at 32×48.
-- Render the standing art around **56×82 to 64×92 logical pixels**, anchored at
-  the same feet. Visual volume may extend beyond collision; gameplay does not.
-- Test silhouettes in black at 64 px tall before painting details.
+- Match the original stick fighter's combat footprint in a shared gameplay
+  capture. The current calibrated target is approximately **50–53 visible
+  logical pixels tall** at 720p, anchored at the same feet. Judge both height
+  and filled visual mass; capes and action poses may widen the silhouette, but
+  the body must neither dominate nor disappear beside the legacy fighter.
+- Test solid-black silhouettes at 51 px tall before painting details.
 - **Every fighter must own at least two character-exclusive outer-silhouette
   anchors.** These must identify the fighter without color, facial detail,
   weapon, nameplate or HUD portrait. The Gilded Executor's anchors are the

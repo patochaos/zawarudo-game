@@ -1,0 +1,26 @@
+{
+  "cell_size": [
+    384,
+    256
+  ],
+  "baseline_y": 238,
+  "target_upright_height": 224,
+  "states": {
+    "IDLE": 4,
+    "WALK": 6,
+    "RUN": 6,
+    "RISE": 2,
+    "FALL": 2,
+    "LOCK": 2,
+    "SHOOT": 4,
+    "DEFEAT": 4
+  },
+  "source_order": [
+    "idle-source.png",
+    "walk-source.png",
+    "run-source.png",
+    "air-source.png",
+    "action-source.png",
+    "defeat-source.png"
+  ]
+}

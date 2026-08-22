@@ -1,11 +1,13 @@
 extends Node2D
 class_name FighterVisual
 
-## Cosmetic observer for Player. Body state is sampled manually from the
-## authoritative player and world tick; there is no autonomous animation clock,
-## root motion or write back into gameplay state.
+## Cosmetic observer for Player. Body state is sampled from the authoritative
+## player and world tick. The only presentation-time clock is the terminal
+## defeat sequence, because GAME_OVER intentionally stops the simulation tick.
+## No animation state supplies root motion or writes back into gameplay.
 
 const IDLE: StringName = &"IDLE"
+const WALK: StringName = &"WALK"
 const RUN: StringName = &"RUN"
 const RISE: StringName = &"RISE"
 const FALL: StringName = &"FALL"
@@ -18,6 +20,7 @@ var body_state: StringName = IDLE
 var body_frame: int = 0
 var _fighter: Player
 var _aim_arm: Node2D
+var _defeat_elapsed: float = 0.0
 
 
 class AimArm extends Node2D:
@@ -48,8 +51,10 @@ func _ready() -> void:
 	sync_from_player()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	sync_from_player()
+	if body_state == DEFEAT:
+		_defeat_elapsed += delta
 	queue_redraw()
 
 
@@ -58,7 +63,12 @@ func sync_from_player() -> void:
 		_fighter = get_parent() as Player
 	if _fighter == null or skin == null:
 		return
-	body_state = _derive_state()
+	var derived_state := _derive_state()
+	if derived_state != body_state:
+		body_state = derived_state
+		_defeat_elapsed = 0.0
+	else:
+		body_state = derived_state
 	var frame_count := skin.frame_count(body_state)
 	if frame_count <= 0:
 		body_frame = 0
@@ -66,10 +76,14 @@ func sync_from_player() -> void:
 	var tick := 0
 	if _fighter.cfg != null:
 		tick = int(_fighter.cfg.world_tick)
-	var frame_step: int = tick / maxi(1, skin.ticks_per_frame)
+	var state_ticks := skin.ticks_for_state(body_state)
+	var frame_step: int = tick / state_ticks
 	if body_state == SHOT:
 		frame_step = maxi(0, _presentation_exec_tick() - _fighter.plan.shot_tick) \
-			/ maxi(1, skin.ticks_per_frame)
+			/ state_ticks
+		body_frame = mini(frame_count - 1, frame_step)
+	elif body_state == DEFEAT:
+		frame_step = int(_defeat_elapsed * 60.0) / state_ticks
 		body_frame = mini(frame_count - 1, frame_step)
 	else:
 		body_frame = posmod(frame_step, frame_count)
@@ -86,7 +100,7 @@ func _derive_state() -> StringName:
 	if not _fighter.on_ground:
 		return RISE if _fighter.vel.y < 0.0 else FALL
 	if absf(_fighter.vel.x) > 24.0:
-		return RUN
+		return WALK if skin.has_sprite(WALK) else RUN
 	return IDLE
 
 
@@ -103,7 +117,7 @@ func _shot_is_visible(phase: int) -> bool:
 			or phase not in [Phase.EXECUTING, Phase.REPLAY]:
 		return false
 	var elapsed := _presentation_exec_tick() - _fighter.plan.shot_tick
-	return elapsed >= 0 and elapsed < skin.frame_count(SHOT) * maxi(1, skin.ticks_per_frame)
+	return elapsed >= 0 and elapsed < skin.frame_count(SHOT) * skin.ticks_for_state(SHOT)
 
 
 func body_signature() -> String:
