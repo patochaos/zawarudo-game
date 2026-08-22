@@ -7,7 +7,7 @@
   implementation pass
 - Starting branch: `main` at `3508807`
 - Starting commit: `904ddbe` (checkpoint of the previously uncommitted worktree)
-- Working branch: `remove-dead-features`, head `e0a686e` — **not merged, not deployed**
+- Working branch: `remove-dead-features`, head `cb6c48c` — **not merged, not deployed**
 - Production gate: none; this is maintenance ahead of Gate 2
 - Status: **complete for its scope.** The remaining backlog below is untouched.
 
@@ -22,7 +22,10 @@
 
 ## What this branch did
 
-Twelve commits on top of `904ddbe`. Net **+1,437 / −2,131** across 61 files.
+Seventeen commits on top of `904ddbe` across two passes. The first pass ended
+at `e0a686e`; the second picked up the cheap UI items and opponent presets.
+One row below (`c179bad`) belongs to a different workstream and is listed only
+so the branch history reads straight.
 
 | Commit | Change |
 |---|---|
@@ -38,6 +41,11 @@ Twelve commits on top of `904ddbe`. Net **+1,437 / −2,131** across 61 files.
 | `ed32932` | **CI runs every suite and fails on engine errors**; capture scripts fixed. |
 | `86d6547` | Three latent plan/execution divergences. |
 | `e0a686e` | **Forfeit path for abandoned online matches.** |
+| `f3fb2d1` | This handoff. |
+| `0f4ff58` | **Four HUD/menu readability faults** — items 25, 26, 28 and the wrong panel header from 24. |
+| `c179bad` | *(not this workstream)* Animated Executor — the fighter-visual rework. |
+| `6249172` | **The two new Executor captures hung CI**; routed through the capture helper. |
+| `cb6c48c` | **Opponent skill presets** — item 19. |
 
 ### Deletions in detail
 
@@ -259,11 +267,12 @@ review so earlier discussion still maps.
   `shock_plasma_range_full` (1440 px — wider than the 1280 px arena) and
   `shock_combo_radius` (280 px). Needs playtesting between changes;
   `CharacterBalanceSimulation.gd` gives directional evidence only.
-- **19 — Difficulty selection.** Highest value per hour on this list, and
-  self-contained. Three presets over constants that already exist:
-  `ai_aim_jitter` (fixed 2.0), `Ai.MOVES_SEARCHED` (fixed 2, out of 11 movement
-  candidates), `ai_think_min` / `ai_think_max`. Today there is one fixed skill
-  level and it bounces new players straight off.
+- ~~**19 — Difficulty selection.**~~ **DONE** — `cb6c48c`. `OPPONENT` sits beside
+  `MATCH LIVES`; `set_difficulty()` writes all four knobs together so a preset
+  cannot be half-applied. `STANDARD` is unchanged from the authored values, so
+  every balance pass still describes the middle preset. Covered by
+  `tests/DifficultyTest.gd`, which pins that `Ai.begin` honours the budget
+  rather than the knob being decorative.
 - **20 — Unresolved matches.** 7/84 and 4/42 of the project's own simulations hit
   `TURN_CAP = 60` with no winner — a five-minute draw. SUPER and the Temporal
   Core are not closing it.
@@ -279,16 +288,19 @@ review so earlier discussion still maps.
 - **23 — Key rebinding.** `K_P1` is hardcoded keycodes with a comment saying
   "rebind by editing the keycodes below". Hostile to AZERTY and to anyone with a
   mobility need. Moving to a Godot input map also fixes **32**.
-- **24** — The right-hand menu panel is ~45 % of every screen for one sentence,
-  and still reads `FIGHT DOSSIER // CONTEXT` on the Options page.
-- **25** — The `SUPER` label sits inside its meter and is covered by the fill.
-- **26** — `T1` / `PLAN` are the smallest text on screen while `3.0` is the
-  largest; "am I planning or watching?" is the more important state.
+- **24 — PARTLY DONE** (`0f4ff58`, `cb6c48c`). The wrong `FIGHT DOSSIER //
+  CONTEXT` header is fixed, and the opponent row gave the panel real content on
+  the setup page. **Still open:** on MAIN and OPTIONS it is still ~45 % of the
+  screen carrying one sentence. That is a layout decision, not a bug.
+- ~~**25** — `SUPER` label under its own fill.~~ **DONE** — `0f4ff58`.
+- ~~**26** — phase name smaller than the clock.~~ **DONE** — `0f4ff58`.
+  Phase 11→14 px, clock 34→26 px. Neither field can grow sideways: the fighter
+  seals own x < 438 and x > 842.
 - **27** — `HARD` is stamped on all nine platforms plus two wall labels,
-  duplicating what the colour system already carries.
-- **28** — `MenuLayer._label` uses `shadow_offset (3, 4)` on 11–16 px text —
-  ~35 % of glyph height, so it reads as a second copy of the word. Drop to
-  `(1, 2)`; keep the large offset for the 31 px title only.
+  duplicating what the colour system already carries. Note this now overlaps the
+  live fighter-visual workstream; coordinate before touching `Arena.gd`.
+- ~~**28** — menu shadows read as ghost text.~~ **DONE** — `0f4ff58`. 3×4 → 1×2;
+  the 31 px title keeps its own.
 - **29** — Options has five entries: no fullscreen, no resolution, no music/SFX
   split, no language (the design doc is Spanish; the UI is English-only, with all
   strings hardcoded in GDScript).
@@ -303,21 +315,29 @@ review so earlier discussion still maps.
 - **32 — Replace `_unhandled_key_input`.** ~211 lines of near-duplicate
   per-mode keycode branches. Both the maintenance hazard and the reason **23**
   does not exist.
-- **33 — Rate-limit `POST /rooms`.** Joins and socket messages are throttled;
-  room *creation* is not.
+- **33 — Rate-limit `POST /rooms`. WON'T DO** unless abuse actually appears.
+  Every creation hits a *different* Durable Object, so there is no shared state
+  to throttle against — it would need a global limiter DO or KV existing purely
+  to slow room creation on a hobby game already behind Cloudflare's DDoS
+  protection. Joins and socket messages *are* throttled, which covers the real
+  abuse path (hammering a leaked code). Revisit only with evidence.
 
 ---
 
 ## Handoff result
 
-- Final commit: `e0a686e` on `remove-dead-features` (not merged, not deployed)
+- Final commit: `cb6c48c` on `remove-dead-features` (not merged, not deployed)
 - Verification performed: 20/20 Godot suites with zero engine errors; 34/34
   backend tests; backend typecheck clean; all four kits confirmed to start a
   match; HUD reference capture regenerated and visually confirmed
 - Known limitations: the branch is unmerged and the protocol change is breaking
   (see pending decision 1); backlog items 18–33 untouched
-- Next recommended action: **item 19 (difficulty selection)** — self-contained,
-  testable without playtesting, and the largest single improvement to the new
-  player experience. Item 18 is more valuable but needs human playtesting between
-  iterations.
+- Next recommended action: **item 18 (balance)**. It is now the largest open
+  problem and everything cheaper has been taken. It needs human playtesting
+  between passes, so it cannot be finished from a test suite alone — start at
+  `shock_plasma_range_full` (1440 px, wider than the 1280 px arena).
+- Coordination note: a second workstream is live in `FighterSkin.gd`,
+  `FighterVisual.gd`, `PreviewLayer.gd` and the ghost-pose fields of
+  `GameManager.gd`. Items 22 and 27 overlap it directly. Check `git status`
+  before editing those files.
 - Items requiring director approval: pending decisions 1–3 above
