@@ -446,16 +446,34 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 	var length := lerpf(54.0, 145.0, power) if mode == 0 else lerpf(80.0, 220.0, power)
 	var tip := shoulder + dir * length
 	if mode == 0:
-		# A single rail and lightning diamond: unmistakably the fast straight shot.
-		draw_line(shoulder, shoulder + dir * AIM_LEN_MAX, Color(body.r, body.g, body.b, 0.16), 2.0)
-		draw_line(shoulder, tip, body, 4.0 if live else 2.5)
-		var side := dir.orthogonal()
+		# The lance falls, so the preview has to be its real arc rather than a
+		# direction rail. Aiming a ballistic shot off a straight line would be
+		# guesswork the planning contract is supposed to remove.
+		var launch: Vector2 = dir * gm.shock_plasma_speed_for_power(power)
+		var flight: Dictionary = PredictionSystem.predict_plasma(
+			shoulder + dir * 24.0, launch, gm,
+			gm.shock_plasma_range_for_power(power), gm.world_tick)
+		var arc: PackedVector2Array = flight["path"]
+		if arc.size() >= 2:
+			draw_polyline(arc, Color(body.r, body.g, body.b, 0.16), 5.0, true)
+			draw_polyline(arc, body, 3.0 if live else 2.0, true)
+			tip = arc[arc.size() - 1]
+		var heading: Vector2 = dir
+		if arc.size() >= 2:
+			var run: Vector2 = arc[arc.size() - 1] - arc[arc.size() - 2]
+			if not run.is_zero_approx():
+				heading = run.normalized()
+		var side := heading.orthogonal()
 		draw_colored_polygon(PackedVector2Array([
-			tip + dir * 12.0, tip + side * 7.0, tip - dir * 7.0,
+			tip + heading * 12.0, tip + side * 7.0, tip - heading * 7.0,
 			tip - side * 7.0,
 		]), Color(body.r, body.g, body.b, 0.92))
-		draw_line(tip - dir * 5.0 + side * 8.0, tip + dir * 7.0 - side * 8.0,
+		draw_line(tip - heading * 5.0 + side * 8.0, tip + heading * 7.0 - side * 8.0,
 			Color(0.96, 1.0, 1.0, body.a), 2.0)
+		# A blocked lance ends on cover; say so rather than letting the head sit
+		# ambiguously against a wall.
+		if bool(flight["blocked"]):
+			draw_arc(tip, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, body.a * 0.9), 2.0)
 	else:
 		# A short rising curve communicates "lob" without solving its final landing.
 		var curve := PackedVector2Array()

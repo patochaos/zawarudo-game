@@ -260,7 +260,11 @@ func _aim_shock(plan: PlayerPlan) -> void:
 		# still settle near its target instead of sailing through the whole arena.
 		plan.power = clampf(delta.length() / 1150.0, 0.15, 1.0)
 	else:
-		plan.set_aim_from_vector(delta, _gm.aim_min_angle, _gm.aim_max_angle)
+		# The lance falls, so aim above the mark by the same lead the search used.
+		plan.set_aim_from_vector(
+			plasma_launch_direction(_gm, origin, target,
+				1.0 if _idx % 2 == 0 else -1.0),
+			_gm.aim_min_angle, _gm.aim_max_angle)
 		plan.power = 1.0
 
 
@@ -706,6 +710,26 @@ func _fire_shock(origin: Vector2, fire_tick: int,
 		"attack_mode": 1 if establish_orb else 0}
 
 
+## Where to point a falling lance so it arrives at `target`. Aiming straight at
+## a point only works for a projectile that does not drop; now that the bolt is
+## ballistic, a flat aim undershoots by 0.5 * g * t^2. This is the same
+## first-order lead a player makes by eye, and both the search and the shot it
+## finally arms go through it so the two cannot disagree.
+static func plasma_launch_direction(gm, origin: Vector2, target: Vector2,
+		fallback_side: float = 1.0) -> Vector2:
+	var delta: Vector2 = gm.wrap_delta(origin, target)
+	var speed: float = maxf(gm.shock_plasma_speed_for_power(1.0), 1.0)
+	# Two passes: the drop depends on the flight time, which depends on the
+	# lengthened aim. One correction converges closely enough at these speeds.
+	var aim: Vector2 = delta
+	for refinement in 2:
+		var flight_time: float = aim.length() / speed
+		aim = delta - Vector2(0.0, 0.5 * gm.shock_plasma_gravity * flight_time * flight_time)
+	if aim.is_zero_approx():
+		return Vector2(fallback_side, 0.0)
+	return aim.normalized()
+
+
 func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
 	var best := {"score": -INF, "target": _future_target(fire_tick)}
 	for aimed_future: PackedVector2Array in _futures:
@@ -714,22 +738,24 @@ func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
 			var distance: float = _gm.wrap_delta(origin, target).length()
 			var travel_ticks := roundi(distance / maxf(_gm.shock_plasma_speed * _dt, 0.001))
 			target = aimed_future[clampi(fire_tick + travel_ticks, 0, aimed_future.size() - 1)]
-		var direction: Vector2 = _gm.wrap_delta(origin, target).normalized()
-		if direction.is_zero_approx():
-			direction = Vector2.RIGHT if _idx % 2 == 0 else Vector2.LEFT
+		var direction: Vector2 = plasma_launch_direction(_gm, origin, target,
+			1.0 if _idx % 2 == 0 else -1.0)
 		var pos: Vector2 = Player.shoulder_at(origin) + direction * 24.0
 		var covered := [false, false, false]
 		var closest := INF
-		# The bolt expires at its authored range, not at the edge of the search.
-		# Walking it further would let the AI plan shots that die in mid-air and
-		# then score them as though they had arrived.
-		var step: float = float(_gm.shock_plasma_speed) * _dt
+		# The bolt expires at its authored range, not at the edge of the search,
+		# and it falls on the way. Walking it straight and forever would let the
+		# AI plan shots that never arrive and then score them as though they had.
+		var bolt: Vector2 = direction * _gm.shock_plasma_speed_for_power(1.0)
 		var reach_left: float = _gm.shock_plasma_range_for_power(1.0)
 		for t in mini(72, _gm.exec_ticks() - fire_tick):
+			var flight := ShockPlasma.step_state(pos, bolt, _dt, _gm)
+			var raw: Vector2 = flight[0]
+			bolt = flight[1]
+			var step: float = pos.distance_to(raw)
 			if reach_left < step:
 				break
 			reach_left -= step
-			var raw: Vector2 = pos + direction * step
 			var blocked := false
 			for solid: Rect2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
 				if Arrow.seg_hits_rect(pos, raw, solid.grow(ShockPlasma.COLLISION_RADIUS)):

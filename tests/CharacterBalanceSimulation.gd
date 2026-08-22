@@ -11,6 +11,12 @@ const TOURNAMENT_HITS_TO_WIN := 5
 
 var _samples := 2
 var _only_player_count := 0
+## Restrict the matrix to one arena. Every match is seeded from its own
+## (level, sample, pairing) triple and never reads another match's state, so
+## splitting by arena across parallel processes gives byte-identical totals to
+## one serial run — it just uses more than the single core this is otherwise
+## pinned to. -1 runs the whole matrix.
+var _only_level := -1
 var _report := {
 	"matches": 0,
 	"unresolved": 0,
@@ -27,7 +33,14 @@ func _init() -> void:
 			_samples = maxi(1, int(arg.trim_prefix("--samples=")))
 		elif arg.begins_with("--players="):
 			_only_player_count = clampi(int(arg.trim_prefix("--players=")), 2, 4)
+		elif arg.begins_with("--level="):
+			_only_level = clampi(int(arg.trim_prefix("--level=")), 0, Levels.count() - 1)
 	call_deferred("_run")
+
+
+## The arenas this process is responsible for.
+func _levels() -> Array:
+	return [_only_level] if _only_level >= 0 else range(Levels.count())
 
 
 func _run() -> void:
@@ -46,7 +59,7 @@ func _run() -> void:
 	# Duel every pairing. Alternating the order each sample prevents the left
 	# spawn or P1 colour from being mistaken for character strength.
 	if _only_player_count in [0, 2]:
-		for level in Levels.count():
+		for level in _levels():
 			for a in kits.size():
 				for b in range(a + 1, kits.size()):
 					for sample in _samples:
@@ -56,7 +69,7 @@ func _run() -> void:
 
 	# Three-player matches omit each of the four kits in turn. Four-player
 	# matches field the complete roster, keeping per-kit exposure symmetrical.
-	for level in Levels.count():
+	for level in _levels():
 		for sample in _samples:
 			if _only_player_count in [0, 3]:
 				for omitted in kits.size():

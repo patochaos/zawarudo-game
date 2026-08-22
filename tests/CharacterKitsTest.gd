@@ -112,6 +112,12 @@ func _run() -> void:
 	orb.vel = Vector2.ZERO
 	orb.age_ticks = orb.arm_ticks
 	game.players[1].plan.attack_mode = 0
+	# The lance falls, so hitting a fixed point means aiming above it. This is the
+	# same lead the planner and the preview use; the check is about the combo
+	# resolving, not about whether a flat shot happens to connect.
+	game.players[1].plan.set_aim_from_vector(
+		Ai.plasma_launch_direction(game, game.players[1].position, orb.position),
+		game.aim_min_angle, game.aim_max_angle)
 	game._spawn_player_attack(game.players[1])
 	_check(game.shock_plasmas.size() == 1,
 		"Shock mode 1 must create the fast straight plasma projectile")
@@ -205,9 +211,13 @@ func _run() -> void:
 	intercepted_plasma.configure_launch(Vector2.LEFT, 1200.0)
 	game._arrow_layer.add_child(intercepted_plasma)
 	game.shock_plasmas = [intercepted_plasma]
+	# The contract is the retained fraction, not an absolute number: a ballistic
+	# bolt has picked up some fall speed by the time the blade reaches it.
+	var speed_before_intercept: float = intercepted_plasma.vel.length()
 	game._step_shock_weapons(game.tick_dt())
 	_check(game.arrows.is_empty() and game.shock_plasmas.size() == 1 \
-			and is_equal_approx(intercepted_plasma.vel.length(), 540.0),
+			and intercepted_plasma.vel.length() < speed_before_intercept * 0.5 \
+			and intercepted_plasma.vel.length() > speed_before_intercept * 0.4,
 		"a dagger interception must spend the dagger and heavily attenuate plasma")
 
 	game._clear_character_projectiles()
@@ -237,6 +247,7 @@ func _run() -> void:
 		"AI must reject a high-risk frontal shot when evasion or an off-angle attack exists")
 
 	_test_plasma_planner_respects_its_range(game)
+	_test_orb_field_is_bounded(game)
 
 	game.free()
 	if _failures == 0:
@@ -244,6 +255,42 @@ func _run() -> void:
 	else:
 		push_error("Character kits: %d test(s) failed" % _failures)
 	quit(_failures)
+
+
+## The orb field used to be unbounded in both directions: nothing capped how many
+## could be live, and an uncollected orb held its square for 360 execution ticks —
+## eight planning phases. The two orbs the AI keeps came from a planner constant
+## a human was never bound by, so the field a person could build was strictly
+## larger than anything the balance matrix ever measured.
+func _test_orb_field_is_bounded(game) -> void:
+	var original_weapons: Array[int] = game.player_weapons.duplicate()
+	game.player_weapons[1] = game.Weapon.SHOCK
+	game._clear_character_projectiles()
+
+	var caster: Player = game.players[1]
+	caster.plan.attack_mode = 1
+	caster.plan.power = 0.6
+	for cast in game.shock_max_live_orbs + 3:
+		game._set_shock_attack_mode(1, 1)
+		caster.plan.attack_mode = 1
+		game._spawn_player_attack(caster)
+		_check(game.shock_orb_count(1) <= game.shock_max_live_orbs,
+			"the live orb count must never exceed the cap, however often she casts")
+	_check(game.shock_orb_count(1) == game.shock_max_live_orbs,
+		"casting past the cap must retire the oldest orb rather than refuse the throw")
+
+	var survivor = null
+	for orb in game.shock_orbs:
+		if orb.shooter == 1:
+			survivor = orb
+			break
+	_check(survivor != null and survivor.lifetime_ticks == game.shock_orb_lifetime_ticks,
+		"an orb must take its lifetime from the tuning rather than its own default")
+	_check(game.shock_orb_lifetime_ticks < 360,
+		"the authored lifetime must be shorter than the eight-window original")
+
+	game._clear_character_projectiles()
+	game.player_weapons = original_weapons
 
 
 ## The Witch's planner walks her bolt forward tick by tick to see what it covers.

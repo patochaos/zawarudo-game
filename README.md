@@ -366,18 +366,30 @@ Movement after CUT TO END cannot reload LOST FRAME cells until the next
 execution window.
 
 **The Static Witch** charges **PLASMA** with left mouse and **ORB** with right
-mouse. Her horizontal locomotion is 110% of the shared baseline. Plasma gains
-speed, range and visual weight with charge; partial shots fade before crossing
-the full screen, while only a completed draw spans the arena. It remains a very
-fast straight simulated projectile which can be
-intercepted and heavily attenuated by a spent dagger. Each cast adds another
-long-range, low-gravity persistent orb without dismissing her existing field. Orbs arm after a
-short delay and can rest on platforms. Ordinary weapons trigger a small,
-owner-safe pop, including when an orb's lifetime ends; plasma triggers the
-large, fully dangerous shock combo, whose lethal radius grows with plasma charge.
-Both blasts revector nearby weapons
-instead of erasing them. Her SUPER launches an armed orb ahead of a plasma shot,
-preserving an interceptible combo line.
+mouse. Her horizontal locomotion is 110% of the shared baseline.
+
+**The lance falls.** It is fast, but it is ballistic like every other projectile
+in the game, so hitting a distant target means leading it and aiming above the
+mark. Charge buys a flatter arc as well as more speed and range, which is what
+makes waiting for a full draw a decision rather than a formality. The planning
+preview draws the true arc — not a direction line — and rings the head in red
+where cover stops it. A spent dagger can still intercept the bolt and heavily
+attenuate it.
+
+She may hold **two orbs at once**. Casting a third detonates her oldest rather
+than refusing the throw, so the field is a resource with a ceiling instead of an
+accumulation. An uncollected orb holds its square for four execution windows.
+Orbs arm after a short delay and can rest on platforms. Ordinary weapons trigger
+a small, owner-safe pop, including when an orb's lifetime ends; plasma triggers
+the large, fully dangerous shock combo, whose lethal radius grows with plasma
+charge. Both blasts revector nearby weapons instead of erasing them. Her SUPER
+places an armed orb ahead of her and fires a lance, as two separate threats.
+
+*Why she changed:* a flat lance crossed 870px of the 1280px arena inside one
+execution window, while a fighter can move about 195px. It was the one attack
+that asked no prediction of its owner in a game built on prediction, and it read
+in the balance matrix as a kit that beat every other kit. Giving it an arc put
+her back inside the game's own rule rather than nerfing a number.
 
 **Broodtail**, the fourth selectable fighter, throws one **LIVING CHAKRAM** at
 half the former launch speed. It follows the committed aim exactly. A wall or

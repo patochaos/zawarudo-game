@@ -219,12 +219,28 @@ var simplified_fighter_proto_enabled: bool = false
 ## The normal throw follows the committed aim exactly.
 @export var shock_plasma_speed_min: float = 860.0
 @export var shock_plasma_speed: float = 1160.0
+## The lance falls. Every other projectile in the game does, and a flat shot was
+## the one attack in a game about prediction that needed none: it crossed 870px
+## of a 1280px arena inside a single execution window while a fighter can move
+## about 195px, so there was no leading it and no reading it. Charge now buys a
+## flatter arc as well as speed, which is what makes a full draw worth waiting
+## for instead of merely stronger.
+@export var shock_plasma_gravity: float = 420.0
 @export var shock_plasma_range_min: float = 320.0
 @export var shock_plasma_range_partial_max: float = 1040.0
 @export var shock_plasma_range_full: float = 1440.0
 @export var shock_orb_speed_min: float = 280.0
 @export var shock_orb_speed_max: float = 520.0
 @export var shock_orb_arm_ticks: int = 30
+## How many of her orbs may be live at once. There was no cap at all: the two
+## the AI keeps come from Ai.SHOCK_SETUP_ORB_TARGET, a planner convention a
+## human was never bound by. Casting past the cap pops the oldest, so the throw
+## still does something rather than being silently eaten.
+@export_range(1, 6, 1) var shock_max_live_orbs: int = 2
+## Execution ticks an uncollected orb keeps its square. At 360 it outlived
+## eight planning phases, which is long enough that placing one was rarely a
+## decision. 180 is four windows: still persistent, no longer permanent.
+@export var shock_orb_lifetime_ticks: int = 180
 @export var shock_small_radius: float = 84.0
 @export var shock_combo_radius_min: float = 190.0
 @export var shock_combo_radius: float = 280.0
@@ -3387,13 +3403,34 @@ func _spawn_shock_plasma(p: Player, direct: Vector2) -> void:
 	_sfx.play("shoot")
 
 
+## Detonates this player's oldest orbs until one slot is free. Age is read from
+## age_ticks rather than list order so a restored replay frame retires the same
+## orb the live match did.
+func _retire_oldest_orb_over_cap(shooter: int) -> void:
+	var cap: int = maxi(1, shock_max_live_orbs)
+	while shock_orb_count(shooter) >= cap:
+		var oldest = null
+		for orb in shock_orbs:
+			if orb.shooter != shooter:
+				continue
+			if oldest == null or orb.age_ticks > oldest.age_ticks \
+					or (orb.age_ticks == oldest.age_ticks and orb.network_id < oldest.network_id):
+				oldest = orb
+		if oldest == null:
+			return
+		_detonate_shock_orb(oldest, false, shooter)
+
+
 func _spawn_shock_orb(p: Player, direct: Vector2, prearmed: bool) -> void:
-	# Every cast adds another persistent setup. Lifetime and counterplay bound the
-	# field naturally; casting a new orb never silently dismisses an older one.
+	# The field is a resource with a ceiling, not an accumulation. Casting past the
+	# cap pops the oldest orb rather than refusing the throw, so the turn still
+	# resolves into something the player can read and plan around.
+	_retire_oldest_orb_over_cap(p.index)
 	var orb = SHOCK_ORB_SCRIPT.new()
 	orb.cfg = self
 	orb.shooter = p.index
 	orb.arm_ticks = maxi(1, shock_orb_arm_ticks)
+	orb.lifetime_ticks = maxi(orb.arm_ticks + 1, shock_orb_lifetime_ticks)
 	orb.network_id = _next_character_projectile_id
 	_next_character_projectile_id += 1
 	orb.color = p.color
