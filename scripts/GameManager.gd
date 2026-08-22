@@ -1775,7 +1775,10 @@ func _physics_process(delta: float) -> void:
 			# Cut-ins run on ordinary frame time, but no deterministic simulation tick
 			# is consumed until the portrait and chant have completely cleared.
 			if _super_freeze == null or not _super_freeze.is_active():
-				_sim_tick(delta)
+				# The fixed tick, never the frame delta. The planning ghost is built
+				# from tick_dt(), so execution has to integrate with the same number
+				# or the plan the player committed to stops being the one that runs.
+				_sim_tick(tick_dt())
 				if _super_freeze == null or not _super_freeze.is_active():
 					_capture_replay_frame()
 					if online_mode and state == Phase.GAME_OVER:
@@ -3449,6 +3452,8 @@ func restart() -> void:
 		p.vel = Vector2.ZERO
 		p.on_ground = true
 		p.air_jumps_left = air_jumps_for(i)
+		p.drop_ticks = 0
+		p.drop_from_y = 0.0
 		p.alive = true
 		p.invuln_turns = 0
 		p.plan = PlayerPlan.new()

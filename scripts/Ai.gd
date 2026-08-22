@@ -89,7 +89,11 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	_wrapx = gm.wrap_x
 	_seam = gm.SEAM_MARGIN
 	_wide = Vector2(gm.ARENA_W, 0.0)
-	var budget: int = mini(int(round(gm.movement_budget / _dt)), gm.exec_ticks())
+	# The same integer budget _pilot_step enforces. Deriving it independently
+	# let the two disagree by a tick whenever movement_budget was not an exact
+	# multiple of the tick, and the AI would then arm its shot from a point it
+	# had never evaluated.
+	var budget: int = gm.movement_tick_budget()
 	var move_options: Array = []
 	for move in MOVES:
 		if move[1] and gm.jump_impulse_for(idx) <= 0.0:
