@@ -678,7 +678,7 @@ func _draw_velocity_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
 	draw_arc(pose["shoulder"], 3.5, 0.0, TAU, 10, VELOCITY_GOLD, 1.3, true)
 
 
-func _draw_eclipse_fashion(pose: Dictionary, head: Vector2, _f: float) -> void:
+func _draw_eclipse_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
 	var ink := Color(0.035, 0.025, 0.04, 0.99)
 	# One smooth permanent aureole anchors the identity. It is intentionally
 	# unbladed and stays attached even while a weapon corona is in flight.
@@ -687,14 +687,26 @@ func _draw_eclipse_fashion(pose: Dictionary, head: Vector2, _f: float) -> void:
 	for cardinal in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
 		draw_circle(head + cardinal * 15.0, 1.5, ECLIPSE_ROSE)
 	# The pearl crescent mantle frames the head without becoming horns or armor.
+	# Every point is anchored on neck and chest and mirrored by facing. The two
+	# shoulder joints look like the natural anchors for the outer tips and are
+	# not: `free_shoulder` mirrors with facing while `shoulder` never moves off
+	# x = 0, so on a left-facing fighter the pair swaps order, and the running
+	# pose slides the torso by travel direction rather than by facing, which can
+	# put them almost on top of each other. Either way the crescent folds across
+	# itself, Godot's triangulator rejects a non-simple polygon, and the Eclipse
+	# loses her mantle while logging an error every frame. This is the same fault
+	# that took the Velocity's coat and the Pulse's hem; neck and chest are the
+	# only torso joints that keep their relationship through all three poses.
+	var neck: Vector2 = pose["neck"]
+	var chest: Vector2 = pose["chest"]
 	var mantle := PackedVector2Array([
-		pose["free_shoulder"] + Vector2(-5.0, -4.0),
-		pose["neck"] + Vector2(-7.0, -1.0),
-		pose["neck"] + Vector2(0.0, 5.0),
-		pose["neck"] + Vector2(7.0, -1.0),
-		pose["shoulder"] + Vector2(5.0, -4.0),
-		pose["chest"] + Vector2(6.0, 5.0),
-		pose["chest"] + Vector2(-6.0, 5.0),
+		chest + Vector2(-8.0 * f, -3.0),
+		neck + Vector2(-7.0 * f, -1.0),
+		neck + Vector2(0.0, 5.0),
+		neck + Vector2(7.0 * f, -1.0),
+		chest + Vector2(7.5 * f, -4.0),
+		chest + Vector2(6.0 * f, 5.0),
+		chest + Vector2(-6.0 * f, 5.0),
 	])
 	draw_colored_polygon(mantle, ECLIPSE_PEARL)
 	draw_polyline(mantle + PackedVector2Array([mantle[0]]), ECLIPSE_ROSE, 1.2, true)
