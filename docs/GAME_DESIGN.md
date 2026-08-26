@@ -261,7 +261,7 @@ formar parte de la selección de personajes.
 
 ### Prototipos de personaje
 
-- **The Velocity / Lost Frames:** se mueve al 90% porque pierde parte de los
+- **The Rook / Lost Frames:** se mueve al 90% porque pierde parte de los
   fotogramas de su propia locomoción. La distancia horizontal realmente
   perdida al moverse llena hasta tres celdas persistentes; quedarse quieta o
   empujar una pared no genera recurso. Su ataque **CUT TO END** convierte al
@@ -270,16 +270,17 @@ formar parte de la selección de personajes.
   físicamente proyectiles y pierde durabilidad; no concede invulnerabilidad
   abstracta. No tiene salto convencional: CUT TO END es también su única forma
   de ganar altura, y cae más rápido que el resto del elenco.
-- **The Static Witch / Shock:** alterna entre un plasma recto cuya velocidad,
+- **The Pulse / Shock:** alterna entre un plasma recto cuya velocidad,
   alcance y grosor crecen con la carga —solo la carga completa cruza toda la
   pantalla— y un orbe lento que persiste, se arma y descansa
   sobre plataformas. Un proyectil común o el fin de vida del orbe provoca una
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
-- **Broodtail / Chakram:** cuarto personaje seleccionable. Lanza un chakram
-  viviente a la mitad de su velocidad anterior y sigue exactamente la dirección
-  elegida. No rebota: una pared o plataforma dura lo deja clavado y girando,
-  mientras un lanzamiento que termine en el aire se detiene en ese punto.
+- **The Eclipse / Chakram:** cuarto personaje seleccionable. Lanza una corona
+  viviente a 230–420 px/s y sigue exactamente la dirección elegida. Su primer
+  impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
+  cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
+  lanzamiento que termine en el aire se detiene en ese punto.
   Durante el turno siguiente permanece inmóvil y en el tercero regresa; cada
   chakram conserva su propio turno de lanzamiento. Cualquier impacto de otro
   proyectil lo destruye. La SUPER mantiene tres trayectorias frontales bajo el
@@ -289,7 +290,7 @@ El concepto de **invocador de criaturas** queda reservado para un personaje
 posterior y separado. Sus criaturas caminarían y treparían plataformas,
 detectarían un combatiente dentro de un alcance explícito, mostrarían una breve
 señal y luego saltarían. Es una fantasía de presión territorial y retardada,
-distinta del arma de retorno de Broodtail; separarlas evita sobrecargar ambos
+distinta del arma de retorno de The Eclipse; separarlas evita sobrecargar ambos
 kits y permite dar a las criaturas límites y contrajuego propios.
 
 ### Cobertura destructible

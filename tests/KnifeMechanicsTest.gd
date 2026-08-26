@@ -26,7 +26,7 @@ class DummyCutIn:
 	var active: bool = false
 	var calls: int = 0
 
-	func play(_who: int, _tint: Color, _grenadier: bool = false) -> void:
+	func play(_who: int, _tint: Color, _fighter: Variant = 0) -> void:
 		active = true
 		calls += 1
 

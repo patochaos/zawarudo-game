@@ -21,9 +21,9 @@ func _run() -> void:
 	_check(cut_in.is_active(), "the optimized SUPER cut-in must still start normally")
 	cut_in.cancel()
 	_check(not cut_in.is_active(), "the optimized SUPER cut-in must still cancel normally")
-	cut_in.play(1, Color(0.76, 0.30, 1.0), true)
-	_check(cut_in._art.portrait == cut_in.GRENADIER_PORTRAIT,
-		"a Grenadier SUPER must keep the selected character portrait")
+	cut_in.play(1, Color(0.76, 0.30, 1.0), 2)
+	_check(cut_in._art.portrait == cut_in.ROOK_PORTRAIT,
+		"a SUPER must keep the attacking fighter's own portrait")
 	cut_in.cancel()
 	cut_in.queue_free()
 

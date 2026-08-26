@@ -46,6 +46,11 @@ var return_acceleration: float = 2400.0
 var return_gravity_scale: float = 0.0
 var stationary_spin_speed: float = TAU * 1.8
 var destroy_on_player_hit: bool = false
+## One bank off permanent HARD geometry gives Eclipse a route around a Duelist's
+## approach without letting a persistent corona pinball around the arena.
+var bounce_limit: int = 1
+var bounce_retention: float = 0.82
+var bounce_count: int = 0
 
 var _player_hit_cooldowns: Dictionary = {}
 var _stuck_platform_index: int = -1
@@ -62,12 +67,15 @@ func configure(options: Dictionary) -> void:
 			"freeplay_window_ticks", "max_lifetime_ticks", "outbound_gravity",
 			"outbound_drag", "return_speed", "return_acceleration",
 			"return_gravity_scale", "stationary_spin_speed", "destroy_on_player_hit",
+			"bounce_limit", "bounce_retention",
 		]:
 			set(key, options[key])
 	freeplay_window_ticks = maxi(1, freeplay_window_ticks)
 	max_lifetime_ticks = maxi(1, max_lifetime_ticks)
 	return_speed = maxf(0.0, return_speed)
 	return_acceleration = maxf(0.0, return_acceleration)
+	bounce_limit = maxi(0, bounce_limit)
+	bounce_retention = clampf(bounce_retention, 0.0, 1.0)
 
 
 func is_returning() -> bool:
@@ -134,6 +142,7 @@ func force_recall() -> void:
 ##   hit_player: opponent index, or -1
 ##   hit_platform: platform index, or -1
 ##   stuck: terrain contact pinned the spinning chakram in place
+##   bounced: the outbound chakram ricocheted from HARD terrain
 ##   recalled: this tick changed OUTBOUND -> RETURNING
 func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 	prev_pos = position
@@ -146,6 +155,7 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 		"hit_player": -1,
 		"hit_platform": -1,
 		"stuck": false,
+		"bounced": false,
 		"recalled": false,
 	}
 	var was_returning := is_returning()
@@ -218,6 +228,14 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 		var rect_index: int = terrain_contact[3]
 		position = position.lerp(raw, hit_fraction) + normal * 1.5
 		result["hit_platform"] = platform_index
+		if _can_bounce(normal, cfg.platforms[platform_index]):
+			vel = vel.bounce(normal) * bounce_retention
+			bounce_count += 1
+			prev_pos = position
+			trail.clear()
+			result["bounced"] = true
+			queue_redraw()
+			return result
 		result["stuck"] = true
 		hold_position(platform_index, rect_index)
 		queue_redraw()
@@ -257,13 +275,20 @@ func stable_id() -> int:
 
 
 func lockstep_digest_fragment() -> String:
-	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 		network_id, shooter, volley, age_ticks, int(flight_state),
 		int(round(position.x * 10000.0)), int(round(position.y * 10000.0)),
 		int(round(vel.x * 10000.0)), int(round(vel.y * 10000.0)),
 		launch_turn, 1 if return_started else 0, _stuck_platform_index,
-		_stuck_rect_index,
+		_stuck_rect_index, bounce_count,
 	]
+
+
+func _can_bounce(normal: Vector2, platform: Dictionary) -> bool:
+	return flight_state == FlightState.OUTBOUND \
+		and int(platform.get("hp", -1)) == -1 \
+		and bounce_count < bounce_limit \
+		and not normal.is_zero_approx()
 
 
 func _first_player_contact(from: Vector2, to: Vector2, players: Array) -> Array:

@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 
 
 func _init() -> void:
@@ -11,14 +12,14 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
-	game._on_menu_start(true, 0)
+	game.start_quick_match(true, 0)
+	await VisualCapture.await_transition(self, game)
 	game.state = Phase.GAME_OVER
 	game.winner = 0
 	game.score[0] = game.hits_to_win
 	game._cycle_rematch_level(1)
 	game._ui.refresh()
-	await process_frame
-	await process_frame
+	await VisualCapture.settle(self)
 
 	var error := _save("res://previews/match-result-options.png")
 	if error != OK:
@@ -29,17 +30,10 @@ func _capture() -> void:
 	game._touch_controls._update_context()
 	game._ui.set_touch_mode(true)
 	game._ui.refresh()
-	await process_frame
-	await process_frame
+	await VisualCapture.settle(self)
 	error = _save("res://previews/match-result-touch-options.png")
 	quit(error)
 
 
 func _save(output: String) -> Error:
-	var image := root.get_texture().get_image()
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error == OK:
-		print("Match result preview saved: %s" % output)
-	else:
-		push_error("Could not save match result preview (error %d)" % error)
-	return error
+	return VisualCapture.save(self, output, "Match result preview")

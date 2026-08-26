@@ -11,6 +11,10 @@ const COLLISION_RADIUS := 4.0
 ## the swept test cannot mistake its launch volume for an immediate self-hit.
 ## The grace is short enough that a wrapping bolt can still threaten its owner.
 const OWNER_GRACE_TICKS := 8
+## Ceiling on how far ahead a preview or an AI search walks the arc. The bolt
+## normally dies on its distance budget long before this; the cap only stops a
+## grazing shot from being traced forever.
+const MAX_PREDICT_TICKS := 150
 
 var cfg
 var vel := Vector2.ZERO
@@ -39,6 +43,14 @@ func configure_launch(direction: Vector2, speed: float = 1120.0,
 	prev_pos = position
 
 
+## One tick of ballistic motion, as a pure function. Execution, the planning
+## preview and the AI's search all integrate the bolt through here, so a lance
+## the player was shown is the lance that actually flies. Returns [pos, vel].
+static func step_state(pos: Vector2, vel: Vector2, dt: float, cfg) -> Array:
+	vel.y += cfg.shock_plasma_gravity * dt
+	return [pos + vel * dt, vel]
+
+
 ## Returns:
 ## {alive, hit_player, hit_platform, contact_position, projectile_kind}.
 ## A -1 target means no contact. Orb contact is deliberately resolved by the
@@ -47,6 +59,9 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 	prev_pos = position
 	age_ticks += 1
 	var result := _empty_result()
+	# Gravity is applied before the step is measured, so the distance budget is
+	# spent along the real arc rather than along a straight line it never flew.
+	vel = step_state(position, vel, dt, cfg)[1]
 	var full_step_distance := vel.length() * dt
 	var distance_left := maxf(max_distance - distance_travelled, 0.0)
 	if distance_left <= 0.0001:

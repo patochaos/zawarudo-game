@@ -21,30 +21,17 @@ if ($LASTEXITCODE -ne 0) {
     throw "Godot could not refresh the project class cache (exit $LASTEXITCODE)."
 }
 
-$tests = @(
-    "FighterVisualTest",
-    "KnifeMechanicsTest",
-    "OnlineLockstepTest",
-    "DoubleJumpTest",
-    "PlaytestReadinessTest",
-    "FourPlayerModeTest",
-    "SuperCutInTest",
-    "KineticArenaTest",
-    "TouchControlsTest",
-	"KenneyPolishTest",
-	"MenuInteractionTest",
-	"GrenadierTest",
-	"DashbladeTest",
-	"ChakramTest",
-	"ShockWeaponTest",
-	"CharacterKitsTest",
-	"CharacterSelectTest",
-	"TeamBattleTest",
-	"MatchReplayTest",
-    "CloseCameraTest",
-    "LevelLayoutTest",
-    "UserJourneyTest"
-)
+$tests = Get-ChildItem -LiteralPath (Join-Path $projectRoot "tests") -Filter "*.gd" |
+    Where-Object {
+        $_.BaseName -notin @("CharacterBalanceSimulation", "VisualCaptureHelper") -and
+        -not (Select-String -LiteralPath $_.FullName -SimpleMatch "VisualCaptureHelper" -Quiet)
+    } |
+    Sort-Object Name |
+    Select-Object -ExpandProperty BaseName
+
+if ($tests.Count -eq 0) {
+    throw "No Godot test suites were found."
+}
 
 $failed = [System.Collections.Generic.List[string]]::new()
 foreach ($test in $tests) {
@@ -59,4 +46,4 @@ if ($failed.Count -gt 0) {
     throw "Godot test failures: $($failed -join ', ')"
 }
 
-Write-Host "All established Godot gameplay and journey suites passed."
+Write-Host "All $($tests.Count) Godot gameplay and journey suites passed."

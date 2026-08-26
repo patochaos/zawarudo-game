@@ -34,7 +34,8 @@ class DummyPlayer:
 func _init() -> void:
 	_test_turn_lifecycle_is_deterministic()
 	_test_forced_recall_returns_and_is_caught()
-	_test_terrain_contact_sticks_and_tracks_platform()
+	_test_hard_terrain_bounces_once_then_sticks()
+	_test_breakable_terrain_sticks_without_bouncing()
 	_test_projectile_clash_contract()
 	if _failures == 0:
 		print("Chakram: all tests passed")
@@ -94,24 +95,45 @@ func _test_forced_recall_returns_and_is_caught() -> void:
 	chakram.free()
 
 
-func _test_terrain_contact_sticks_and_tracks_platform() -> void:
+func _test_hard_terrain_bounces_once_then_sticks() -> void:
+	var cfg := DummyConfig.new()
+	cfg.platforms = [
+		{"rects": [Rect2(100.0, -100.0, 20.0, 200.0)], "hp": -1},
+		{"rects": [Rect2(30.0, -100.0, 10.0, 200.0)], "hp": -1},
+	]
+	var chakram = _chakram(cfg, Vector2(70.0, 0.0), Vector2(450.0, 0.0), 3)
+	chakram.outbound_gravity = 0.0
+	chakram.outbound_drag = 0.0
+	var result: Dictionary = chakram.sim_step(1.0 / 15.0, [], 3)
+	_check(result["bounced"] and not result["stuck"] and result["hit_platform"] == 0,
+		"the first swept HARD-terrain contact must report a ricochet")
+	_check(result["alive"] and not chakram.is_holding() and chakram.vel.x < 0.0 \
+			and is_equal_approx(chakram.vel.length(), 450.0 * chakram.bounce_retention),
+		"a HARD ricochet must reverse the surface-normal velocity and retain tuned speed")
+	result = chakram.sim_step(0.15, [], 3)
+	_check(result["stuck"] and not result["bounced"] and result["hit_platform"] == 1,
+		"a second terrain contact must spend the one-bounce allowance and pin the chakram")
+	var stuck_at: Vector2 = chakram.position
+	_check(result["alive"] and chakram.is_holding() and chakram.vel.is_zero_approx(),
+		"the post-ricochet terrain contact must leave a persistent holding hazard")
+	cfg.platforms[1]["rects"][0].position.x += 24.0
+	chakram.sim_step(1.0 / 60.0, [], 4)
+	_check(is_equal_approx(chakram.position.x, stuck_at.x + 24.0),
+		"a stuck chakram must remain attached to a moving hard platform")
+	chakram.free()
+
+
+func _test_breakable_terrain_sticks_without_bouncing() -> void:
 	var cfg := DummyConfig.new()
 	cfg.platforms = [{
 		"rects": [Rect2(100.0, -100.0, 20.0, 200.0)],
-		"hp": -1,
+		"hp": 2,
 	}]
 	var chakram = _chakram(cfg, Vector2(70.0, 0.0), Vector2(450.0, 0.0), 3)
 	chakram.outbound_gravity = 0.0
 	var result: Dictionary = chakram.sim_step(1.0 / 15.0, [], 3)
-	_check(result["stuck"] and result["hit_platform"] == 0,
-		"a swept HARD-terrain contact must report that the chakram became stuck")
-	var stuck_at: Vector2 = chakram.position
-	_check(result["alive"] and chakram.is_holding() and chakram.vel.is_zero_approx(),
-		"terrain contact must stop the chakram without destroying or bouncing it")
-	cfg.platforms[0]["rects"][0].position.x += 24.0
-	chakram.sim_step(1.0 / 60.0, [], 4)
-	_check(is_equal_approx(chakram.position.x, stuck_at.x + 24.0),
-		"a stuck chakram must remain attached to a moving hard platform")
+	_check(result["stuck"] and not result["bounced"] and chakram.is_holding(),
+		"breakable cover must absorb and pin a chakram instead of ricocheting it")
 	chakram.free()
 
 

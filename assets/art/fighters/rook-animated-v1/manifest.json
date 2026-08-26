@@ -1,0 +1,40 @@
+{
+  "cell_size": [
+    384,
+    256
+  ],
+  "baseline_y": 238,
+  "target_upright_height": 224,
+  "draw_rect": [
+    -43.5,
+    -29.921875,
+    87.0,
+    58.0
+  ],
+  "states": {
+    "IDLE": 4,
+    "WALK": 6,
+    "RUN": 6,
+    "RISE": 2,
+    "FALL": 2,
+    "LOCK": 2,
+    "SHOT": 4,
+    "DEFEAT": 4
+  },
+  "source_order": [
+    "idle-source.png",
+    "walk-source.png",
+    "run-source.png",
+    "air-source.png",
+    "action-source-v2.png",
+    "defeat-source.png"
+  ],
+  "shared_source_scales": {
+    "idle-source.png": 0.37333333333333335,
+    "walk-source.png": 0.509090909090909,
+    "run-source.png": 0.64,
+    "air-source.png": 0.45681381957773515,
+    "action-source-v2.png": 0.5333333333333333,
+    "defeat-source.png": 0.4
+  }
+}

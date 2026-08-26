@@ -10,11 +10,10 @@ const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
 const PANEL_MAX_H := 430.0
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
-const GRENADIER_PORTRAIT := preload("res://assets/art/portraits/grenadier-portrait-v2.png")
-const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
-const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
-const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
+const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
+const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
+const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 
 
 class CutInArt:
@@ -39,10 +38,9 @@ class CutInArt:
 		owner_index = who
 		owner_color = tint
 		match int(fighter):
-			1: portrait = GRENADIER_PORTRAIT
-			2: portrait = DASHBLADE_PORTRAIT
-			3: portrait = CHAKRAM_PORTRAIT
-			4: portrait = SHOCK_PORTRAIT
+			2: portrait = ROOK_PORTRAIT
+			3: portrait = ECLIPSE_PORTRAIT
+			4: portrait = PULSE_PORTRAIT
 			_: portrait = DUELIST_PORTRAIT
 		elapsed = 0.0
 		playing = true

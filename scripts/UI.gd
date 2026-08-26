@@ -5,11 +5,10 @@ const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
 ## Compact match HUD. Detailed player-plan panels were deliberately removed so
 ## the arena, ghosts and world-space previews remain the focus.
 
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-intense-v2.png")
-const GRENADIER_PORTRAIT := preload("res://assets/art/portraits/grenadier-portrait-v2.png")
-const DASHBLADE_PORTRAIT := preload("res://assets/art/portraits/dashblade-portrait-v1.png")
-const CHAKRAM_PORTRAIT := preload("res://assets/art/portraits/broodtail-portrait-v1.png")
-const SHOCK_PORTRAIT := preload("res://assets/art/portraits/shockwitch-portrait-v1.png")
+const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
+const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
+const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
+const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 
 
 class FighterSeal:
@@ -22,7 +21,6 @@ class FighterSeal:
 	var mirrored: bool = false
 	var portrait: Texture2D
 	var fighter_name: String = "DUELIST"
-	var fuse_seconds: int = -1
 	var points: int = 0
 	var points_to_win: int = 3
 	var super_meter: float = 0.0
@@ -48,13 +46,11 @@ class FighterSeal:
 		queue_redraw()
 
 	func set_state(score_value: int, win_score: int, meter: float, armed: bool,
-			selected_fuse: int = -1, debt_cells: int = -1,
-			debt_max: int = 3) -> void:
+			debt_cells: int = -1, debt_max: int = 3) -> void:
 		points = score_value
 		points_to_win = win_score
 		super_meter = clampf(meter, 0.0, 1.0)
 		super_armed = armed
-		fuse_seconds = selected_fuse
 		lost_frames = debt_cells
 		max_lost_frames = maxi(1, debt_max)
 		queue_redraw()
@@ -119,14 +115,15 @@ class FighterSeal:
 				draw_colored_polygon(diamond, EMPTY_PIP)
 			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.0, true)
 
-		var label_x := 284.0 if not mirrored else 76.0
 		var bar_x := 306.0 if not mirrored else 14.0
-		var meter_label := "FUSE %ds" % fuse_seconds if fuse_seconds > 0 else "SUPER"
-		draw_string(font, Vector2(label_x, 45.0), meter_label,
-			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
-			48.0, 8, accent.lightened(0.08))
 		var bar_width := 110.0
 		var bar_rect := Rect2(bar_x, 39.0, bar_width, 4.0)
+		# Directly above the bar, never beside it: at 284 the label ran from 284 to
+		# 332 while the bar started at 306, so the fill painted over its own name —
+		# and on the mirrored side it covered the label completely.
+		draw_string(font, Vector2(bar_x, 35.0), "SUPER",
+			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
+			bar_width, 8, accent.lightened(0.08))
 		draw_rect(bar_rect, Color(0.10, 0.09, 0.14, 0.92))
 		draw_rect(bar_rect, Color(accent.r, accent.g, accent.b, 0.62), false, 1.0)
 		if super_meter > 0.0:
@@ -206,8 +203,9 @@ const _HINT_AI := "P2  AI · PLAN HIDDEN"
 const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
 const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_RIVAL := "P%d  ONLINE · PLAN HIDDEN"
+const _HINT_ONLINE_ABANDONED := "OPPONENT DISCONNECTED  ·  ENTER CLAIMS THE MATCH  ·  ESC LEAVES"
+const _HINT_ONLINE_BROKEN := "MATCH STOPPED  ·  ESC RETURNS TO THE MENU"
 const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
-const _HINT_PAD_GRENADIER := "PAD P%d GRENADIER · L-STICK MOVE · A JUMP · R-STICK AIM · R2 GRENADE · L1/R1 FUSE · START LOCK"
 var _banner_bg: ColorRect
 var _banner_rule: ColorRect
 var _banner: Label
@@ -249,10 +247,13 @@ func build(manager) -> void:
 		"application/config/version", "DEV"))
 	_build_label.add_theme_color_override("font_color", Color(0.38, 0.42, 0.50))
 	_build_label.visible = false
-	_turn_label = _mk_label(Vector2(438.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_RIGHT)
-	_timer_label = _mk_label(Vector2(548.0, 2.0), 184.0, 34, HORIZONTAL_ALIGNMENT_CENTER)
+	# Which phase you are in decides whether your input matters at all, so it
+	# should not be the smallest text on screen while the clock is the largest.
+	# The seals own x < 438 and x > 842, so these widths cannot grow.
+	_turn_label = _mk_label(Vector2(438.0, 20.0), 92.0, 13, HORIZONTAL_ALIGNMENT_RIGHT)
+	_timer_label = _mk_label(Vector2(548.0, 6.0), 184.0, 26, HORIZONTAL_ALIGNMENT_CENTER)
 	_timer_label.size.y = 48.0
-	_phase_label = _mk_label(Vector2(750.0, 18.0), 92.0, 11, HORIZONTAL_ALIGNMENT_LEFT)
+	_phase_label = _mk_label(Vector2(750.0, 18.0), 92.0, 14, HORIZONTAL_ALIGNMENT_LEFT)
 	_phase_track = ColorRect.new()
 	_phase_track.position = Vector2(480.0, 53.0)
 	_phase_track.size = Vector2(320.0, 3.0)
@@ -473,9 +474,9 @@ func refresh() -> void:
 		match_rule += "   ·   CORE IN %d HITLESS TURN%s" % [remaining, "" if remaining == 1 else "S"]
 	_score_label.text = match_rule
 	_score_label.visible = gm.team_mode
-	_level_label.text = ("CLOSE CAMERA — %s   ·   %s" % [gm.level_name, gm.level_wrap]) \
-		if gm.prototype_mode else \
-		("LEVEL %d/%d — %s   ·   %s" % [gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap])
+	_level_label.text = "LEVEL %d/%d — %s   ·   %s" % [
+		gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap,
+	]
 	if gm.tutorial_mode:
 		_level_label.text = "TUTORIAL — %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	if gm.online_mode:
@@ -484,6 +485,11 @@ func refresh() -> void:
 			if gm.online_player == 0 else _HINT_ONLINE_RIVAL % 1
 		_hint_p2.text = ((_HINT_PAD % 2) if gm._pads[1] >= 0 else (_HINT_ONLINE_YOU % 2)) \
 			if gm.online_player == 1 else _HINT_ONLINE_RIVAL % 2
+		# Being stranded outlasts any banner, so the way out stays on screen.
+		if gm.online_match_broken:
+			_hint_p2.text = _HINT_ONLINE_BROKEN
+		elif gm.online_peer_lost:
+			_hint_p2.text = _HINT_ONLINE_ABANDONED
 	elif gm.tutorial_mode:
 		_hint_p1.text = ""
 		_hint_p2.text = ""
@@ -493,16 +499,12 @@ func refresh() -> void:
 			_hint_p1.text = "CRIMSON  P1 + P3  ·  COORDINATE PLANS  ·  FRIENDLY FIRE SCORES NO POINT"
 			_hint_p2.text = "AZURE  P2 + P4  ·  FIRST TEAM TO %d HITS" % gm.hits_to_win
 		else:
-			if gm.uses_grenade(0):
-				_hint_p1.text = \
-					"P1 GRENADIER  A/D MOVE · SPACE JUMP · LMB GRENADE · 1/2/3 FUSE · SHIFT LOCK · R UNDO"
-				_level_label.text += "   ·   P1 FUSE %ds" % gm.players[0].plan.grenade_fuse_seconds
-			elif gm.uses_dashblade(0):
-				_hint_p1.text = "P1 VELOCITY  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
+			if gm.uses_dashblade(0):
+				_hint_p1.text = "P1 ROOK  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
 			elif gm.uses_chakram(0):
-				_hint_p1.text = "P1 BROODTAIL  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
+				_hint_p1.text = "P1 ECLIPSE  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
 			elif gm.uses_shock(0):
-				_hint_p1.text = "P1 STATIC WITCH  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
+				_hint_p1.text = "P1 PULSE  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
 				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
 					if gm.players[0].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(0),
 					"" if gm.shock_orb_count(0) == 1 else "S"]
@@ -513,21 +515,17 @@ func refresh() -> void:
 				_hint_p2.text = _HINT_AI_4P if gm.players.size() == 4 else _HINT_AI
 			else:
 				if gm._pads[1] >= 0:
-					if gm.uses_grenade(1):
-						_hint_p2.text = _HINT_PAD_GRENADIER % 2
-					elif gm.uses_dashblade(1):
-						_hint_p2.text = "PAD P2 VELOCITY · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
+					if gm.uses_dashblade(1):
+						_hint_p2.text = "PAD P2 ROOK · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
 					elif gm.uses_chakram(1):
-						_hint_p2.text = "PAD P2 BROODTAIL · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
+						_hint_p2.text = "PAD P2 ECLIPSE · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
 					elif gm.uses_shock(1):
-						_hint_p2.text = "PAD P2 STATIC WITCH · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
+						_hint_p2.text = "PAD P2 PULSE · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
 					else:
 						_hint_p2.text = _HINT_PAD % 2
 				else:
 					_hint_p2.text = _HINT_P2_MISSING
-				if gm.uses_grenade(1):
-					_level_label.text += "   ·   P2 FUSE %ds" % gm.players[1].plan.grenade_fuse_seconds
-				elif gm.uses_shock(1):
+				if gm.uses_shock(1):
 					_level_label.text += "   ·   P2 %s · %d ORB%s LIVE" % ["PLASMA" \
 						if gm.players[1].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(1),
 						"" if gm.shock_orb_count(1) == 1 else "S"]
@@ -540,13 +538,11 @@ func refresh() -> void:
 		if duel_hud:
 			var portrait: Texture2D = DUELIST_PORTRAIT
 			match gm.player_weapons[i]:
-				1: portrait = GRENADIER_PORTRAIT
-				2: portrait = DASHBLADE_PORTRAIT
-				3: portrait = CHAKRAM_PORTRAIT
-				4: portrait = SHOCK_PORTRAIT
+				2: portrait = ROOK_PORTRAIT
+				3: portrait = ECLIPSE_PORTRAIT
+				4: portrait = PULSE_PORTRAIT
 			seal.set_identity(gm.weapon_short_name(i), portrait)
 			seal.set_state(gm.score[i], gm.hits_to_win, gm.super_meter[i], gm.super_armed[i],
-				gm.players[i].plan.grenade_fuse_seconds if gm.uses_grenade(i) else -1,
 				gm.frame_debt_cells[i] if gm.uses_dashblade(i) else -1,
 				gm.frame_debt_max_cells)
 	for i in gm.MAX_PLAYERS:

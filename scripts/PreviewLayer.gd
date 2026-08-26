@@ -22,7 +22,8 @@ func _draw() -> void:
 		return
 
 	if gm.state == Phase.EXECUTING or gm.state == Phase.REPLAY \
-			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU:
+			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU \
+			or gm.state == Phase.ROSTER or gm.state == Phase.MATCH_SETUP:
 		return
 
 	# Where the moving world will be when this window closes is public and
@@ -70,17 +71,17 @@ func _draw_player_preview(p: Player) -> void:
 	if recorded > 0 and recorded < path.size():
 		draw_circle(path[recorded], 3.5, Color(col.r, col.g, col.b, 0.9))
 
-	# Ghosts use the same stick-figure pose as the live body. This keeps the
-	# planning view expressive without hiding the exact collision-sized path.
+	# Each marker samples the predicted velocity/ground state at its own tick, so
+	# an airborne endpoint cannot keep wearing the idle silhouette.
 	var end_pos: Vector2 = path[path.size() - 1]
 	var here: Vector2 = gm.shot_origin(i)
 	var same_marker: bool = here.distance_to(end_pos) <= 2.0
 	_draw_destination(end_pos, p)
-	_draw_ghost_figure(end_pos, p, 0.85)
+	_draw_ghost_figure(end_pos, p, 0.85, path.size() - 1)
 
 	# live ghost head, i.e. the point the player is currently piloting
 	if not same_marker:
-		_draw_ghost_figure(here, p, 0.45)
+		_draw_ghost_figure(here, p, 0.45, gm.pilot_tick(i))
 
 	_draw_stamina(p, here)
 	_draw_shot_preview(p, here)
@@ -120,7 +121,12 @@ func _draw_destination(at: Vector2, p: Player) -> void:
 	_label(foot + Vector2(14.0, -8.0), "END", c, 11)
 
 
-func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
+func _draw_ghost_figure(at: Vector2, p: Player, alpha: float, tick: int = -1) -> void:
+	var visual := p.get_node_or_null("FighterVisual") as FighterVisual
+	if visual != null and visual.skin != null and visual.skin.ghost_texture != null:
+		var pose := _ghost_sprite_pose(p, visual.skin, tick)
+		_draw_sprite_ghost(at, p, visual.skin, alpha, pose["state"], pose["frame"])
+		return
 	var pose := Player.idle_pose_points(p.facing, p.aim_dir())
 	var base := _player_preview_color(p)
 	var c := Color(base.r, base.g, base.b, minf(1.0, alpha + (0.1 if high_contrast else 0.0)))
@@ -143,6 +149,81 @@ func _draw_ghost_figure(at: Vector2, p: Player, alpha: float) -> void:
 	draw_arc(at + pose["head"], 6.0, 0.0, TAU, 16, c, 2.0, true)
 	for joint in [pose["hip"], pose["knee_a"], pose["knee_b"], pose["grip"]]:
 		draw_circle(at + joint, 2.0, c)
+
+
+func _ghost_sprite_pose(p: Player, skin: FighterSkin, tick: int) -> Dictionary:
+	var state: StringName = FighterVisual.IDLE
+	var frame := 0
+	if tick < 0:
+		return {"state": state, "frame": frame}
+	if p.plan.has_shot() and tick == p.plan.shot_tick and skin.has_sprite(FighterVisual.SHOT):
+		# The release silhouette communicates the action more clearly than its
+		# preceding anticipation frame at the one pinned shot marker.
+		state = FighterVisual.SHOT
+		frame = mini(1, skin.frame_count(state) - 1)
+		return {"state": state, "frame": frame}
+
+	var i: int = p.index
+	var velocity := Vector2.ZERO
+	var grounded := p.on_ground
+	if i >= 0 and i < gm.ghost_velocity_path.size() \
+			and tick < gm.ghost_velocity_path[i].size() \
+			and tick < gm.ghost_ground_path[i].size():
+		velocity = gm.ghost_velocity_path[i][tick]
+		grounded = gm.ghost_ground_path[i][tick] == 1
+	else:
+		# Visual tests and hand-authored previews may replace only ghost_path.
+		# Recover a useful pose from its local tangent when no simulation samples
+		# accompany that path.
+		var path: PackedVector2Array = gm.ghost_path[i]
+		if path.size() > 1:
+			var sample := clampi(tick, 0, path.size() - 1)
+			var before := path[maxi(0, sample - 1)]
+			var after := path[mini(path.size() - 1, sample + 1)]
+			velocity = (after - before) / maxf(gm.tick_dt(), 0.0001)
+			grounded = absf(after.y - before.y) < 0.1
+
+	if not grounded:
+		state = FighterVisual.RISE if velocity.y < 0.0 else FighterVisual.FALL
+	elif absf(velocity.x) >= FighterVisual.RUN_SPEED_THRESHOLD \
+			and skin.has_sprite(FighterVisual.RUN):
+		state = FighterVisual.RUN
+	elif absf(velocity.x) > 24.0:
+		state = FighterVisual.WALK if skin.has_sprite(FighterVisual.WALK) \
+			else FighterVisual.RUN
+	var count := skin.frame_count(state)
+	if count > 0:
+		frame = posmod(tick / skin.ticks_for_state(state), count)
+	return {"state": state, "frame": frame}
+
+
+func _draw_sprite_ghost(at: Vector2, p: Player, skin: FighterSkin, alpha: float,
+		state: StringName, frame: int) -> void:
+	var base := _player_preview_color(p)
+	var outline := Color(0.015, 0.02, 0.035, alpha * (0.9 if high_contrast else 0.62))
+	var fill := Color(base.r, base.g, base.b,
+		minf(1.0, alpha * (0.82 if high_contrast else 0.62)))
+	var scale := Vector2(float(p.facing), 1.0)
+	var atlas: Texture2D = skin.ghost_atlases.get(state) as Texture2D
+	var source := Rect2(
+		Vector2(float(frame * skin.sprite_cell_size.x), 0.0),
+		Vector2(skin.sprite_cell_size)
+	)
+	# The monochrome mask preserves the live fighter's exact outer contour while
+	# keeping the future position visually distinct from the full-color body.
+	for offset in [Vector2(-1.25, 0.0), Vector2(1.25, 0.0),
+			Vector2(0.0, -1.25), Vector2(0.0, 1.25)]:
+		draw_set_transform(at + offset, 0.0, scale)
+		if atlas != null:
+			draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, outline)
+		else:
+			draw_texture_rect(skin.ghost_texture, skin.sprite_draw_rect, false, outline)
+	draw_set_transform(at, 0.0, scale)
+	if atlas != null:
+		draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, fill)
+	else:
+		draw_texture_rect(skin.ghost_texture, skin.sprite_draw_rect, false, fill)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## One shot per turn. While the shot is still yours to place, the reticle tracks
@@ -179,12 +260,8 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var chakram_preview: bool = gm.uses_chakram(p.index)
 	var chakram_super: bool = chakram_preview and (p.plan.super_shot or (not armed \
 		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index]))
-	var grenade_preview: bool = gm.uses_grenade(p.index) and not p.plan.super_shot \
-		and not (not armed and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index])
 	var launches: Array[Vector2] = []
-	if grenade_preview:
-		launches.append(gm.grenade_launch_velocity(p.aim_dir(), power))
-	elif chakram_preview:
+	if chakram_preview:
 		launches = gm.chakram_launch_velocities(p.aim_dir(), power, chakram_super)
 	else:
 		launches = gm.knife_launch_velocities(p.aim_dir(), power)
@@ -195,7 +272,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var length: float = lerpf(AIM_LEN_MIN, AIM_LEN_MAX, power)
 	var tip: Vector2 = shoulder + dir * length
 	var body: Color = col.lightened(0.35) if live else Color(col.r, col.g, col.b, 0.5)
-	if not grenade_preview and not chakram_preview:
+	if not chakram_preview:
 		var dagger_reticle := _draw_dagger_trajectory_reticle(
 			shoulder, launches, gm.knife_launch_velocity(p.aim_dir(), power),
 			length, power, body, col, live)
@@ -216,10 +293,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 			draw_line(shoulder, shoulder + shot_dir * AIM_LEN_MAX,
 				Color(col.r, col.g, col.b, 0.12), 1.5)
 			draw_line(shoulder, shot_tip, body, 3.0 if live else 2.0)
-			if grenade_preview:
-				_draw_grenade_head(shot_tip, body)
-			else:
-				_draw_chakram_head(shot_tip, shot_dir, body)
+			_draw_chakram_head(shot_tip, shot_dir, body)
 
 		# The centre spine carries the power notches; the fan carries direction.
 		draw_line(shoulder, tip, Color(body.r, body.g, body.b, body.a * 0.45), 1.0)
@@ -238,9 +312,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var aimed: Vector2 = p.aim_dir().normalized()
 	var actual_elevation: float = rad_to_deg(atan2(-aimed.y, absf(aimed.x)))
 	var tag := "%d° · %d%%" % [int(round(actual_elevation)), int(round(power * 100.0))]
-	if grenade_preview:
-		tag = "GRENADE · FUSE %ds · %s" % [p.plan.grenade_fuse_seconds, tag]
-	elif chakram_preview:
+	if chakram_preview:
 		tag = ("TRIPLE CHAKRAM · " if chakram_super else \
 			"CHAKRAM · DIRECT · ") + tag
 	if armed:
@@ -378,16 +450,34 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 	var length := lerpf(54.0, 145.0, power) if mode == 0 else lerpf(80.0, 220.0, power)
 	var tip := shoulder + dir * length
 	if mode == 0:
-		# A single rail and lightning diamond: unmistakably the fast straight shot.
-		draw_line(shoulder, shoulder + dir * AIM_LEN_MAX, Color(body.r, body.g, body.b, 0.16), 2.0)
-		draw_line(shoulder, tip, body, 4.0 if live else 2.5)
-		var side := dir.orthogonal()
+		# The lance falls, so the preview has to be its real arc rather than a
+		# direction rail. Aiming a ballistic shot off a straight line would be
+		# guesswork the planning contract is supposed to remove.
+		var launch: Vector2 = dir * gm.shock_plasma_speed_for_power(power)
+		var flight: Dictionary = PredictionSystem.predict_plasma(
+			shoulder + dir * 24.0, launch, gm,
+			gm.shock_plasma_range_for_power(power), gm.world_tick)
+		var arc: PackedVector2Array = flight["path"]
+		if arc.size() >= 2:
+			draw_polyline(arc, Color(body.r, body.g, body.b, 0.16), 5.0, true)
+			draw_polyline(arc, body, 3.0 if live else 2.0, true)
+			tip = arc[arc.size() - 1]
+		var heading: Vector2 = dir
+		if arc.size() >= 2:
+			var run: Vector2 = arc[arc.size() - 1] - arc[arc.size() - 2]
+			if not run.is_zero_approx():
+				heading = run.normalized()
+		var side := heading.orthogonal()
 		draw_colored_polygon(PackedVector2Array([
-			tip + dir * 12.0, tip + side * 7.0, tip - dir * 7.0,
+			tip + heading * 12.0, tip + side * 7.0, tip - heading * 7.0,
 			tip - side * 7.0,
 		]), Color(body.r, body.g, body.b, 0.92))
-		draw_line(tip - dir * 5.0 + side * 8.0, tip + dir * 7.0 - side * 8.0,
+		draw_line(tip - heading * 5.0 + side * 8.0, tip + heading * 7.0 - side * 8.0,
 			Color(0.96, 1.0, 1.0, body.a), 2.0)
+		# A blocked lance ends on cover; say so rather than letting the head sit
+		# ambiguously against a wall.
+		if bool(flight["blocked"]):
+			draw_arc(tip, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, body.a * 0.9), 2.0)
 	else:
 		# A short rising curve communicates "lob" without solving its final landing.
 		var curve := PackedVector2Array()
@@ -499,15 +589,6 @@ func _draw_chakram_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 	draw_line(tip - side * 8.0, tip + side * 8.0, Color(col.r, col.g, col.b, col.a * 0.32), 1.0)
 
 
-func _draw_grenade_head(tip: Vector2, col: Color) -> void:
-	draw_circle(tip, Grenade.RADIUS, Color(0.025, 0.02, 0.035, col.a))
-	var shell_color := col.darkened(0.55)
-	draw_circle(tip, Grenade.RADIUS - 2.0, shell_color)
-	draw_line(tip + Vector2(3.0, -8.0), tip + Vector2(8.0, -15.0), col, 2.0)
-	draw_circle(tip + Vector2(9.0, -16.0), 2.6, col.lightened(0.55))
-
-
-## Marks the point along the path where the bow releases.
 func _launch_marker(at: Vector2, col: Color, alpha: float, caption: String) -> void:
 	var c := Color(col.r, col.g, col.b, alpha)
 	draw_circle(at, 4.0, c)

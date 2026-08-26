@@ -39,6 +39,20 @@ const ICONS := {
 	&"touch_hold": preload("res://assets/kenney/prompts/touch-hold.png"),
 }
 
+const KEY_ICONS := {
+	KEY_A: &"key_a",
+	KEY_D: &"key_d",
+	KEY_S: &"key_s",
+	KEY_SPACE: &"key_space",
+	KEY_SHIFT: &"key_shift",
+	KEY_T: &"key_t",
+	KEY_R: &"key_r",
+	KEY_F: &"key_f",
+	KEY_ENTER: &"key_enter",
+	KEY_KP_ENTER: &"key_enter",
+	KEY_ESCAPE: &"key_escape",
+}
+
 
 static func icon(id: StringName) -> Texture2D:
 	return ICONS.get(id) as Texture2D
@@ -56,3 +70,23 @@ static func draw_sequence(canvas: CanvasItem, ids: Array, origin: Vector2,
 	for i in ids.size():
 		draw_icon(canvas, StringName(ids[i]), Rect2(origin + Vector2(float(i) * (icon_size + gap), 0.0),
 			Vector2(icon_size, icon_size)), tint)
+
+
+static func draw_key_sequence(canvas: CanvasItem, codes: Array, origin: Vector2,
+		tint: Color, icon_size: float = 20.0, gap: float = 3.0) -> void:
+	for i in codes.size():
+		var rect := Rect2(origin + Vector2(float(i) * (icon_size + gap), 0.0),
+			Vector2(icon_size, icon_size))
+		var prompt_id: StringName = KEY_ICONS.get(int(codes[i]), &"")
+		if prompt_id != &"":
+			draw_icon(canvas, prompt_id, rect, tint)
+			continue
+		# Rebound keys outside the curated icon subset still get a legible Kenney
+		# keycap instead of falling back to stale default artwork.
+		canvas.draw_rect(rect, Color(tint.r, tint.g, tint.b, tint.a * 0.10))
+		canvas.draw_rect(rect, tint, false, 1.2)
+		var key_name := OS.get_keycode_string(int(codes[i])).to_upper()
+		if key_name.length() > 4:
+			key_name = key_name.left(4)
+		canvas.draw_string(HUD_FONT, rect.position + Vector2(1.0, icon_size * 0.68), key_name,
+			HORIZONTAL_ALIGNMENT_CENTER, icon_size - 2.0, 7, tint)

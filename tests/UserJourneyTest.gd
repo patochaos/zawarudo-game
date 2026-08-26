@@ -30,7 +30,7 @@ func _run() -> void:
 	_check(game.state == Phase.MENU and not game.tutorial_mode and not game._tutorial.visible,
 		"leaving How To Play must cleanly restore the title state")
 
-	game._on_menu_start(false, 2, 2)
+	game.start_quick_match(false, 2, 2)
 	game._transition.visible = false
 	_check(game.state == Phase.PLANNING and game.level_index == 2 and game.players.size() == 2,
 		"a selected local arena must reach a two-player planning phase")
@@ -61,7 +61,8 @@ func _run() -> void:
 	_check(game.state == Phase.MENU and game._menu.visible,
 		"the result screen must always provide a route back to the title")
 
-	game._on_menu_online(1)
+	game._setup.level = 1
+	game._on_menu_online()
 	game._transition.visible = false
 	_check(game.state == Phase.ONLINE_LOBBY and game._online_lobby.visible,
 		"Online must open its private-room lobby instead of entering an ambiguous match state")
@@ -70,7 +71,7 @@ func _run() -> void:
 	_check(game.state == Phase.MENU and not game._online_lobby.visible,
 		"cancelling Online must disconnect and restore the menu")
 
-	game._on_menu_freeplay(3)
+	game.start_quick_freeplay(3)
 	game._transition.visible = false
 	_check(game.state == Phase.FREEPLAY and game.level_index == 3 \
 		and game._tuning.visible and not game._ui.visible,

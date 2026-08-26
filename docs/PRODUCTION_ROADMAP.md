@@ -10,11 +10,19 @@ The production pipeline is hybrid: one canonical character model and rig in
 Blender, rendered to layered 2D sprites, with a procedural aiming arm and
 event-driven presentation in Godot.
 
+## Current handoff
+
+The maintenance pass of 2026-08-21 — retired-feature removal, the online
+protocol 2 pin, the forfeit path and the CI hardening — is written up in
+[`HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md`](HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md),
+together with the open backlog and the acceptance commands. Read it before
+picking up new work.
+
 ## Direction decisions
 
 - Stay in Godot. A Unity migration is out of scope.
-- Use the standard match camera as the working target. `Close Camera` remains
-  an experiment until silhouette tests justify promoting it.
+- Use the standard match camera as the working target. The `Close Camera`
+  experiment has been retired and removed.
 - Keep `Player` authoritative for simulation, position, collision and aim.
 - Treat every new character, shader and cut-in as a cosmetic observer.
 - Use pre-rendered 3D for match characters. Do not use live 3D viewports in

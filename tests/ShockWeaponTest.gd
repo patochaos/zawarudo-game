@@ -10,6 +10,9 @@ class TestConfig:
 	extends RefCounted
 	var platforms: Array = []
 	var world_bounds := Rect2(-1000.0, -1000.0, 2000.0, 2000.0)
+	## The lance is ballistic. These checks isolate contact and range, so they
+	## fly it flat; the arc itself is covered against the real manager.
+	var shock_plasma_gravity: float = 0.0
 
 	func wrap_point(point: Vector2) -> Vector2:
 		return point

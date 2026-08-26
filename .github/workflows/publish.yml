@@ -17,7 +17,8 @@ jobs:
   verify:
     name: Verify game and room service
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Every logic suite now runs, not just four of them.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: chickensoft-games/setup-godot@v2.4.1
@@ -30,9 +31,51 @@ jobs:
       - name: Run deterministic game tests
         shell: bash
         run: |
-          for test in tests/KnifeMechanicsTest.gd tests/LevelLayoutTest.gd tests/MenuInteractionTest.gd tests/OnlineLockstepTest.gd; do
-            godot --headless --path . --script "$test"
+          shopt -s nullglob
+          status=0
+          ran=0
+          for test in tests/*.gd; do
+            case "$test" in
+              # Long-running AI tournament research tool, not a test suite.
+              tests/CharacterBalanceSimulation.gd) continue ;;
+              # Shared plumbing for the screenshot captures, not a suite.
+              tests/VisualCaptureHelper.gd) continue ;;
+            esac
+            # Screenshot capture scripts need a real render target and cannot
+            # run under --headless. They are developer tools run windowed, and
+            # are identified by the capture helper they preload.
+            if grep -q 'VisualCaptureHelper' "$test"; then
+              continue
+            fi
+            ran=$((ran + 1))
+            echo "::group::$test"
+            set +e
+            # A GDScript runtime error kills the suite coroutine before quit(),
+            # which leaves Godot running forever; cap each suite instead.
+            output=$(timeout 300 godot --headless --path . --script "$test" 2>&1)
+            code=$?
+            set -e
+            printf '%s\n' "$output"
+            echo "::endgroup::"
+            if [ "$code" -ne 0 ]; then
+              echo "::error::$test exited with status $code"
+              status=1
+              continue
+            fi
+            # Exit codes alone hide engine-level faults: a suite can assert its
+            # way to a clean 0 while Godot logs rendering or script errors.
+            if printf '%s\n' "$output" | grep -q 'ERROR:'; then
+              echo "::error::$test exited 0 but Godot logged errors:"
+              printf '%s\n' "$output" | grep -n 'ERROR:'
+              status=1
+            fi
           done
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::No game test suites found under tests/"
+            exit 1
+          fi
+          echo "Ran $ran game test suite(s)."
+          exit "$status"
       - uses: actions/setup-node@v7
         with:
           node-version: 24

@@ -23,7 +23,7 @@ func _run() -> void:
 func _test_telemetry_report() -> void:
 	var telemetry = TELEMETRY.new()
 	root.add_child(telemetry)
-	telemetry.begin_match("tutorial", "TEST ARENA", "wide", "keyboard_mouse")
+	telemetry.begin_match("tutorial", "TEST ARENA", "keyboard_mouse")
 	telemetry.record("plan_locked", 1, {"movement_ticks": 12, "power": 0.5})
 	var scores: Array[int] = [3, 1, 0, 0]
 	telemetry.finish_match(0, scores, 4, "digest")
@@ -119,7 +119,7 @@ func _test_tutorial_launch() -> void:
 		and game._online_lobby.weapon == game._online_lobby.FIGHTER_ROSTER[1],
 		"the online lobby must expose every arena and roster fighter before room creation")
 	_check("HOST ARENA" in game._online_lobby._level_label.text \
-		and "VELOCITY" in game._online_lobby._fighter_label.text,
+		and "ROOK" in game._online_lobby._fighter_label.text,
 		"the online lobby must explain which room settings the player is choosing")
 	game._online_lobby._sanitize_code("abci12z9")
 	_check(game._online_lobby._code_input.text == "ABC2Z9",

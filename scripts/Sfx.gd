@@ -26,8 +26,14 @@ const K_TEMPORAL_BLAST := preload("res://assets/kenney/audio/temporal-blast.ogg"
 const K_TIME_FREEZE := preload("res://assets/kenney/audio/time-freeze.ogg")
 const K_TIME_RESUME := preload("res://assets/kenney/audio/time-resume.ogg")
 
+## The game has no music bed. The axis that actually matters is the loud,
+## opinionated voice cues against everything else, so that is the split the
+## options screen offers.
+const VOICE_CUES := ["title", "muda"]
+
 var muted: bool = false
-var master_volume: float = 1.0
+var sfx_volume: float = 1.0
+var voice_volume: float = 1.0
 
 var _streams: Dictionary = {}
 var _layers: Dictionary = {}
@@ -94,22 +100,25 @@ func _ready() -> void:
 func play(which: String) -> void:
 	if muted or not _streams.has(which):
 		return
-	_play_stream(_streams[which], which, 0.0, _pitch.get(which, 1.0),
+	var gain: float = voice_volume if which in VOICE_CUES else sfx_volume
+	if gain <= 0.001:
+		return
+	_play_stream(_streams[which], which, 0.0, _pitch.get(which, 1.0), gain,
 		_cutoff.get(which, 0.0))
 	for layer: Dictionary in _layers.get(which, []):
 		_play_stream(layer["stream"], which, float(layer.get("gain", 0.0)),
-			float(layer.get("pitch", 1.0)))
+			float(layer.get("pitch", 1.0)), gain)
 
 
 func _play_stream(stream: AudioStream, event_name: String, gain_delta: float,
-		pitch_scale: float, cutoff: float = 0.0) -> void:
+		pitch_scale: float, channel_gain: float, cutoff: float = 0.0) -> void:
 	var slot: int = _next
 	var pl: AudioStreamPlayer = _players[slot]
 	_next = (_next + 1) % VOICES
 	pl.stream = stream
 	pl.pitch_scale = pitch_scale
 	_base_db[slot] = VOLUME_DB + _gain_db.get(event_name, 0.0) + gain_delta \
-		+ linear_to_db(maxf(master_volume, 0.001))
+		+ linear_to_db(maxf(channel_gain, 0.001))
 	pl.volume_db = _base_db[slot]
 	pl.play()
 	_stop_at[slot] = float(Time.get_ticks_msec()) * 0.001 + cutoff if cutoff > 0.0 else 0.0
@@ -141,13 +150,24 @@ func toggle_mute() -> bool:
 	return muted
 
 
-func set_volume(value: float) -> void:
-	master_volume = clampf(value, 0.0, 1.0)
-	muted = master_volume <= 0.001
-	if muted:
-		for i in _players.size():
-			_players[i].stop()
-			_stop_at[i] = 0.0
+func set_sfx_volume(value: float) -> void:
+	sfx_volume = clampf(value, 0.0, 1.0)
+	_silence_if_all_quiet()
+
+
+func set_voice_volume(value: float) -> void:
+	voice_volume = clampf(value, 0.0, 1.0)
+	_silence_if_all_quiet()
+
+
+## Turning both channels to zero has to stop what is already sounding, not just
+## refuse the next cue.
+func _silence_if_all_quiet() -> void:
+	if sfx_volume > 0.001 or voice_volume > 0.001:
+		return
+	for i in _players.size():
+		_players[i].stop()
+		_stop_at[i] = 0.0
 
 
 func _exit_tree() -> void:
@@ -214,7 +234,7 @@ func _break() -> AudioStreamWAV:
 	return _wav(s)
 
 
-## Grenade blast: a hard transient over a low, rapidly falling pressure wave.
+## Blast: a hard transient over a low, rapidly falling pressure wave.
 func _explosion() -> AudioStreamWAV:
 	var n := int(RATE * 0.42)
 	var s := PackedFloat32Array()

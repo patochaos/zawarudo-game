@@ -21,9 +21,6 @@ var drops: PackedByteArray = PackedByteArray()
 var shot_tick: int = -1     # tick the arrow is loosed on; -1 = no shot this turn
 var aim_angle: float = 0.0  # WORLD degrees: 0 = right, +90 = straight up
 var power: float = 0.5      # 0..1, maps to arrow speed
-## Grenadier-only planning choice. It persists between turns just like aim and
-## power; the fuse itself advances only while GameManager simulates execution.
-var grenade_fuse_seconds: int = 2
 ## Attack captured when the charge starts. The Shock user maps LMB/0 to the
 ## straight plasma lance and RMB/1 to the persistent lobbed orb. Other kits
 ## ignore it, which keeps their normal verb singular and immediately readable.
@@ -132,7 +129,6 @@ func to_network_dict() -> Dictionary:
 		"shot_tick": shot_tick,
 		"aim_angle": aim_angle,
 		"power": power,
-		"grenade_fuse_seconds": grenade_fuse_seconds,
 		"attack_mode": attack_mode,
 		"super_shot": super_shot,
 	}
@@ -142,19 +138,10 @@ func apply_network_dict(data: Dictionary) -> void:
 	dirs = PackedByteArray(data.get("dirs", []))
 	jumps = PackedByteArray(data.get("jumps", []))
 	holds = PackedByteArray(data.get("holds", []))
-	# Builds from before ledge drops existed relay only three movement channels.
-	# Treat the missing channel as "no drop" so either deployment order remains
-	# compatible while the room service and web client roll over.
-	if data.has("drops"):
-		drops = PackedByteArray(data["drops"])
-	else:
-		drops = PackedByteArray()
-		drops.resize(dirs.size())
-		drops.fill(0)
+	drops = PackedByteArray(data["drops"])
 	shot_tick = int(data.get("shot_tick", -1))
 	aim_angle = float(data.get("aim_angle", 0.0))
 	power = clampf(float(data.get("power", 0.5)), 0.0, 1.0)
-	grenade_fuse_seconds = clampi(int(data.get("grenade_fuse_seconds", 2)), 1, 3)
 	attack_mode = clampi(int(data.get("attack_mode", 0)), 0, 1)
 	super_shot = bool(data.get("super_shot", false))
 	super_volley = -1

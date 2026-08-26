@@ -4,6 +4,7 @@ extends SceneTree
 ## 1280×720 viewport. These are product captures, not tutorial mockups.
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
 const OUTPUT_DIR := "res://assets/art/tutorial"
 
 
@@ -22,21 +23,27 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_start(false, 3, 2)
+	game.start_quick_match(false, 3, 2)
 	game.vs_ai = false
 	game._transition.visible = false
 	game._settings["high_contrast_previews"] = true
 	game._apply_settings()
 	for i in 2:
 		game._reset_pilot(i)
-	await _save_frame("tutorial-plan.png")
+	var error := await _save_frame(game, "tutorial-plan.png")
+	if error != OK:
+		quit(error)
+		return
 
 	for tick in 24:
 		game._pilot_step(0, 1, false, true)
 	for tick in 16:
 		game._pilot_step(1, -1, false, true)
 	_refresh_game(game)
-	await _save_frame("tutorial-move.png")
+	error = await _save_frame(game, "tutorial-move.png")
+	if error != OK:
+		quit(error)
+		return
 
 	for i in 2:
 		game._reset_pilot(i)
@@ -45,7 +52,10 @@ func _capture() -> void:
 	for tick in 24:
 		game._pilot_step(1, -1, tick == 4, true)
 	_refresh_game(game)
-	await _save_frame("tutorial-jump.png")
+	error = await _save_frame(game, "tutorial-jump.png")
+	if error != OK:
+		quit(error)
+		return
 
 	game.players[0].plan.set_aim_from_vector(Vector2(0.92, -0.28),
 		game.aim_min_angle, game.aim_max_angle)
@@ -56,12 +66,18 @@ func _capture() -> void:
 	game.players[1].plan.power = 0.62
 	game.players[1].plan.shot_tick = 12
 	_refresh_game(game)
-	await _save_frame("tutorial-attack.png")
+	error = await _save_frame(game, "tutorial-attack.png")
+	if error != OK:
+		quit(error)
+		return
 
 	game._confirm(0)
 	game._confirm(1)
 	_refresh_game(game)
-	await _save_frame("tutorial-lock.png")
+	error = await _save_frame(game, "tutorial-lock.png")
+	if error != OK:
+		quit(error)
+		return
 
 	game._begin_execution()
 	for tick in 22:
@@ -69,7 +85,10 @@ func _capture() -> void:
 		game.exec_tick += 1
 	game._on_player_hit(1, game.players[1].position, 0)
 	_refresh_game(game)
-	await _save_frame("tutorial-result.png")
+	error = await _save_frame(game, "tutorial-result.png")
+	if error != OK:
+		quit(error)
+		return
 
 	root.remove_child(game)
 	game.free()
@@ -83,20 +102,7 @@ func _refresh_game(game) -> void:
 	game._ui.refresh()
 
 
-func _save_frame(filename: String) -> void:
-	await process_frame
-	await process_frame
-	var image := root.get_texture().get_image()
-	if image == null or image.get_width() != 1280 or image.get_height() != 720:
-		push_error("Tutorial capture must render at 1280×720, got %s" % [
-			"no image" if image == null else "%d×%d" % [image.get_width(), image.get_height()],
-		])
-		quit(1)
-		return
-	var output := "%s/%s" % [OUTPUT_DIR, filename]
-	var error := image.save_png(ProjectSettings.globalize_path(output))
-	if error != OK:
-		push_error("Could not save tutorial game image %s (error %d)" % [output, error])
-		quit(error)
-		return
-	print("Tutorial game image saved: %s" % output)
+func _save_frame(game, filename: String) -> Error:
+	await VisualCapture.await_transition(self, game)
+	return VisualCapture.save(self, "%s/%s" % [OUTPUT_DIR, filename],
+		"Tutorial game image", Vector2i(1280, 720))

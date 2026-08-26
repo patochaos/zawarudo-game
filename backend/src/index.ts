@@ -1,4 +1,4 @@
-import { ROOM_CODE_PATTERN, TOKEN_PATTERN } from "./protocol";
+import { PROTOCOL_VERSION, ROOM_CODE_PATTERN, TOKEN_PATTERN } from "./protocol";
 
 export { Room } from "./room";
 
@@ -95,19 +95,19 @@ async function readCreateBody(request: Request): Promise<CreateRoomBody | null> 
     return null;
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)
-      || !("level" in value)) {
+      || !("level" in value) || !("weapon" in value) || !("protocol" in value)) {
     return null;
   }
   const level = value.level;
   if (typeof level !== "number" || !Number.isInteger(level) || level < 0 || level > 99) {
     return null;
   }
-  const weapon = "weapon" in value ? value.weapon : 0;
+  const weapon = value.weapon;
   if (typeof weapon !== "number" || !Number.isInteger(weapon) || !ONLINE_WEAPONS.has(weapon)) {
     return null;
   }
-  const protocol = "protocol" in value ? value.protocol : 1;
-  if (typeof protocol !== "number" || !Number.isInteger(protocol) || protocol < 1 || protocol > 2) {
+  const protocol = value.protocol;
+  if (typeof protocol !== "number" || !Number.isInteger(protocol)) {
     return null;
   }
   return { level, weapon, protocol };
@@ -115,9 +115,6 @@ async function readCreateBody(request: Request): Promise<CreateRoomBody | null> 
 
 async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
   const text = await request.text();
-  if (text.trim() === "") {
-    return { weapon: 0, protocol: 1 };
-  }
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -125,17 +122,26 @@ async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
     return null;
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)
-      || !("weapon" in value)) {
+      || !("weapon" in value) || !("protocol" in value)) {
     return null;
   }
   const weapon = value.weapon;
-  const protocol = "protocol" in value ? value.protocol : 1;
+  const protocol = value.protocol;
   if (typeof weapon !== "number" || !Number.isInteger(weapon) || !ONLINE_WEAPONS.has(weapon)
-      || typeof protocol !== "number" || !Number.isInteger(protocol)
-      || protocol < 1 || protocol > 2) {
+      || typeof protocol !== "number" || !Number.isInteger(protocol)) {
     return null;
   }
   return { weapon, protocol };
+}
+
+// A client that speaks a different protocol version cannot simulate the match deterministically,
+// so it is turned away with a message it can show verbatim instead of joining a broken room.
+function protocolMismatch(request: Request, env: Env, protocol: number): Response {
+  return json(request, env, {
+    error: `Protocol version mismatch: this server speaks protocol ${PROTOCOL_VERSION}, `
+      + `the client sent ${protocol}. Update the game to the current build.`,
+    protocol: PROTOCOL_VERSION,
+  }, 400);
 }
 
 async function createRoom(request: Request, env: Env): Promise<Response> {
@@ -143,13 +149,16 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
   if (body === null) {
     return json(request, env, { error: "Invalid room settings" }, 400);
   }
+  if (body.protocol !== PROTOCOL_VERSION) {
+    return protocolMismatch(request, env, body.protocol);
+  }
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const room = randomRoomCode();
     const token = randomHex(32);
     const seed = randomSeed();
     const stub = env.ROOMS.getByName(room);
-    if (await stub.reserve(room, token, body.level, seed, body.weapon, body.protocol)) {
+    if (await stub.reserve(room, token, body.level, seed, body.weapon)) {
       return json(request, env, {
         room, token, player: 0, level: body.level, weapon: body.weapon,
         protocol: body.protocol,
@@ -164,11 +173,19 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
   if (body === null) {
     return json(request, env, { error: "Invalid fighter" }, 400);
   }
+  if (body.protocol !== PROTOCOL_VERSION) {
+    return protocolMismatch(request, env, body.protocol);
+  }
   const token = randomHex(32);
-  const result = await env.ROOMS.getByName(room).join(token, body.weapon, body.protocol);
+  const result = await env.ROOMS.getByName(room).join(token, body.weapon);
   if (!result.ok) {
-    const status = result.reason === "missing" ? 404 : 409;
-    return json(request, env, { error: result.reason === "missing" ? "Room not found" : "Room is full" }, status);
+    if (result.reason === "missing") {
+      return json(request, env, { error: "Room not found" }, 404);
+    }
+    if (result.reason === "rate_limited") {
+      return json(request, env, { error: "Too many join attempts, try again later" }, 429);
+    }
+    return json(request, env, { error: "Room is full" }, 409);
   }
   return json(request, env, {
     room, token, player: 1, weapon: body.weapon, protocol: body.protocol,

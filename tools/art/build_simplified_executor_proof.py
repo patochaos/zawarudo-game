@@ -73,6 +73,9 @@ def main() -> None:
     atlas.save(args.output)
     for name, cell in zip(POSE_NAMES, cells):
         cell.save(args.output.with_name(f"{name}.png"))
+    ghost = Image.new("RGBA", cells[0].size, (255, 255, 255, 0))
+    ghost.putalpha(cells[0].getchannel("A"))
+    ghost.save(args.output.with_name("ghost.png"))
     print(args.output)
 
 

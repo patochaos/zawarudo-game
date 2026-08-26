@@ -1,0 +1,22 @@
+{
+  "cell_size": [
+    384,
+    256
+  ],
+  "baseline_y": 238,
+  "target_upright_height": 224,
+  "reference_body_height": 586,
+  "shared_source_scale": 0.37777777777777777,
+  "draw_rect": [
+    -43.5,
+    -29.921875,
+    87.0,
+    58.0
+  ],
+  "poses": [
+    "idle",
+    "walk",
+    "lock",
+    "shot"
+  ]
+}

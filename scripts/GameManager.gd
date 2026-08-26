@@ -25,19 +25,17 @@ const ONLINE_CLIENT_SCRIPT := preload("res://scripts/OnlineClient.gd")
 const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
 const TOUCH_CONTROLS_SCRIPT := preload("res://scripts/TouchControls.gd")
 const HAZARD_SCRIPT := preload("res://scripts/Hazard.gd")
-const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
 const TUTORIAL_SCRIPT := preload("res://scripts/TutorialLayer.gd")
 const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
 const FIGHTER_VISUAL_SCRIPT := preload("res://scripts/FighterVisual.gd")
 const FIGHTER_SKIN_SCRIPT := preload("res://scripts/FighterSkin.gd")
-const GRENADE_SCRIPT := preload("res://scripts/Grenade.gd")
 const DASHBLADE_SCRIPT := preload("res://scripts/Dashblade.gd")
 const CHAKRAM_SCRIPT := preload("res://scripts/Chakram.gd")
 const SHOCK_PLASMA_SCRIPT := preload("res://scripts/ShockPlasma.gd")
 const SHOCK_ORB_SCRIPT := preload("res://scripts/ShockOrb.gd")
-const CHARACTER_SELECT_SCRIPT := preload("res://scripts/CharacterSelectLayer.gd")
-const TEAM_SELECT_SCRIPT := preload("res://scripts/TeamSelectLayer.gd")
+const ROSTER_SCRIPT := preload("res://scripts/RosterLayer.gd")
+const MATCH_SETUP_SCRIPT := preload("res://scripts/MatchSetupLayer.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
@@ -49,7 +47,18 @@ const HIT_PAUSE_DURATION := 0.045
 
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
+## Window presets, in the order the options row cycles them.
+const DISPLAY_720 := 0
+const DISPLAY_900 := 1
+const DISPLAY_1080 := 2
+const DISPLAY_MAXIMIZED := 3
+const DISPLAY_FULLSCREEN := 4
+const DISPLAY_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+
 const MAX_PLAYERS := 4
+## Sentinel device ids: the keyboard-and-mouse seat, and "nobody claimed this".
+const KEYBOARD_DEVICE := -2
+const NO_DEVICE := -1
 const DEFAULT_HITS_TO_WIN := 5
 const MAX_HITS_TO_WIN := 7
 const PLAYER_COLORS := [
@@ -62,10 +71,9 @@ const TEAM_COLORS := [Color(0.93, 0.19, 0.28), Color(0.16, 0.66, 0.98)]
 const TEAM_NAMES := ["CRIMSON", "AZURE"]
 
 enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
-## GRENADE remains reachable through its explicit legacy playtest route, but is
-## no longer offered as a roster fighter. The new ids are append-only so old
-## captures do not silently reinterpret id 1.
-enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
+## Ids are append-only and id 1 stays vacant where the retired Grenadier sat,
+## so old captures and telemetry cannot silently reinterpret a kit.
+enum Weapon { KNIVES = 0, DASHBLADE = 2, CHAKRAM = 3, SHOCK = 4 }
 
 # ------------------------------------------------------------------ tuning ---
 
@@ -74,9 +82,19 @@ enum Weapon { KNIVES, GRENADE, DASHBLADE, CHAKRAM, SHOCK }
 ## preview stays hidden — it cannot see your plan, so showing it would be a
 ## one-way giveaway.
 @export var vs_ai: bool = true
+## Opponent skill. Every level plans by the same rules and still cannot see
+## your plan — what changes is how much of the search it spends and how
+## precisely it aims, so a lower level is a rival you can read rather than a
+## different game. Set from the match setup screen; the fields below are what
+## it writes, and stay editable for tuning.
+enum Difficulty { NOVICE, STANDARD, RUTHLESS }
+@export var difficulty: int = Difficulty.STANDARD
 @export var ai_aim_jitter: float = 2.0        # degrees of slop on the AI's aim
 @export var ai_think_min: float = 0.8         # it takes a beat before confirming
 @export var ai_think_max: float = 2.2
+## Movement candidates that get a full shot search, out of the eleven the AI
+## ranks for safety. The rest are still ranked, just never shot from.
+@export_range(1, 11, 1) var ai_moves_searched: int = 2
 ## Soft budget for the one AI search advanced each frame. A single candidate
 ## cannot be pre-empted, so keeping this low avoids visible planning hitches.
 @export var ai_slice_usec: int = 1200
@@ -127,32 +145,32 @@ var simplified_fighter_proto_enabled: bool = false
 ## fighters.
 ##
 ## Approximate full-jump rises at the default 780 impulse / 1400 gravity:
-## Dagger 217px, Velocity 0px, Static Witch 176px, Broodtail 263px.
+## Duelist 217px, Rook 0px, Pulse 176px, Eclipse 263px.
 @export_group("Class Movement")
-@export_subgroup("Dagger Duelist")
+@export_subgroup("The Duelist")
 @export_range(0.1, 2.0, 0.05) var dagger_move_speed_scale: float = 1.0
 @export_range(0.0, 2.0, 0.05) var dagger_jump_impulse_scale: float = 1.0
 @export_range(0.0, 2.0, 0.05) var dagger_air_jump_impulse_scale: float = 0.82
 @export_range(0, 2, 1) var dagger_air_jumps: int = 1
 @export_range(0.1, 2.0, 0.05) var dagger_fall_speed_scale: float = 1.0
 
-@export_subgroup("The Velocity")
+@export_subgroup("The Rook")
 @export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.90
-## Velocity has no ordinary jump. Her freely aimed CUT TO END is her vertical
+## The Rook has no ordinary jump. Her freely aimed CUT TO END is her vertical
 ## traversal verb, and the faster fall keeps a missed aerial cut committal.
 @export_range(0.0, 2.0, 0.05) var velocity_jump_impulse_scale: float = 0.0
 @export_range(0.0, 2.0, 0.05) var velocity_air_jump_impulse_scale: float = 0.0
 @export_range(0, 2, 1) var velocity_air_jumps: int = 0
 @export_range(0.1, 2.0, 0.05) var velocity_fall_speed_scale: float = 1.10
 
-@export_subgroup("The Static Witch")
+@export_subgroup("The Pulse")
 @export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 0.90
 @export_range(0.0, 2.0, 0.05) var shock_jump_impulse_scale: float = 0.90
 @export_range(0.0, 2.0, 0.05) var shock_air_jump_impulse_scale: float = 0.0
 @export_range(0, 2, 1) var shock_air_jumps: int = 0
 @export_range(0.1, 2.0, 0.05) var shock_fall_speed_scale: float = 0.85
 
-@export_subgroup("Broodtail")
+@export_subgroup("The Eclipse")
 @export_range(0.1, 2.0, 0.05) var chakram_move_speed_scale: float = 1.05
 @export_range(0.0, 2.0, 0.05) var chakram_jump_impulse_scale: float = 1.10
 @export_range(0.0, 2.0, 0.05) var chakram_air_jump_impulse_scale: float = 0.72
@@ -193,22 +211,6 @@ var simplified_fighter_proto_enabled: bool = false
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
 
-@export_group("Grenades")
-## Grenades cross meaningful space before their setup pays off. They retain enough
-## momentum to turn walls and platforms into authored bank-shot routes.
-@export var grenade_speed_min: float = 340.0
-@export var grenade_speed_max: float = 700.0
-@export var grenade_gravity: float = 850.0
-@export_range(0.0, 2.0, 0.05) var grenade_drag: float = 0.06
-@export_range(0.0, 1.0, 0.05) var grenade_bounce_retention: float = 0.75
-@export_range(0.0, 1.0, 0.05) var grenade_ground_friction: float = 0.82
-@export var grenade_rest_speed: float = 35.0
-@export var grenade_blast_radius: float = 92.0
-@export_range(0.25, 1.0, 0.05) var grenade_direct_blast_scale: float = 0.75
-@export var grenade_cluster_fragment_speed: float = 330.0
-@export_range(0.1, 1.0, 0.05) var grenade_cluster_fragment_fuse: float = 0.35
-@export_range(0.25, 1.0, 0.05) var grenade_cluster_blast_scale: float = 0.58
-
 @export_group("Character Prototypes")
 @export var dash_speed_min: float = 660.0
 @export var dash_speed_max: float = 980.0
@@ -216,24 +218,40 @@ var simplified_fighter_proto_enabled: bool = false
 @export var dash_duration_ticks_max: int = 15
 @export var dash_guard_durability: int = 2
 @export_range(0.0, 1.0, 0.01) var dash_exit_momentum_retention: float = 0.28
-## Velocity moves at nine tenths of the shared pace. The horizontal distance
+## The Rook moves at nine tenths of the shared pace. The horizontal distance
 ## denied by that ratio becomes Frame Debt: every completed cell adds one dash
 ## tick, and a full three-cell cut adds one front-parry point.
 @export_range(1, 6, 1) var frame_debt_max_cells: int = 3
 @export_range(1.0, 32.0, 0.25) var frame_debt_distance_per_cell: float = 2.75
 @export_range(0, 4, 1) var frame_debt_dash_ticks_per_cell: int = 1
 @export_range(0, 3, 1) var frame_debt_full_guard_bonus: int = 1
-@export var chakram_speed_min: float = 200.0
-@export var chakram_speed_max: float = 360.0
+@export var chakram_speed_min: float = 230.0
+@export var chakram_speed_max: float = 420.0
 ## The normal throw follows the committed aim exactly.
 @export var shock_plasma_speed_min: float = 860.0
 @export var shock_plasma_speed: float = 1160.0
+## The lance falls. Every other projectile in the game does, and a flat shot was
+## the one attack in a game about prediction that needed none: it crossed 870px
+## of a 1280px arena inside a single execution window while a fighter can move
+## about 195px, so there was no leading it and no reading it. Charge now buys a
+## flatter arc as well as speed, which is what makes a full draw worth waiting
+## for instead of merely stronger.
+@export var shock_plasma_gravity: float = 420.0
 @export var shock_plasma_range_min: float = 320.0
 @export var shock_plasma_range_partial_max: float = 1040.0
 @export var shock_plasma_range_full: float = 1440.0
 @export var shock_orb_speed_min: float = 280.0
 @export var shock_orb_speed_max: float = 520.0
 @export var shock_orb_arm_ticks: int = 30
+## How many of her orbs may be live at once. There was no cap at all: the two
+## the AI keeps come from Ai.SHOCK_SETUP_ORB_TARGET, a planner convention a
+## human was never bound by. Casting past the cap pops the oldest, so the throw
+## still does something rather than being silently eaten.
+@export_range(1, 6, 1) var shock_max_live_orbs: int = 2
+## Execution ticks an uncollected orb keeps its square. At 360 it outlived
+## eight planning phases, which is long enough that placing one was rarely a
+## decision. 180 is four windows: still persistent, no longer permanent.
+@export var shock_orb_lifetime_ticks: int = 180
 @export var shock_small_radius: float = 84.0
 @export var shock_combo_radius_min: float = 190.0
 @export var shock_combo_radius: float = 280.0
@@ -299,46 +317,6 @@ var simplified_fighter_proto_enabled: bool = false
 @export_group("Preview")
 @export var trajectory_preview_time: float = 4.5
 
-@export_group("Prototype")
-## PROTOTYPE — selectable as a ruleset from the main menu, disposable as a whole.
-##
-## Three changes tested together, because the question is about the FEEL of a
-## duel and they only answer it as a set:
-##   * a camera that pushes in while time is stopped and pulls out when it runs
-##   * Knife Court V3: raised side shelves, a timed high shuttle, low wrap gates
-##     and a jumpable centre plinth that breaks the flat opening shot
-##   * a fixed pair: one knife follows the aim, one leaves slightly upward
-##
-## Delete `prototype_mode`, DuelCamera.gd and Levels._proving_ground() together
-## once it has answered its question, whichever way it answers.
-@export var prototype_mode: bool = false
-@export var prototype_knives_per_shot: int = 2
-@export_range(2.0, 20.0, 1.0) var prototype_secondary_lob_angle: float = 10.0
-## Lower than the authored 780 impulse: ~129px of rise under normal gravity.
-## Every step in the prototype arena stays at or below 110px.
-@export var prototype_jump_impulse: float = 600.0
-## Short turns. The full 5s window is built for reading a sixteen-platform board;
-## this fixed arena can be read in a fraction of that, and the loop gains far more
-## from cycling quickly than from time nobody is using.
-@export var prototype_planning_duration: float = 3.5
-## The commit beat is now the only pause between deciding and watching, so it
-## stays long enough to register as a transition rather than a hitch.
-@export var prototype_commit_delay: float = 0.20
-## Finishing your action IS the commitment — no separate confirm press. Rollback
-## still un-readies, because rolling back un-fires the shot that made you ready.
-@export var prototype_auto_ready: bool = true
-## How long a player must have stopped acting before finishing counts as being
-## done. Throwing is not the end of a turn — piloting after the shot is a real
-## and useful move — so readiness waits for the hands to come off, not for the
-## knife to leave.
-@export var prototype_ready_grace: float = 0.6
-
-## Close Camera keeps the experimental trailing-boost vocabulary. Terrain
-## ricochet below is global: every ruleset reads HARD and breakable the same way.
-@export var knife_boost_alignment: float = 0.82
-@export var knife_boost_min_closing_speed: float = 80.0
-@export var knife_boost_transfer: float = 0.72
-@export var knife_boost_speed_cap: float = 1.35
 @export_group("Knife Terrain Ricochet")
 @export var knife_ricochet_min_speed: float = 560.0
 @export_range(0.1, 1.0, 0.05) var knife_ricochet_retention: float = 0.72
@@ -367,6 +345,11 @@ var team_score: Array[int] = [0, 0]
 var winning_team: int = -1
 var player_roles: Array[String] = ["HUMAN", "AI", "AI", "AI"]
 var player_devices: Array[int] = [-2, -1, -1, -1]
+## Each CPU slot owns its preset. The scalar difficulty/exported tuning above
+## remains the fallback for legacy match entry points and editor balancing.
+var player_difficulties: Array[int] = [
+	Difficulty.STANDARD, Difficulty.STANDARD, Difficulty.STANDARD, Difficulty.STANDARD,
+]
 
 var banner_text: String = ""
 var banner_color: Color = Color.WHITE
@@ -377,8 +360,8 @@ var _ai_think: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _ai_searches: Array = [null, null, null, null]
 var _ai_step_cursor: int = 0
 var _menu
-var _character_select: CharacterSelectLayer
-var _team_select: TeamSelectLayer
+var _roster: RosterLayer
+var _setup: MatchSetupLayer
 var _tuning
 var planning_time_left: float = 0.0
 var planning_window_duration: float = 5.0
@@ -428,19 +411,14 @@ const SEAM_MARGIN := 340.0   # how far from an edge a platform gets a seam copy
 
 var players: Array = []
 var arrows: Array = []
-var grenades: Array = []
 var dashblades: Array = []
 var chakrams: Array = []
 var shock_plasmas: Array = []
 var shock_orbs: Array = []
 var player_weapons: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
 var local_weapon_choices: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
-var _character_select_player_count: int = 2
-var _character_select_vs_ai: bool = false
-var _character_select_freeplay: bool = false
 var _next_volley: int = 1
 var _next_arrow_id: int = 1
-var _next_grenade_id: int = 1
 var _next_character_projectile_id: int = 100000
 
 ## Online mode is lockstep: this browser records only its assigned player and
@@ -449,6 +427,13 @@ var online_mode: bool = false
 var online_player: int = -1
 var online_room: String = ""
 var online_peer_connected: bool = false
+## True from the moment an opponent drops out of a live match until they come
+## back or the match is claimed. banner_time expires; being stranded does not,
+## so the way out has to stay on screen rather than flash past.
+var online_peer_lost: bool = false
+## Set when the room reports a desync or rejects a plan. Neither side can be
+## trusted as the winner, so the only honest exit is back to the menu.
+var online_match_broken: bool = false
 var _online_seed: int = 0
 var _online_plan_sent: bool = false
 var _online_match_reported: bool = false
@@ -506,6 +491,14 @@ var ghost_dash: Array = [null, null, null, null]
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
 ]
+## Velocity vectors and grounded samples parallel ghost_path, used only to select the
+## correct visual pose for each planning ghost. Simulation still owns the data.
+var ghost_velocity_path: Array[PackedVector2Array] = [
+	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
+]
+var ghost_ground_path: Array[PackedByteArray] = [
+	PackedByteArray(), PackedByteArray(), PackedByteArray(), PackedByteArray(),
+]
 ## A player's prediction depends only on frozen world state and that player's
 ## recorded movement. Most planning frames change neither, so rebuild lazily.
 var _ghost_path_dirty: Array[bool] = [true, true, true, true]
@@ -524,14 +517,6 @@ var _player_layer: Node2D
 var _preview: Node2D
 var _temporal_core: TemporalCore
 var _hazard_layer: Node2D
-var _camera: DuelCamera
-## Loop timings as authored, so prototype mode can be turned off cleanly.
-var _authored_timings: Dictionary = {}
-var _authored_jump_impulse: float = -1.0
-## Seconds each player has gone without driving their ghost, and the recording
-## length that judgement was made against. Prototype auto-ready only.
-var _plan_idle: Array[float] = [0.0, 0.0, 0.0, 0.0]
-var _plan_ticks_seen: Array[int] = [0, 0, 0, 0]
 var _effects
 var _sfx
 var _time_stop
@@ -552,13 +537,18 @@ var _hit_pause_left: float = 0.0
 var _hit_pause_used_this_execution: bool = false
 var _secret_triple_match: bool = false
 var _settings: Dictionary = {
-	"sound": 1.0,
+	"sfx": 1.0,
+	"voice": 1.0,
 	"hit_freeze": true,
 	"reduced_flashes": false,
 	"high_contrast_previews": false,
-	"maximized": true,
+	"display": DISPLAY_MAXIMIZED,
+	"bindings": {},
 	"telemetry": true,
 }
+## Tests can point persistence at a disposable file without touching the
+## player's actual preferences.
+var settings_path: String = "user://settings.cfg"
 
 
 func _exit_tree() -> void:
@@ -568,9 +558,12 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
-	if "--simplified-fighter-proto" in OS.get_cmdline_user_args():
+	var user_args := OS.get_cmdline_user_args()
+	if "--simplified-fighter-proto" in user_args:
 		simplified_fighter_proto_enabled = true
 		fighter_visuals_enabled = true
+	if "--rook-proto" in user_args:
+		local_weapon_choices[0] = Weapon.DASHBLADE
 	_backdrop = BACKDROP_SCRIPT.new()
 	add_child(_backdrop)
 
@@ -642,31 +635,28 @@ func _ready() -> void:
 
 	_menu = MENU_SCRIPT.new()
 	add_child(_menu)
-	_menu.start_requested.connect(_on_menu_start)
-	_menu.character_select_requested.connect(_on_menu_character_select)
-	_menu.team_battle_requested.connect(_on_menu_team_battle)
-	_menu.roster_select_requested.connect(_on_menu_roster_select)
-	_menu.configured_match_requested.connect(_on_menu_configured_match)
-	_menu.freeplay_requested.connect(_on_menu_freeplay)
+	_menu.roster_requested.connect(_open_roster)
 	_menu.online_requested.connect(_on_menu_online)
 	_menu.tutorial_requested.connect(_on_menu_tutorial)
 	_menu.option_changed.connect(_on_option_changed)
+	_menu.binding_changed.connect(_on_binding_changed)
+	_menu.bindings_reset.connect(_on_bindings_reset)
 	_menu.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_menu.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
-	_character_select = CHARACTER_SELECT_SCRIPT.new()
-	add_child(_character_select)
-	_character_select.selection_confirmed.connect(_on_local_character_selection)
-	_character_select.canceled.connect(_on_character_select_canceled)
-	_character_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
-	_character_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_roster = ROSTER_SCRIPT.new()
+	add_child(_roster)
+	_roster.lineup_confirmed.connect(_on_lineup_confirmed)
+	_roster.canceled.connect(_on_roster_canceled)
+	_roster.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_roster.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
-	_team_select = TEAM_SELECT_SCRIPT.new()
-	add_child(_team_select)
-	_team_select.formation_confirmed.connect(_on_team_formation_confirmed)
-	_team_select.canceled.connect(_on_team_select_canceled)
-	_team_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
-	_team_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_setup = MATCH_SETUP_SCRIPT.new()
+	add_child(_setup)
+	_setup.match_confirmed.connect(_on_roster_confirmed)
+	_setup.canceled.connect(_on_setup_canceled)
+	_setup.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_setup.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_online_client = ONLINE_CLIENT_SCRIPT.new()
 	add_child(_online_client)
@@ -685,14 +675,6 @@ func _ready() -> void:
 	_tuning = TUNING_SCRIPT.new()
 	add_child(_tuning)
 
-	# PROTOTYPE. The camera is inert until prototype mode turns it on, so the
-	# shipping build renders through the plain viewport exactly as before.
-	_camera = CAMERA_SCRIPT.new()
-	_camera.gm = self
-	add_child(_camera)
-	_sync_prototype_camera()
-	_sync_prototype_timings()
-
 	_load_level(0)
 	_spawn_players()
 	_tuning.build(self)
@@ -702,13 +684,71 @@ func _ready() -> void:
 	_assign_pads()
 	Input.joy_connection_changed.connect(func(_d, _c):
 		_assign_pads()
-		if _menu != null:
-			_menu.refresh_controller_assignments()
-		if _team_select != null:
-			_team_select.refresh_connections())
+		if _roster != null:
+			_roster.refresh_connections())
 	_prev_mouse = get_viewport().get_mouse_position()
 	_begin_planning(true)
 	_open_menu()
+
+
+## One knob for three, so a preset cannot be half-applied. NOVICE searches a
+## single movement candidate and aims loosely enough to be dodged on read;
+## RUTHLESS searches half the candidate set and barely misses. The think
+## delay moves with them so a weaker opponent also feels less certain.
+func set_difficulty(level: int) -> void:
+	difficulty = clampi(level, Difficulty.NOVICE, Difficulty.RUTHLESS)
+	var tuning := _difficulty_tuning(difficulty)
+	ai_aim_jitter = tuning["aim_jitter"]
+	ai_moves_searched = tuning["moves_searched"]
+	ai_think_min = tuning["think_min"]
+	ai_think_max = tuning["think_max"]
+	player_difficulties.fill(difficulty)
+
+
+func set_player_difficulty(player_index: int, level: int) -> void:
+	if player_index < 0 or player_index >= player_difficulties.size():
+		return
+	player_difficulties[player_index] = clampi(
+		level, Difficulty.NOVICE, Difficulty.RUTHLESS)
+
+
+func player_difficulty(player_index: int) -> int:
+	if player_index < 0 or player_index >= player_difficulties.size():
+		return difficulty
+	return player_difficulties[player_index]
+
+
+func ai_aim_jitter_for(player_index: int) -> float:
+	return float(_difficulty_tuning(player_difficulty(player_index))["aim_jitter"])
+
+
+func ai_moves_searched_for(player_index: int) -> int:
+	return int(_difficulty_tuning(player_difficulty(player_index))["moves_searched"])
+
+
+func ai_think_range_for(player_index: int) -> Vector2:
+	var tuning := _difficulty_tuning(player_difficulty(player_index))
+	return Vector2(float(tuning["think_min"]), float(tuning["think_max"]))
+
+
+func _difficulty_tuning(level: int) -> Dictionary:
+	match clampi(level, Difficulty.NOVICE, Difficulty.RUTHLESS):
+		Difficulty.NOVICE:
+			return {"aim_jitter": 7.0, "moves_searched": 1,
+				"think_min": 1.4, "think_max": 3.0}
+		Difficulty.RUTHLESS:
+			return {"aim_jitter": 0.6, "moves_searched": 5,
+				"think_min": 0.5, "think_max": 1.2}
+		_:
+			return {"aim_jitter": 2.0, "moves_searched": 2,
+				"think_min": 0.8, "think_max": 2.2}
+
+
+func difficulty_name() -> String:
+	match difficulty:
+		Difficulty.NOVICE: return "NOVICE"
+		Difficulty.RUTHLESS: return "RUTHLESS"
+		_: return "STANDARD"
 
 
 func is_ai(i: int) -> bool:
@@ -738,182 +778,165 @@ func _open_menu() -> void:
 	_tuning.visible = false
 	if _online_lobby != null:
 		_online_lobby.close()
-	if _character_select != null:
-		_character_select.close()
-	if _team_select != null:
-		_team_select.close()
+	if _roster != null:
+		_roster.close()
+	if _setup != null:
+		_setup.close()
+		_menu.backdrop_level = _setup.level
 	_menu.open()
 	if _transition != null:
 		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
 
 
-func _on_menu_character_select() -> void:
-	team_mode = false
-	_open_character_select(2, false, false, ["HUMAN", "HUMAN"])
-
-
-func _on_menu_team_battle() -> void:
+## One screen owns every local-match decision, so there is exactly one way in
+## and exactly one configuration coming back out of it.
+func _open_roster() -> void:
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
-	team_mode = true
-	state = Phase.TEAM_SELECT
+	state = Phase.ROSTER
 	_ui.visible = false
 	_tuning.visible = false
 	_menu.close()
-	_character_select.close()
 	if _transition != null:
 		_transition.visible = false
-	_team_select.open(_menu.level)
+	_setup.close()
+	_roster.open()
 
 
-func _on_team_formation_confirmed(slots: Array, selected_level: int) -> void:
-	if slots.size() != MAX_PLAYERS:
-		return
-	for i in MAX_PLAYERS:
-		var slot: Dictionary = slots[i]
-		player_roles[i] = str(slot["role"])
-		player_devices[i] = int(slot["device"])
-		player_teams[i] = int(slot["team"])
-	_menu.level = posmod(selected_level, Levels.count())
-	var roles: Array[String] = []
-	for i in MAX_PLAYERS:
-		roles.append(("CRIMSON" if player_teams[i] == 0 else "AZURE") + " · " + player_roles[i])
-	_team_select.close()
-	_character_select_player_count = MAX_PLAYERS
-	_character_select_vs_ai = true
-	_character_select_freeplay = false
-	state = Phase.CHARACTER_SELECT
-	_character_select.open(local_weapon_choices, MAX_PLAYERS, roles, true, player_roles)
-
-
-func _on_team_select_canceled() -> void:
-	team_mode = false
+func _on_roster_canceled() -> void:
 	state = Phase.MENU
-	_team_select.close()
+	_menu.backdrop_level = _setup.level
 	_menu.open()
-	_menu._show_local_menu()
 
 
-func _on_menu_roster_select(requested_players: int, freeplay: bool) -> void:
-	team_mode = false
-	var count := 2 if freeplay else clampi(requested_players, 2, MAX_PLAYERS)
-	var slot_roles: Array[String] = ["HUMAN"]
-	for i in range(1, count):
-		slot_roles.append("DUMMY" if freeplay else "AI")
-	_open_character_select(count, not freeplay, freeplay, slot_roles)
+## Who is fighting is settled; the rules screen takes it from here.
+func _on_lineup_confirmed(lineup: Dictionary) -> void:
+	state = Phase.MATCH_SETUP
+	_roster.close()
+	_setup.open(lineup)
 
 
-func _on_menu_configured_match(config: Dictionary) -> void:
-	var mode := int(config.get("mode", MENU_SCRIPT.BattleMode.VS))
+## Stepping back is a step, not a reset: the lineup screen reopens holding
+## exactly the fighters it handed over.
+func _on_setup_canceled() -> void:
+	state = Phase.ROSTER
+	_setup.close()
+	_roster.open()
+
+
+func _on_roster_confirmed(config: Dictionary) -> void:
+	var mode := int(config.get("mode", MatchSetupLayer.BattleMode.VS))
 	var count := clampi(int(config.get("player_count", 2)), 2, MAX_PLAYERS)
 	var weapons: Array = config.get("weapons", [])
-	var roles: Array = config.get("roles", [])
-	if mode == MENU_SCRIPT.BattleMode.FREE_PLAY:
+	_menu.backdrop_level = int(config.get("level", 0))
+	if mode == MatchSetupLayer.BattleMode.FREE_PLAY:
 		_start_freeplay(int(config.get("level", 0)), weapons, count,
 			config.get("roles", []), config.get("devices", []))
 		return
-	team_mode = mode == MENU_SCRIPT.BattleMode.TEAM_BATTLE
-	_start_local_match(roles.has("AI"),
-		int(config.get("level", 0)), count, weapons, config)
+	team_mode = mode == MatchSetupLayer.BattleMode.TEAM_BATTLE
+	_start_local_match(int(config.get("level", 0)), count, weapons, config)
 
 
-func _open_character_select(count: int, ai: bool, freeplay: bool, slot_roles: Array) -> void:
-	tutorial_mode = false
-	online_mode = false
-	online_player = -1
-	_character_select_player_count = clampi(count, 2, MAX_PLAYERS)
-	_character_select_vs_ai = ai
-	_character_select_freeplay = freeplay
-	state = Phase.CHARACTER_SELECT
-	_ui.visible = false
-	_tuning.visible = false
-	_menu.close()
-	if _transition != null:
-		_transition.visible = false
-	_character_select.open(local_weapon_choices, _character_select_player_count, slot_roles)
+## Test and capture seam: the roster screen's outcome without driving the
+## roster screen. It still travels the one configuration path a real match
+## uses, so a capture cannot diverge from what a player would get.
+func start_quick_match(ai: bool, lvl: int, requested_players: int = 2,
+		picks: Array = []) -> void:
+	var count := clampi(requested_players, 2, MAX_PLAYERS)
+	_roster._debug_pads.clear()
+	for i in MAX_PLAYERS:
+		_roster.weapons[i] = _roster_weapon_or_default(int(picks[i])) \
+			if i < picks.size() else Weapon.KNIVES
+		if i >= count:
+			_roster.kinds[i] = RosterLayer.SlotKind.OPEN
+		elif i == 0 or not ai:
+			_roster.kinds[i] = RosterLayer.SlotKind.PLAYER
+		else:
+			_roster.kinds[i] = RosterLayer.SlotKind.CPU
+		_roster.devices[i] = KEYBOARD_DEVICE if i == 0 else NO_DEVICE
+		_roster.ready_slots[i] = false
+	if not ai:
+		# Stand in for the pads a local duel's other seats would have claimed.
+		for i in range(1, count):
+			_roster._debug_pads.append(i - 1)
+			_roster.devices[i] = i - 1
+	_roster._normalize()
+	_setup.battle_mode = MatchSetupLayer.BattleMode.VS
+	_setup.level = posmod(lvl, Levels.count())
+	_setup.configure(_roster.build_lineup())
+	_on_roster_confirmed(_setup.build_config())
 
 
-func _on_local_character_selection(weapons: Array) -> void:
-	for i in _character_select_player_count:
-		local_weapon_choices[i] = _roster_weapon_or_default(int(weapons[i]))
-	_character_select.close()
-	if _character_select_freeplay:
-		_start_freeplay(_menu.level, weapons)
-	else:
-		_start_local_match(_character_select_vs_ai, _menu.level,
-			_character_select_player_count, weapons)
-
-
-func _on_character_select_canceled() -> void:
-	if team_mode:
-		state = Phase.TEAM_SELECT
-		_character_select.close()
-		_team_select.open(_menu.level)
-		return
-	state = Phase.MENU
-	_menu.open()
-	_menu._show_local_menu()
-
-
-func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
+## Test and capture seam, as above, for the tuning sandbox.
+func start_quick_freeplay(lvl: int) -> void:
 	team_mode = false
-	_start_local_match(ai, lvl, requested_players, [])
+	_start_freeplay(lvl, [])
 
 
-func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Array,
-		setup: Dictionary = {}) -> void:
+## The roster screen is the only source of a local match, so the whole
+## configuration arrives at once instead of being reassembled from defaults.
+func _start_local_match(lvl: int, requested_players: int, weapons: Array,
+		setup: Dictionary) -> void:
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
-	_apply_ruleset(_menu.ruleset)
-	hits_to_win = clampi(_menu.match_lives, 3, MAX_HITS_TO_WIN)
-	if not setup.is_empty():
-		var configured_roles: Array = setup.get("roles", [])
-		var configured_devices: Array = setup.get("devices", [])
-		var configured_teams: Array = setup.get("teams", [])
-		for i in MAX_PLAYERS:
-			player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else "AI"
-			player_devices[i] = int(configured_devices[i]) if i < configured_devices.size() else -1
-			player_teams[i] = int(configured_teams[i]) if i < configured_teams.size() else -1
-	elif not team_mode:
+	hits_to_win = clampi(int(setup.get("match_lives", DEFAULT_HITS_TO_WIN)), 3, MAX_HITS_TO_WIN)
+	set_difficulty(int(setup.get("difficulty", difficulty)))
+	var configured_roles: Array = setup.get("roles", [])
+	var configured_devices: Array = setup.get("devices", [])
+	var configured_teams: Array = setup.get("teams", [])
+	var configured_difficulties: Array = setup.get("difficulties", [])
+	if not team_mode:
 		winning_team = -1
 		team_score = [0, 0]
-		for i in MAX_PLAYERS:
-			player_teams[i] = -1
-			player_roles[i] = "HUMAN" if not ai or i == 0 else "AI"
-			player_devices[i] = -2 if i == 0 else -1
-	vs_ai = player_roles.has("AI") if not setup.is_empty() or team_mode else ai
+	for i in MAX_PLAYERS:
+		player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else "AI"
+		player_devices[i] = int(configured_devices[i]) \
+			if i < configured_devices.size() else NO_DEVICE
+		player_teams[i] = int(configured_teams[i]) if i < configured_teams.size() else -1
+		var player_skill := int(configured_difficulties[i]) \
+			if i < configured_difficulties.size() else difficulty
+		set_player_difficulty(i, player_skill)
+	vs_ai = player_roles.slice(0, requested_players).has("AI")
 	player_weapons.fill(Weapon.KNIVES)
-	if not weapons.is_empty():
-		for i in mini(requested_players, weapons.size()):
-			player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	elif ai and requested_players == 2 and _menu.human_weapon == Weapon.GRENADE:
-		player_weapons[0] = Weapon.GRENADE
-	elif not ai and requested_players == 2:
-		player_weapons[0] = local_weapon_choices[0]
-		player_weapons[1] = local_weapon_choices[1]
+	for i in mini(requested_players, weapons.size()):
+		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
+	for i in mini(requested_players, local_weapon_choices.size()):
+		local_weapon_choices[i] = player_weapons[i]
 	_set_player_count(requested_players)
 	_ui.visible = true
 	_tuning.visible = false
 	_menu.close()
-	_character_select.close()
+	_roster.close()
+	_setup.close()
 	_load_level(lvl)
 	restart()
 	_sfx.play("title")
 	var team_shape := "%dv%d" % [
 		int(ceil(float(requested_players) / 2.0)), int(requested_players / 2),
 	]
-	var telemetry_mode := "local_team_%s" % team_shape if team_mode else \
-		("ai_grenadier_wide" if uses_grenade(0) else \
-		("ai_%s" % ("close" if prototype_mode else "wide")) if ai else \
-		("local_2p_%s_%s" % [weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower()] \
-		if requested_players == 2 else "local_%dp" % requested_players))
+	var telemetry_mode: String
+	if team_mode:
+		telemetry_mode = "local_team_%s" % team_shape
+	elif vs_ai:
+		telemetry_mode = "ai_wide"
+	elif requested_players == 2:
+		telemetry_mode = "local_2p_%s_%s" % [
+			weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower(),
+		]
+	else:
+		telemetry_mode = "local_%dp" % requested_players
 	_begin_match_telemetry(telemetry_mode)
-	var matchup := "CRIMSON VS AZURE // %s" % team_shape.to_upper() if team_mode else \
-		("%dP ROSTER" % requested_players if requested_players > 2 else \
-		("GRENADIER VS AI" if ai and uses_grenade(0) else \
-		("VS AI" if ai else "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)])))
+	var matchup: String
+	if team_mode:
+		matchup = "CRIMSON VS AZURE // %s" % team_shape.to_upper()
+	elif requested_players > 2:
+		matchup = "%dP ROSTER" % requested_players
+	elif vs_ai:
+		matchup = "VS AI"
+	else:
+		matchup = "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)]
 	_transition.play("%s // %s" % [matchup, level_name],
 		"WRITE THE MOVE", PLAYER_COLORS[0], reduced_flashes)
 
@@ -931,15 +954,16 @@ func _on_menu_tutorial() -> void:
 	_transition.visible = false
 
 
-func _on_menu_online(lvl: int) -> void:
+func _on_menu_online() -> void:
 	team_mode = false
 	tutorial_mode = false
-	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = false
 	state = Phase.ONLINE_LOBBY
-	_online_lobby.open(lvl, local_weapon_choices[0])
+	# The lobby starts from the arena and fighter the roster screen last held,
+	# then lets each side choose its own before the room opens.
+	_online_lobby.open(_setup.level, local_weapon_choices[0])
 	_transition.play("ONLINE DUEL", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
 
 
@@ -974,6 +998,8 @@ func _leave_online() -> void:
 	online_player = -1
 	online_room = ""
 	online_peer_connected = false
+	online_peer_lost = false
+	online_match_broken = false
 	_online_lobby.close()
 	_open_menu()
 
@@ -998,7 +1024,9 @@ func _on_online_message(message: Dictionary) -> void:
 					_online_lobby.set_status("OPPONENT CONNECTED — STARTING…" if connected \
 						else "WAITING FOR PLAYER 2…", false)
 				elif online_mode:
-					banner_text = "OPPONENT RECONNECTED" if connected else "OPPONENT DISCONNECTED — WAITING"
+					online_peer_lost = not connected
+					banner_text = "OPPONENT RECONNECTED" if connected \
+						else "OPPONENT DISCONNECTED — ENTER CLAIMS THE MATCH"
 					banner_color = Color(0.52, 0.95, 0.70) if connected else Color(1.0, 0.45, 0.35)
 					banner_time = 2.0
 		"match_start":
@@ -1031,9 +1059,12 @@ func _on_online_message(message: Dictionary) -> void:
 			banner_text = "REMATCH %d / 2 READY" % ready.size()
 			banner_color = Color(0.86, 0.68, 1.0)
 			banner_time = 1.4
+		"opponent_left":
+			_finish_abandoned_match(int(message.get("winner", online_player)))
 		"desync":
 			state = Phase.ONLINE_WAIT
-			banner_text = "MATCH DESYNC DETECTED — RETURN TO MENU"
+			online_match_broken = true
+			banner_text = "MATCH DESYNC DETECTED — ESC RETURNS TO THE MENU"
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 		"error":
@@ -1063,6 +1094,8 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	_online_plan_sent = false
 	_online_match_reported = false
 	_online_waiting_rematch = false
+	online_peer_lost = false
+	online_match_broken = false
 	_online_lobby.close()
 	_ui.visible = true
 	_tuning.visible = false
@@ -1084,8 +1117,9 @@ func _apply_online_turn_plans(message: Dictionary) -> void:
 		var invalid_reason := _online_plan_invalid_reason(i, plans[i])
 		if not invalid_reason.is_empty():
 			state = Phase.ONLINE_WAIT
+			online_match_broken = true
 			var owner := "YOUR" if i == online_player else "OPPONENT"
-			banner_text = "%s PLAN FAILED VALIDATION — MATCH STOPPED" % owner
+			banner_text = "%s PLAN FAILED VALIDATION — ESC RETURNS TO THE MENU" % owner
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 			push_error("Online plan rejected for player %d: %s" % [i + 1, invalid_reason])
@@ -1106,24 +1140,17 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	var jumps: Array = data.get("jumps", [])
 	var holds: Array = data.get("holds", [])
 	var drops: Array = data.get("drops", [])
-	if not data.has("drops"):
-		drops.resize(dirs.size())
-		drops.fill(0)
 	if dirs.size() != jumps.size() or dirs.size() != holds.size() or dirs.size() != drops.size():
 		return "recording arrays have different lengths"
-	# Builds published before the integer cap could emit one extra tick when
-	# stamina reached a tiny positive float residue. Accept that single legacy
-	# tick so a stale browser can finish a match with a freshly loaded one.
-	var max_recorded := mini(exec_ticks(), movement_tick_budget() + 1)
+	# The same cap the room service enforces. Both ends derive it from the
+	# movement budget, so neither can accept a recording the other rejects.
+	var max_recorded := mini(exec_ticks(), movement_tick_budget())
 	if dirs.size() > max_recorded:
 		return "movement has %d ticks; maximum is %d" % [dirs.size(), max_recorded]
 	var shot_tick := int(data.get("shot_tick", -1))
 	if shot_tick < -1 or shot_tick > dirs.size():
 		return "shot tick %d is outside the recording" % shot_tick
-	var grenade_fuse := int(data.get("grenade_fuse_seconds", 2))
 	var attack_mode := int(data.get("attack_mode", 0))
-	if grenade_fuse < 1 or grenade_fuse > 3:
-		return "grenade fuse %d is outside 1..3" % grenade_fuse
 	if attack_mode < 0 or attack_mode > 1:
 		return "attack mode %d is outside 0..1" % attack_mode
 	if bool(data.get("super_shot", false)) and (shot_tick < 0 or super_meter[i] < 1.0):
@@ -1131,14 +1158,9 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	return ""
 
 
-## Free play: no turns, no freeze. One player under continuous control so the
+## Free play: no turns, no freeze. Players under continuous control so the
 ## movement and shooting can be judged by feel, with the tuning values editable
 ## live. Whatever you set here is what the real match uses afterwards.
-func _on_menu_freeplay(lvl: int) -> void:
-	team_mode = false
-	_start_freeplay(lvl, [])
-
-
 func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 		configured_roles: Array = [], configured_devices: Array = []) -> void:
 	team_mode = false
@@ -1157,7 +1179,6 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 	player_weapons.fill(Weapon.KNIVES)
 	for i in mini(requested_players, weapons.size()):
 		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	_apply_ruleset(0)
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = true
@@ -1169,11 +1190,23 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 
 
 func _load_settings() -> void:
-	_settings["maximized"] = DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED
 	var cfg := ConfigFile.new()
-	if cfg.load("user://settings.cfg") == OK:
+	if cfg.load(settings_path) == OK:
 		for key in _settings.keys():
 			_settings[key] = cfg.get_value("options", key, _settings[key])
+		# Preserve preferences written before effects/voice and the display preset
+		# became separate options. Saving once after the next change retires these
+		# legacy keys naturally.
+		if not cfg.has_section_key("options", "sfx") \
+				and cfg.has_section_key("options", "sound"):
+			_settings["sfx"] = cfg.get_value("options", "sound", 1.0)
+		if not cfg.has_section_key("options", "voice") \
+				and cfg.has_section_key("options", "sound"):
+			_settings["voice"] = cfg.get_value("options", "sound", 1.0)
+		if not cfg.has_section_key("options", "display") \
+				and cfg.has_section_key("options", "maximized"):
+			_settings["display"] = DISPLAY_MAXIMIZED \
+				if bool(cfg.get_value("options", "maximized", true)) else DISPLAY_720
 	_apply_settings()
 
 
@@ -1181,7 +1214,7 @@ func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	for key in _settings.keys():
 		cfg.set_value("options", key, _settings[key])
-	var error := cfg.save("user://settings.cfg")
+	var error := cfg.save(settings_path)
 	if error != OK:
 		push_warning("Could not save options (error %d)" % error)
 
@@ -1190,44 +1223,114 @@ func _on_option_changed(key: String, value: Variant) -> void:
 	if not _settings.has(key):
 		return
 	_settings[key] = value
-	_apply_settings()
+	_apply_setting(key)
 	_save_settings()
 
 
+## A stored layout only replaces the actions it actually names, so a binding
+## added later still arrives with its shipped default rather than unbound.
+func _apply_bindings() -> void:
+	key_bindings = DEFAULT_BINDINGS.duplicate(true)
+	var stored: Dictionary = _settings.get("bindings", {})
+	for action in stored.keys():
+		if action in key_bindings:
+			key_bindings[action] = Array(stored[action])
+	if _menu != null:
+		_menu.configure_bindings(key_bindings)
+
+
+## Rebinding is exclusive: a key can drive exactly one action, so taking it
+## leaves whichever action held it empty until the player sets that one too.
+func _on_binding_changed(action: String, codes: Array) -> void:
+	if action not in DEFAULT_BINDINGS:
+		return
+	var stored: Dictionary = _settings.get("bindings", {}).duplicate(true)
+	for other in key_bindings.keys():
+		if other == action:
+			continue
+		var kept: Array = []
+		for code in key_bindings[other]:
+			if code not in codes:
+				kept.append(code)
+		if kept.size() != key_bindings[other].size():
+			stored[other] = kept
+	stored[action] = codes.duplicate()
+	_on_option_changed("bindings", stored)
+
+
+func _on_bindings_reset() -> void:
+	_on_option_changed("bindings", {})
+
+
 func _apply_settings() -> void:
-	hit_freeze_enabled = bool(_settings["hit_freeze"])
-	reduced_flashes = bool(_settings["reduced_flashes"])
-	if _sfx != null:
-		_sfx.set_volume(float(_settings["sound"]))
-	if _time_stop != null:
-		_time_stop.reduced_flashes = reduced_flashes
-	if _effects != null:
-		_effects.reduced_flashes = reduced_flashes
-	if _preview != null:
-		_preview.high_contrast = bool(_settings["high_contrast_previews"])
-		_preview.queue_redraw()
-	if _telemetry != null:
-		_telemetry.enabled = bool(_settings["telemetry"])
-	if DisplayServer.get_name() != "headless":
-		var desired := DisplayServer.WINDOW_MODE_MAXIMIZED if bool(_settings["maximized"]) \
-			else DisplayServer.WINDOW_MODE_WINDOWED
-		if DisplayServer.window_get_mode() != desired:
-			DisplayServer.window_set_mode(desired)
+	for key in _settings:
+		_apply_setting(str(key))
+
+
+func _apply_setting(key: String) -> void:
+	match key:
+		"sfx":
+			if _sfx != null:
+				_sfx.set_sfx_volume(float(_settings["sfx"]))
+		"voice":
+			if _sfx != null:
+				_sfx.set_voice_volume(float(_settings["voice"]))
+		"hit_freeze":
+			hit_freeze_enabled = bool(_settings["hit_freeze"])
+		"reduced_flashes":
+			reduced_flashes = bool(_settings["reduced_flashes"])
+			if _time_stop != null:
+				_time_stop.reduced_flashes = reduced_flashes
+			if _effects != null:
+				_effects.reduced_flashes = reduced_flashes
+		"high_contrast_previews":
+			if _preview != null:
+				_preview.high_contrast = bool(_settings["high_contrast_previews"])
+				_preview.queue_redraw()
+		"telemetry":
+			if _telemetry != null:
+				_telemetry.enabled = bool(_settings["telemetry"])
+		"bindings":
+			_apply_bindings()
+		"display":
+			if DisplayServer.get_name() != "headless":
+				_apply_display(int(_settings["display"]))
+
+
+## One row owns the whole window decision, so a size and a mode can never
+## disagree about what the player asked for.
+func _apply_display(preset: int) -> void:
+	var desired := DisplayServer.WINDOW_MODE_WINDOWED
+	if preset == DISPLAY_MAXIMIZED:
+		desired = DisplayServer.WINDOW_MODE_MAXIMIZED
+	elif preset == DISPLAY_FULLSCREEN:
+		desired = DisplayServer.WINDOW_MODE_FULLSCREEN
+	if DisplayServer.window_get_mode() != desired:
+		DisplayServer.window_set_mode(desired)
+	if preset >= DISPLAY_SIZES.size():
+		return
+	var size: Vector2i = DISPLAY_SIZES[preset]
+	if DisplayServer.window_get_size() != size:
+		DisplayServer.window_set_size(size)
+		# Resizing from the top-left corner walks the window off screen over a few
+		# changes, so it is re-centred on the screen it already lives on.
+		var screen := DisplayServer.window_get_current_screen()
+		DisplayServer.window_set_position(
+			DisplayServer.screen_get_position(screen)
+			+ (DisplayServer.screen_get_size(screen) - size) / 2)
 
 
 func _reset_freeplay() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	for g in grenades:
-		g.queue_free()
-	grenades.clear()
 	_clear_character_projectiles()
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
 		p.fighter_style = player_weapons[i]
+		_sync_fighter_visual(p, i)
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
@@ -1415,8 +1518,8 @@ func _apply_movers(abs_tick: int) -> void:
 
 func _load_level(index: int) -> void:
 	level_index = posmod(index, Levels.count())
-	var lv := Levels.build_tutorial() if tutorial_mode else \
-		(Levels.build_prototype() if prototype_mode else Levels.build(level_index, player_count))
+	var lv := Levels.build_tutorial() if tutorial_mode \
+		else Levels.build(level_index, player_count)
 	level_name = lv["name"]
 	_backdrop.show_level(level_index)
 	level_wrap = Levels.wrap_label(lv)
@@ -1465,89 +1568,6 @@ func next_level() -> void:
 	restart()   # also zeroes the score
 
 
-# ------------------------------------------------------------- prototype -----
-
-## Menu-owned ruleset selection. 0 = authored game, 1 = close-camera test.
-## Applying it before level load keeps every match isolated
-## from whichever experiment was played previously.
-func _apply_ruleset(selected: int) -> void:
-	prototype_mode = selected == 1
-	_sync_prototype_tuning()
-	_sync_prototype_camera()
-	_sync_prototype_timings()
-
-## Captured once so switching rulesets cannot drift tuning.
-func _sync_prototype_tuning() -> void:
-	if _authored_jump_impulse < 0.0:
-		_authored_jump_impulse = jump_impulse
-	jump_impulse = prototype_jump_impulse if prototype_mode else _authored_jump_impulse
-
-
-## The authored timings are captured once, on the first call, so toggling back
-## and forth cannot drift them.
-func _sync_prototype_timings() -> void:
-	if _authored_timings.is_empty():
-		_authored_timings = {
-			"planning_duration": planning_duration,
-			"commit_delay": commit_delay,
-			"ai_think_min": ai_think_min,
-			"ai_think_max": ai_think_max,
-		}
-	if prototype_mode:
-		planning_duration = prototype_planning_duration
-		commit_delay = prototype_commit_delay
-		# An opponent that deliberates for two seconds would eat the whole short
-		# window and make auto-ready pointless, so the AI's beat scales with it.
-		ai_think_min = minf(_authored_timings["ai_think_min"], prototype_planning_duration * 0.25)
-		ai_think_max = minf(_authored_timings["ai_think_max"], prototype_planning_duration * 0.60)
-	else:
-		for key in _authored_timings:
-			set(key, _authored_timings[key])
-	_clamp_planning_timer()
-
-
-## PROTOTYPE. Finishing your action readies you. There is no separate confirm
-## press to remember, which is what makes a two-and-a-half second turn workable.
-##
-## "Finished" is deliberately NOT "has thrown". Piloting after the shot — firing
-## early, then running for cover behind your own knife — is one of the better
-## moves in the game, and readying on the throw would silently delete it, since
-## a confirmed plan stops accepting pilot input. So the rule is: the shot is
-## placed, and the player has stopped driving for a moment.
-##
-## Rollback is untouched — it un-fires the shot, so the plan stops being finished
-## and the ready state falls away with it.
-func _auto_ready_finished_plans(delta: float) -> void:
-	if not prototype_mode or not prototype_auto_ready:
-		return
-	for i in players.size():
-		if not _is_locally_controlled(i) or is_ai(i):
-			continue
-		var p: Player = players[i]
-		if not p.alive or p.plan.confirmed:
-			continue
-		# A ghost that advanced this frame, or a draw still being held, is a
-		# player still acting. Comparing the recording length is enough to see
-		# it, and keeps this rule out of the piloting code entirely.
-		var recorded: int = p.plan.recorded_ticks()
-		if charging[i] or recorded != _plan_ticks_seen[i] or not p.plan.has_shot():
-			_plan_ticks_seen[i] = recorded
-			_plan_idle[i] = 0.0
-			continue
-		_plan_idle[i] += delta
-		if _plan_idle[i] >= prototype_ready_grace:
-			_confirm(i)
-
-
-func _sync_prototype_camera() -> void:
-	if _camera == null:
-		return
-	_camera.enabled = prototype_mode
-	if not prototype_mode:
-		_camera.position = Vector2(ARENA_W, ARENA_H) * 0.5
-		_camera.zoom = Vector2.ONE
-
-
 func _spawn_players() -> void:
 	for i in player_count:
 		_add_player(i)
@@ -1566,15 +1586,43 @@ func _add_player(i: int) -> void:
 	p.plan.set_aim_from_vector(_default_aim_vector(i), aim_min_angle, aim_max_angle)
 	p.plan.power = 0.55
 	_player_layer.add_child(p)
-	if fighter_visuals_enabled and (not simplified_fighter_proto_enabled or i == 0):
-		var fighter_visual := FIGHTER_VISUAL_SCRIPT.new()
-		fighter_visual.name = "FighterVisual"
-		var fighter_skin = FIGHTER_SKIN_SCRIPT.simplified_executor_proof() \
-			if simplified_fighter_proto_enabled else FIGHTER_SKIN_SCRIPT.executor_prototype(i)
-		fighter_visual.configure(p, fighter_skin)
-		p.add_child(fighter_visual)
-		p.draw_legacy_visual = false
+	_sync_fighter_visual(p, i)
 	players.append(p)
+
+
+func _fighter_skin_for(i: int):
+	if not fighter_visuals_enabled:
+		return null
+	if not simplified_fighter_proto_enabled:
+		return FIGHTER_SKIN_SCRIPT.executor_prototype(i)
+	# A fighter is drawn the same way in every slot; the player's own accent is
+	# what separates two people who picked it, so the roster's duplicate rule
+	# stays legible instead of putting two identical figures on the board.
+	var identity: Color = PLAYER_COLORS[i % PLAYER_COLORS.size()]
+	if player_weapons[i] == Weapon.DASHBLADE:
+		return FIGHTER_SKIN_SCRIPT.animated_rook(identity)
+	if player_weapons[i] == Weapon.KNIVES:
+		return FIGHTER_SKIN_SCRIPT.animated_executor_proof(identity)
+	return null
+
+
+func _sync_fighter_visual(p: Player, i: int) -> void:
+	var fighter_skin = _fighter_skin_for(i)
+	var visual := p.get_node_or_null("FighterVisual") as FighterVisual
+	if fighter_skin == null:
+		p.draw_legacy_visual = true
+		if visual != null:
+			p.remove_child(visual)
+			visual.free()
+		return
+	if visual == null:
+		visual = FIGHTER_VISUAL_SCRIPT.new()
+		visual.name = "FighterVisual"
+		visual.configure(p, fighter_skin)
+		p.add_child(visual)
+	else:
+		visual.configure(p, fighter_skin)
+	p.draw_legacy_visual = false
 
 
 ## Local matches can switch between the one-player tutorial, the duel roster,
@@ -1598,29 +1646,28 @@ func _default_aim_vector(i: int) -> Vector2:
 func _assign_pads() -> void:
 	var list := Input.get_connected_joypads()
 	_pads.fill(-1)
-	if team_mode:
-		for i in mini(players.size(), player_devices.size()):
-			var device := player_devices[i]
-			if device >= 0 and device in list and not is_ai(i):
-				_pads[i] = device
-		return
 	if list.is_empty():
 		return
-	# A local duel has one intentional device split: P1 owns keyboard + mouse;
-	# the first connected pad owns P2. Online still maps the first pad to the
-	# server-assigned local fighter because there is only one person per machine.
+	# Online maps the first pad to the server-assigned local fighter, because
+	# there is only ever one person on this machine.
 	if online_mode and online_player >= 0:
 		_pads[online_player] = list[0]
-	elif players.size() > 1:
+		return
+	# Local play follows what the roster screen recorded: a pad drives the slot
+	# it claimed. Entry points with no roster behind them (tutorial, free play
+	# defaults) keep the old split of P1 keyboard, first pad on P2.
+	var claimed := false
+	for i in mini(players.size(), player_devices.size()):
+		var device := player_devices[i]
+		if device >= 0 and device in list and not is_ai(i):
+			_pads[i] = device
+			claimed = true
+	if not claimed and players.size() > 1:
 		_pads[1] = list[0]
 
 
 func arrow_speed_for(power: float) -> float:
 	return lerpf(arrow_speed_min, arrow_speed_max, clampf(power, 0.0, 1.0))
-
-
-func uses_grenade(i: int) -> bool:
-	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.GRENADE
 
 
 func uses_dashblade(i: int) -> bool:
@@ -1704,7 +1751,7 @@ func _frame_debt_threshold_units() -> int:
 	return maxi(1, roundi(maxf(0.001, frame_debt_distance_per_cell) * 1000.0))
 
 
-## Convert real horizontal displacement into the distance Velocity was denied
+## Convert real horizontal displacement into the distance The Rook was denied
 ## by her class multiplier. At 90%, every nine travelled pixels represent one
 ## deleted pixel. Pressing into a wall earns nothing because no movement exists
 ## to edit out of the sequence.
@@ -1786,31 +1833,20 @@ func _roster_weapon_or_default(value: int) -> int:
 
 func weapon_short_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.GRENADE: return "GRENADIER"
-		Weapon.DASHBLADE: return "VELOCITY"
-		Weapon.CHAKRAM: return "BROODTAIL"
-		Weapon.SHOCK: return "STATIC WITCH"
+		Weapon.DASHBLADE: return "ROOK"
+		Weapon.CHAKRAM: return "ECLIPSE"
+		Weapon.SHOCK: return "PULSE"
 		_: return "DUELIST"
 
 
 func character_display_name(i: int) -> String:
 	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.GRENADE: return "THE GRENADIER"
-		Weapon.DASHBLADE: return "THE VELOCITY"
-		Weapon.CHAKRAM: return "BROODTAIL"
-		Weapon.SHOCK: return "THE STATIC WITCH"
-		_: return "DAGGER DUELIST"
+		Weapon.DASHBLADE: return "THE ROOK"
+		Weapon.CHAKRAM: return "THE ECLIPSE"
+		Weapon.SHOCK: return "THE PULSE"
+		_: return "THE DUELIST"
 
 
-func grenade_launch_velocity(aim: Vector2, power: float) -> Vector2:
-	var direct := aim.normalized()
-	if direct.is_zero_approx():
-		direct = Vector2.RIGHT
-	return direct * lerpf(grenade_speed_min, grenade_speed_max, clampf(power, 0.0, 1.0))
-
-
-## Shared Chakram launch geometry. Execution and the planning preview both read
-## these velocities so the normal direct throw and SUPER spread cannot drift.
 func chakram_launch_velocities(aim: Vector2, power: float,
 		empowered: bool = false) -> Array[Vector2]:
 	var direct := aim.normalized()
@@ -1843,19 +1879,13 @@ func knife_launch_velocities(aim: Vector2, power: float, secret_triple: bool = f
 	var offsets: PackedFloat32Array = knife_offsets(power)
 	if secret_triple:
 		offsets.clear()
-		if prototype_mode:
-			offsets.append(-prototype_secondary_lob_angle)
-			offsets.append(0.0)
-			offsets.append(prototype_secondary_lob_angle)
-		else:
-			var half_spread := knife_spread_for(power) * 0.5
-			offsets.append(-half_spread)
-			offsets.append(0.0)
-			offsets.append(half_spread)
+		var half_spread := knife_spread_for(power) * 0.5
+		offsets.append(-half_spread)
+		offsets.append(0.0)
+		offsets.append(half_spread)
 	var out: Array[Vector2] = []
 	for off in offsets:
-		var signed_offset: float = -side * off if prototype_mode else off
-		out.append(base.rotated(deg_to_rad(signed_offset)))
+		out.append(base.rotated(deg_to_rad(off)))
 	return out
 
 
@@ -1869,19 +1899,8 @@ func knife_spread_for(power: float) -> float:
 ## preview, the throw and the AI all read the fan from here so they cannot drift
 ## apart.
 func knife_offsets(power: float) -> PackedFloat32Array:
-	var n: int = maxi(1, prototype_knives_per_shot if prototype_mode else knives_per_shot)
+	var n: int = maxi(1, knives_per_shot)
 	var out := PackedFloat32Array()
-	if prototype_mode:
-		if n == 1:
-			out.append(0.0)
-		elif n == 2:
-			out.append(0.0)
-			out.append(prototype_secondary_lob_angle)
-		else:
-			for i in n:
-				out.append((float(i) / float(n - 1) - 0.5) \
-					* prototype_secondary_lob_angle * 2.0)
-		return out
 	if n == 1:
 		out.append(0.0)
 		return out
@@ -1942,6 +1961,10 @@ func _physics_process(delta: float) -> void:
 	match state:
 		Phase.MENU:
 			return
+		Phase.ROSTER:
+			return
+		Phase.MATCH_SETUP:
+			return
 		Phase.ONLINE_LOBBY:
 			return
 		Phase.ONLINE_WAIT:
@@ -1963,7 +1986,6 @@ func _physics_process(delta: float) -> void:
 			if tutorial_waiting and _tutorial.observe_planning():
 				_ui.refresh()
 				return
-			_auto_ready_finished_plans(delta)
 			_tick_ai(delta)
 			_update_facing()
 			_refresh_dirty_ghost_paths()
@@ -1987,7 +2009,10 @@ func _physics_process(delta: float) -> void:
 			# Cut-ins run on ordinary frame time, but no deterministic simulation tick
 			# is consumed until the portrait and chant have completely cleared.
 			if _super_freeze == null or not _super_freeze.is_active():
-				_sim_tick(delta)
+				# The fixed tick, never the frame delta. The planning ghost is built
+				# from tick_dt(), so execution has to integrate with the same number
+				# or the plan the player committed to stops being the one that runs.
+				_sim_tick(tick_dt())
 				if _super_freeze == null or not _super_freeze.is_active():
 					_capture_replay_frame()
 					if online_mode and state == Phase.GAME_OVER:
@@ -2032,7 +2057,7 @@ func _sim_tick(dt: float) -> void:
 			continue
 		if p.plan.super_shot:
 			var since_launch: int = exec_tick - p.plan.shot_tick
-			if player_weapons[p.index] in [Weapon.KNIVES, Weapon.GRENADE] \
+			if player_weapons[p.index] == Weapon.KNIVES \
 					and since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
 				var wave: int = since_launch / maxi(1, super_wave_interval_ticks)
 				if wave < maxi(1, super_waves):
@@ -2064,16 +2089,16 @@ func _freeplay_tick(delta: float) -> void:
 	var p: Player = players[0]
 
 	var dir := 0
-	if _held(K_P1["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
+	if _held(key_bindings["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
 		dir -= 1
-	if _held(K_P1["right"]) or _pad_right(_pads[0]) or _touch_controls.right_held:
+	if _held(key_bindings["right"]) or _pad_right(_pads[0]) or _touch_controls.right_held:
 		dir += 1
-	var jump_now: bool = _held(K_P1["jump"]) \
+	var jump_now: bool = _held(key_bindings["jump"]) \
 		or (_pads[0] >= 0 and Input.is_joy_button_pressed(_pads[0], JOY_BUTTON_A)) \
 		or _touch_controls.jump_held
 	var jump_edge: bool = jump_now and not _jump_prev[0]
 	_jump_prev[0] = jump_now
-	var wait_now: bool = _held(K_P1["wait"]) or _pad_down(_pads[0]) \
+	var wait_now: bool = _held(key_bindings["wait"]) or _pad_down(_pads[0]) \
 		or _touch_controls.wait_held
 	var drop_now: bool = jump_edge and wait_now
 
@@ -2096,7 +2121,7 @@ func _freeplay_tick(delta: float) -> void:
 	_update_facing()
 
 	# hold to draw, release to loose — immediately, no turn to wait for
-	var primary_held: bool = _held(K_P1["charge"]) or _touch_controls.charge_held
+	var primary_held: bool = _held(key_bindings["charge"]) or _touch_controls.charge_held
 	var secondary_held: bool = uses_shock(0) and not _touch_controls.has_active_touches() \
 		and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	if not _touch_controls.has_active_touches() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
@@ -2157,7 +2182,6 @@ func _step_arrows(dt: float) -> void:
 	_step_dashblades(dt, survivors)
 	_resolve_clashes(survivors)
 	arrows = survivors
-	_step_grenades(dt)
 	_step_chakrams(dt)
 	_step_shock_weapons(dt)
 	if not damaged.is_empty():
@@ -2208,37 +2232,6 @@ func _step_dashblades(dt: float, live_arrows: Array) -> void:
 	dashblades = live
 
 
-func _step_grenades(dt: float) -> void:
-	var live: Array = []
-	var triggered: Array = []
-	for g in grenades:
-		var res: Dictionary = g.sim_step(dt, players)
-		if res["alive"]:
-			live.append(g)
-			if res["detonate"]:
-				triggered.append(g)
-		else:
-			g.queue_free()
-	grenades = live
-	arrows = _resolve_grenade_knife_contacts(arrows, triggered)
-
-	# Two moving grenades use the same synchronised swept test as knife clashes.
-	# Both are detonated, and the breadth-first explosion pass handles any chain.
-	for i in grenades.size():
-		for j in range(i + 1, grenades.size()):
-			var a = grenades[i]
-			var b = grenades[j]
-			if Arrow.moving_points_closest(a.prev_pos, a.position, b.prev_pos, b.position)[0] \
-					<= a.collision_radius() + b.collision_radius():
-				if not triggered.has(a):
-					triggered.append(a)
-				if not triggered.has(b):
-					triggered.append(b)
-
-	if not triggered.is_empty():
-		_detonate_grenades(triggered)
-
-
 func _step_chakrams(dt: float) -> void:
 	var live: Array = []
 	for chakram in chakrams:
@@ -2246,6 +2239,10 @@ func _step_chakrams(dt: float) -> void:
 		var result: Dictionary = chakram.sim_step(dt, players, simulation_turn)
 		if result["hit_player"] >= 0:
 			_on_player_hit(result["hit_player"], chakram.position, chakram.shooter)
+		if result.get("bounced", false):
+			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.45))
+			_remember_aftermath("CHAKRAM RICOCHET", chakram.position, chakram.color)
+			_sfx.play("clash")
 		if result.get("stuck", false):
 			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.35))
 			_remember_aftermath("CHAKRAM STUCK", chakram.position, chakram.color)
@@ -2300,24 +2297,6 @@ func _step_chakrams(dt: float) -> void:
 	if not broken_chakrams.is_empty():
 		_sfx.play("clash")
 
-	# A direct grenade body impact breaks the chakram and primes the grenade's
-	# ordinary detonation path; the explosion remains owned by its shooter.
-	var triggered_grenades: Array = []
-	for chakram in chakrams.duplicate():
-		for grenade in grenades:
-			if chakram.shooter == grenade.shooter:
-				continue
-			var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
-				grenade.prev_pos, grenade.position)
-			if contact[0] > Chakram.COLLISION_RADIUS + grenade.collision_radius():
-				continue
-			chakrams.erase(chakram)
-			chakram.queue_free()
-			if not triggered_grenades.has(grenade):
-				triggered_grenades.append(grenade)
-			break
-	if not triggered_grenades.is_empty():
-		_detonate_grenades(triggered_grenades)
 
 
 func _step_shock_weapons(dt: float) -> void:
@@ -2504,7 +2483,7 @@ func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
 		var blast_contact := _shock_blast_player_contact(orb.position, radius, player)
 		if player.alive and not player.is_invulnerable() \
 				and blast_contact.is_finite() \
-				and _grenade_blast_reaches(orb.position, blast_contact):
+				and _blast_reaches(orb.position, blast_contact):
 			_on_player_hit(player.index, player.position, scorer)
 	for arrow: Arrow in arrows:
 		var local_position: Vector2 = orb.position + wrap_delta(orb.position, arrow.position)
@@ -2519,13 +2498,6 @@ func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
 		if not redirected.is_equal_approx(chakram.vel):
 			chakram.vel = redirected
 			chakram.force_recall()
-	for grenade in grenades:
-		var local_position: Vector2 = orb.position + wrap_delta(orb.position, grenade.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			grenade.vel, impulse, radius)
-		if not redirected.is_equal_approx(grenade.vel):
-			grenade.vel = redirected
-			grenade.prev_pos = grenade.position
 	for other_plasma in shock_plasmas:
 		if other_plasma == source_projectile:
 			continue
@@ -2569,120 +2541,7 @@ func _shock_blast_player_contact(origin: Vector2, radius: float,
 	return nearest
 
 
-func _resolve_grenade_knife_contacts(live_arrows: Array, triggered: Array) -> Array:
-	if grenades.is_empty() or live_arrows.is_empty():
-		return live_arrows
-	var kept: Array = []
-	for a: Arrow in live_arrows:
-		var struck = null
-		var contact: Array = []
-		for g in grenades:
-			contact = Arrow.moving_points_closest(a.prev_pos, a.position, g.prev_pos, g.position)
-			if contact[0] <= g.collision_radius() + knife_clash_radius * 0.5:
-				struck = g
-				break
-		if struck == null:
-			kept.append(a)
-			continue
-		struck.position = contact[2]
-		struck.prev_pos = struck.position
-		if not triggered.has(struck):
-			triggered.append(struck)
-		a.queue_free()
-	return kept
-
-
-func _detonate_grenades(initial: Array) -> void:
-	var pending: Array = initial.duplicate()
-	var exploded: Array = []
-	var cluster_specs: Array[Dictionary] = []
-	var cursor := 0
-	while cursor < pending.size():
-		var g = pending[cursor]
-		cursor += 1
-		if exploded.has(g) or not grenades.has(g):
-			continue
-		exploded.append(g)
-		_blasts_this_execution += 1
-		_effects.add(Effects.Kind.EXPLOSION, g.position, g.color)
-		_remember_aftermath("BLAST", g.position, g.color)
-		_sfx.play("explosion")
-		var blast_radius: float = grenade_blast_radius * g.blast_radius_scale
-		# A three-second grenade rewards the full setup only when its timer matures.
-		# Early dagger, bomb and player impacts still detonate it normally.
-		if not g.cluster_fragment and g.fuse_ticks_total >= 3 * Engine.physics_ticks_per_second \
-				and g.fuse_ticks_left <= 0:
-			cluster_specs.append({
-				"position": g.position,
-				"shooter": g.shooter,
-				"color": g.color,
-			})
-
-		for p: Player in players:
-			if not p.alive or p.is_invulnerable():
-				continue
-			if wrap_delta(g.position, p.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, p.position):
-				_on_player_hit(p.index, p.position, g.shooter)
-
-		# An explosion consumes nearby knives. This prevents the dagger that lit
-		# the fuse from continuing invisibly through the blast.
-		var kept_arrows: Array = []
-		for a: Arrow in arrows:
-			if wrap_delta(g.position, a.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, a.position):
-				a.queue_free()
-			else:
-				kept_arrows.append(a)
-		arrows = kept_arrows
-
-		for other in grenades:
-			if other == g or exploded.has(other) or pending.has(other):
-				continue
-			if wrap_delta(g.position, other.position).length() <= blast_radius \
-					and _grenade_blast_reaches(g.position, other.position):
-				pending.append(other)
-
-	var kept_grenades: Array = []
-	for g in grenades:
-		if exploded.has(g):
-			g.queue_free()
-		else:
-			kept_grenades.append(g)
-	grenades = kept_grenades
-	_spawn_cluster_fragments(cluster_specs)
-
-
-func _spawn_cluster_fragments(specs: Array[Dictionary]) -> void:
-	var fragment_ticks := maxi(1, int(round(grenade_cluster_fragment_fuse \
-		* Engine.physics_ticks_per_second)))
-	var directions := PackedFloat32Array([-150.0, -90.0, -30.0])
-	for spec: Dictionary in specs:
-		var volley := _next_volley
-		_next_volley += 1
-		for degrees: float in directions:
-			var direction := Vector2.from_angle(deg_to_rad(degrees))
-			var g = GRENADE_SCRIPT.new()
-			g.cfg = self
-			g.shooter = int(spec["shooter"])
-			g.volley = volley
-			g.network_id = _next_grenade_id
-			_next_grenade_id += 1
-			g.color = spec["color"]
-			g.cluster_fragment = true
-			g.blast_radius_scale = grenade_cluster_blast_scale
-			g.position = wrap_point(Vector2(spec["position"]) + direction * 28.0)
-			g.prev_pos = g.position
-			g.vel = direction * grenade_cluster_fragment_speed
-			g.fuse_ticks_total = fragment_ticks
-			g.fuse_ticks_left = fragment_ticks
-			_arrow_layer.add_child(g)
-			grenades.append(g)
-
-
-## Hard cover blocks blast damage. The target is unfolded across wrapping seams
-## before the segment test so the shortest visible route is always used.
-func _grenade_blast_reaches(origin: Vector2, target: Vector2) -> bool:
+func _blast_reaches(origin: Vector2, target: Vector2) -> bool:
 	var endpoint := origin + wrap_delta(origin, target)
 	for r: Rect2 in solid_rects:
 		var impact := Arrow.segment_rect_impact(origin, endpoint, r)
@@ -2795,9 +2654,6 @@ func _resolve_clashes(live: Array) -> void:
 				continue
 
 			var at: Vector2 = (hit[1] + hit[2]) * 0.5
-			if prototype_mode and _try_trailing_boost(a, b, at):
-				break
-
 			var prior_hits: int = maxi(a.clash_count, b.clash_count)
 			var damping: float = minf(knife_reclash_damping_cap,
 				knife_clash_damping + float(prior_hits) * knife_reclash_damping_bonus)
@@ -2825,39 +2681,6 @@ func _resolve_clashes(live: Array) -> void:
 				_award_super_charge(a.shooter)
 				_award_super_charge(b.shooter)
 			break
-
-
-## Same-direction contact is not a clash in Close Camera: if the
-## faster knife genuinely approached from behind, it spends itself to relay
-## momentum into the leading knife. Ownership of the leader never changes.
-func _try_trailing_boost(a: Arrow, b: Arrow, at: Vector2) -> bool:
-	var sa: float = a.vel.length()
-	var sb: float = b.vel.length()
-	if sa <= 0.001 or sb <= 0.001:
-		return false
-	if a.vel.normalized().dot(b.vel.normalized()) < knife_boost_alignment:
-		return false
-	var chaser: Arrow = a if sa > sb else b
-	var leader: Arrow = b if chaser == a else a
-	if chaser.vel.length() - leader.vel.length() < knife_boost_min_closing_speed:
-		return false
-	var travel: Vector2 = chaser.vel.normalized()
-	if (leader.prev_pos - chaser.prev_pos).dot(travel) < -knife_clash_radius * 0.25:
-		return false
-
-	var relayed: Vector2 = leader.vel + chaser.vel * knife_boost_transfer
-	var cap: float = arrow_speed_max * knife_boost_speed_cap
-	if relayed.length() > cap:
-		relayed = relayed.normalized() * cap
-	leader.boost(relayed, knife_clash_cooldown, chaser.stable_id())
-	# A clean relay re-energises one spent bank, keeping a successful chain live.
-	leader.ricochet_count = maxi(0, leader.ricochet_count - 1)
-	chaser.deflect(chaser.vel * 0.18, knife_clash_spin, knife_clash_cooldown,
-		leader.stable_id())
-	_effects.add(Effects.Kind.CLASH, at, Color(1.0, 0.72, 0.18))
-	_remember_aftermath("BOOST", at, Color(1.0, 0.72, 0.18))
-	_sfx.play("clash")
-	return true
 
 
 func _award_super_charge(shooter: int) -> void:
@@ -3166,7 +2989,8 @@ func _begin_planning(first: bool) -> void:
 		var search := Ai.new()
 		search.begin(self, i, target)
 		_ai_searches[i] = search
-		_ai_think[i] = rng.randf_range(ai_think_min, ai_think_max)
+		var think_range := ai_think_range_for(i)
+		_ai_think[i] = rng.randf_range(think_range.x, think_range.y)
 
 
 func _advance_chakrams_for_turn() -> void:
@@ -3350,26 +3174,6 @@ func _capture_replay_frame() -> void:
 			"trail": a.trail.duplicate(),
 		})
 
-	var grenade_frames: Array[Dictionary] = []
-	for g in grenades:
-		grenade_frames.append({
-			"network_id": g.network_id,
-			"shooter": g.shooter,
-			"volley": g.volley,
-			"position": g.position,
-			"prev_pos": g.prev_pos,
-			"vel": g.vel,
-			"rotation": g.rotation,
-			"color": g.color,
-			"fuse_ticks_left": g.fuse_ticks_left,
-			"fuse_ticks_total": g.fuse_ticks_total,
-			"age_ticks": g.age_ticks,
-			"bounce_count": g.bounce_count,
-			"blast_radius_scale": g.blast_radius_scale,
-			"cluster_fragment": g.cluster_fragment,
-			"trail": g.trail.duplicate(),
-		})
-
 	var hazard_frames: Array[Dictionary] = []
 	for h: Hazard in hazards:
 		hazard_frames.append({
@@ -3384,7 +3188,6 @@ func _capture_replay_frame() -> void:
 		"score": score.duplicate(),
 		"players": player_frames,
 		"arrows": arrow_frames,
-		"grenades": grenade_frames,
 		"hazards": hazard_frames,
 		"world_tick": world_tick,
 		"platforms": platforms.duplicate(true),
@@ -3512,40 +3315,6 @@ func _apply_replay_frame(frame: Dictionary) -> void:
 		frame_arrows.append(a)
 	arrows = frame_arrows
 
-	var grenade_by_id: Dictionary = {}
-	for child in _arrow_layer.get_children():
-		if child is Grenade:
-			grenade_by_id[child.network_id] = child
-			child.visible = false
-	var frame_grenades: Array = []
-	for data: Dictionary in frame.get("grenades", []):
-		var id := int(data["network_id"])
-		var g = grenade_by_id.get(id)
-		if g == null:
-			g = GRENADE_SCRIPT.new()
-			g.cfg = self
-			g.network_id = id
-			_arrow_layer.add_child(g)
-			grenade_by_id[id] = g
-		g.visible = true
-		g.shooter = int(data["shooter"])
-		g.volley = int(data["volley"])
-		g.position = data["position"]
-		g.prev_pos = data["prev_pos"]
-		g.vel = data["vel"]
-		g.rotation = float(data["rotation"])
-		g.color = data["color"]
-		g.fuse_ticks_left = int(data["fuse_ticks_left"])
-		g.fuse_ticks_total = int(data["fuse_ticks_total"])
-		g.age_ticks = int(data["age_ticks"])
-		g.bounce_count = int(data["bounce_count"])
-		g.blast_radius_scale = float(data.get("blast_radius_scale", 1.0))
-		g.cluster_fragment = bool(data.get("cluster_fragment", false))
-		g.trail = PackedVector2Array(data["trail"])
-		g.queue_redraw()
-		frame_grenades.append(g)
-	grenades = frame_grenades
-
 	world_tick = int(frame["world_tick"])
 	platforms = frame["platforms"].duplicate(true)
 	_rebuild_solids()
@@ -3576,8 +3345,7 @@ func _finish_match_replay() -> void:
 	if not _replay_terminal_frame.is_empty():
 		_apply_replay_frame(_replay_terminal_frame)
 	for child in _arrow_layer.get_children():
-		if (child is Arrow and not arrows.has(child)) \
-				or (child is Grenade and not grenades.has(child)):
+		if child is Arrow and not arrows.has(child):
 			child.queue_free()
 	state = Phase.GAME_OVER
 	banner_text = "TEAM %s WINS THE MATCH" % TEAM_NAMES[winning_team] \
@@ -3671,8 +3439,6 @@ func _choose_respawn_point(player_index: int) -> Vector2:
 ## spread is the shot, not a sequence of shots.
 func _spawn_player_attack(p: Player) -> void:
 	match player_weapons[p.index]:
-		Weapon.GRENADE:
-			_spawn_grenade(p)
 		Weapon.DASHBLADE:
 			_spawn_dashblade(p, false)
 		Weapon.CHAKRAM:
@@ -3791,13 +3557,34 @@ func _spawn_shock_plasma(p: Player, direct: Vector2) -> void:
 	_sfx.play("shoot")
 
 
+## Detonates this player's oldest orbs until one slot is free. Age is read from
+## age_ticks rather than list order so a restored replay frame retires the same
+## orb the live match did.
+func _retire_oldest_orb_over_cap(shooter: int) -> void:
+	var cap: int = maxi(1, shock_max_live_orbs)
+	while shock_orb_count(shooter) >= cap:
+		var oldest = null
+		for orb in shock_orbs:
+			if orb.shooter != shooter:
+				continue
+			if oldest == null or orb.age_ticks > oldest.age_ticks \
+					or (orb.age_ticks == oldest.age_ticks and orb.network_id < oldest.network_id):
+				oldest = orb
+		if oldest == null:
+			return
+		_detonate_shock_orb(oldest, false, shooter)
+
+
 func _spawn_shock_orb(p: Player, direct: Vector2, prearmed: bool) -> void:
-	# Every cast adds another persistent setup. Lifetime and counterplay bound the
-	# field naturally; casting a new orb never silently dismisses an older one.
+	# The field is a resource with a ceiling, not an accumulation. Casting past the
+	# cap pops the oldest orb rather than refusing the throw, so the turn still
+	# resolves into something the player can read and plan around.
+	_retire_oldest_orb_over_cap(p.index)
 	var orb = SHOCK_ORB_SCRIPT.new()
 	orb.cfg = self
 	orb.shooter = p.index
 	orb.arm_ticks = maxi(1, shock_orb_arm_ticks)
+	orb.lifetime_ticks = maxi(orb.arm_ticks + 1, shock_orb_lifetime_ticks)
 	orb.network_id = _next_character_projectile_id
 	_next_character_projectile_id += 1
 	orb.color = p.color
@@ -3829,27 +3616,6 @@ func _spawn_character_super(p: Player) -> void:
 		Weapon.SHOCK:
 			_spawn_shock_orb(p, p.aim_dir(), true)
 			_spawn_shock_plasma(p, p.aim_dir())
-
-
-func _spawn_grenade(p: Player) -> void:
-	var launch := grenade_launch_velocity(p.aim_dir(), p.plan.power)
-	var g = GRENADE_SCRIPT.new()
-	g.cfg = self
-	g.shooter = p.index
-	g.volley = _next_volley
-	_next_volley += 1
-	g.network_id = _next_grenade_id
-	_next_grenade_id += 1
-	g.color = p.color
-	g.position = p.shoulder() + launch.normalized() * 24.0
-	g.prev_pos = g.position
-	g.vel = launch
-	g.fuse_ticks_total = clampi(p.plan.grenade_fuse_seconds, 1, 3) \
-		* Engine.physics_ticks_per_second
-	g.fuse_ticks_left = g.fuse_ticks_total
-	_arrow_layer.add_child(g)
-	grenades.append(g)
-	_sfx.play("shoot")
 
 
 func _spawn_arrow(p: Player) -> void:
@@ -3932,24 +3698,23 @@ func restart() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	for g in grenades:
-		g.queue_free()
-	grenades.clear()
 	_clear_character_projectiles()
 	_next_volley = 1
 	_next_arrow_id = 1
-	_next_grenade_id = 1
 	_next_character_projectile_id = 100000
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
 		var p: Player = players[i]
 		p.fighter_style = player_weapons[i]
+		_sync_fighter_visual(p, i)
 		p.clear_afterimages()
 		p.position = spawns[i]
 		p.vel = Vector2.ZERO
 		p.on_ground = true
 		p.air_jumps_left = air_jumps_for(i)
+		p.drop_ticks = 0
+		p.drop_from_y = 0.0
 		p.alive = true
 		p.invuln_turns = 0
 		p.plan = PlayerPlan.new()
@@ -3994,8 +3759,6 @@ func _reset_pilot(i: int) -> void:
 	_pilot_accum[i] = 0.0
 	charging[i] = false
 	_charge_t[i] = 0.0
-	_plan_idle[i] = 0.0
-	_plan_ticks_seen[i] = 0
 	# Planning may resume long after the previous input poll. Sampling the actual
 	# button prevents a stale edge from swallowing an airborne jump.
 	_jump_prev[i] = _jump_input_held(i)
@@ -4074,6 +3837,8 @@ func _rebuild_ghost_path(i: int) -> void:
 	var p: Player = players[i]
 	var pl: PlayerPlan = p.plan
 	var path := PackedVector2Array()
+	var velocity_path := PackedVector2Array()
+	var ground_path := PackedByteArray()
 	# Replay the recording from the live body state.
 	var pos: Vector2 = p.position
 	var vel: Vector2 = p.vel
@@ -4083,12 +3848,16 @@ func _rebuild_ghost_path(i: int) -> void:
 	var drop_from: float = p.drop_from_y
 	var pending_dash = _dash_prediction_copy(i)
 	path.append(pos)
+	velocity_path.append(vel)
+	ground_path.append(1 if og else 0)
 	for t in exec_ticks():
 		if pending_dash != null and pending_dash.active:
 			var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
 			pos = wrap_point(dash_result["position"])
 			vel = dash_result["velocity"]
 			path.append(pos)
+			velocity_path.append(vel)
+			ground_path.append(1 if og else 0)
 			continue
 		var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
 		vel = drop_result[0]
@@ -4109,9 +3878,13 @@ func _rebuild_ghost_path(i: int) -> void:
 		if og:
 			air_jumps = air_jumps_for(i)
 		path.append(pos)
+		velocity_path.append(vel)
+		ground_path.append(1 if og else 0)
 	if pending_dash != null:
 		pending_dash.free()
 	ghost_path[i] = path
+	ghost_velocity_path[i] = velocity_path
+	ghost_ground_path[i] = ground_path
 	_ghost_path_dirty[i] = false
 
 
@@ -4154,12 +3927,16 @@ func ghost_end(i: int) -> Vector2:
 #   Rollback   : un-fires the shot and drops the confirmation, keeps the path
 #   Reset path : throws the recorded movement away and refills stamina
 
-const K_P1 := {
+## The shipped layout. `key_bindings` starts here and is replaced, action by
+## action, by whatever the player sets on the controls screen.
+const DEFAULT_BINDINGS := {
 	"left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE, KEY_W, KEY_UP], "wait": [KEY_S],
 	"charge": [], "rollback": [KEY_R], "reset": [KEY_F],
 	"super": [KEY_T],
 	"aim_up": [KEY_Q], "aim_down": [KEY_E],
 }
+var key_bindings: Dictionary = DEFAULT_BINDINGS.duplicate(true)
+
 const K_GAMEPAD_ONLY := {
 	"left": [], "right": [], "jump": [], "wait": [],
 	"charge": [], "rollback": [], "reset": [], "super": [],
@@ -4176,16 +3953,18 @@ func _input_map_for(i: int) -> Dictionary:
 	# machine, regardless of whether the server assigned them slot 0 or slot 1.
 	# In a local duel P2 is gamepad-only so the two players never fight over one
 	# keyboard or accidentally drive each other's plan.
-	return K_P1 if online_mode else (K_P1 if i == _keyboard_player() else K_GAMEPAD_ONLY)
+	return key_bindings if online_mode \
+		else (key_bindings if i == _keyboard_player() else K_GAMEPAD_ONLY)
 
 
+## Whoever claimed the keyboard seat on the roster screen drives it in play,
+## in every mode. Slot 0 is the fallback for entry points with no roster.
 func _keyboard_player() -> int:
 	if online_mode:
 		return online_player
-	if team_mode:
-		for i in player_devices.size():
-			if player_devices[i] == TeamSelectLayer.KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
-				return i
+	for i in player_devices.size():
+		if player_devices[i] == KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
+			return i
 	return 0
 
 
@@ -4249,7 +4028,43 @@ func _request_rematch() -> void:
 		_load_level(rematch_level_index)
 		restart()
 		_begin_match_telemetry("tutorial" if tutorial_mode else \
-			("ai_%s" % ("close" if prototype_mode else "wide") if vs_ai else "local_2p"))
+			("ai_wide" if vs_ai else "local_2p"))
+
+
+## An opponent who reloads the page cannot rejoin: a match in progress cannot
+## be rebuilt from one turn of state. Rather than leave the survivor watching
+## an empty room until it expires, let them claim it. The room refuses unless
+## the opponent really is gone, so this is never a way to end a live match.
+func _claim_abandoned_match() -> void:
+	if not online_mode or online_peer_lost == false or state == Phase.GAME_OVER:
+		return
+	if not _online_client.send_forfeit():
+		banner_text = "COULD NOT REACH THE ROOM — RECONNECTING"
+		banner_color = Color(1.0, 0.45, 0.35)
+		banner_time = 2.0
+		return
+	banner_text = "CLAIMING THE MATCH…"
+	banner_color = Color(0.86, 0.68, 1.0)
+	banner_time = 1.6
+
+
+## The room has ruled: the abandoned match is over. Land on the ordinary
+## result screen so the rematch handshake still works if they come back.
+func _finish_abandoned_match(claimed_by: int) -> void:
+	if not online_mode:
+		return
+	online_peer_lost = false
+	winner = clampi(claimed_by, 0, 1)
+	winning_team = -1
+	_online_match_reported = true
+	state = Phase.GAME_OVER
+	# The same arrival every other win uses, so the result screen's gamepad
+	# edges are primed and a held button cannot instantly skip past it.
+	_prime_game_over_pad_state()
+	_finish_match_telemetry()
+	banner_text = "OPPONENT LEFT — PLAYER %d TAKES THE MATCH" % (winner + 1)
+	banner_color = PLAYER_COLORS[winner].lightened(0.3)
+	banner_time = 3.0
 
 
 func _cycle_rematch_level(direction: int) -> void:
@@ -4262,18 +4077,13 @@ func _cycle_rematch_level(direction: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if state == Phase.TEAM_SELECT:
-		var team_joy := event as InputEventJoypadButton
-		if team_joy != null and team_joy.pressed:
-			_team_select.handle_input(team_joy)
-		return
-	if state == Phase.CHARACTER_SELECT:
+	if state == Phase.ROSTER or state == Phase.MATCH_SETUP:
 		var joy := event as InputEventJoypadButton
 		if joy != null and joy.pressed:
-			if team_mode:
-				_character_select.handle_joy_button_for_slot(_slot_for_device(joy.device), joy.button_index)
+			if state == Phase.ROSTER:
+				_roster.handle_joy_button(joy.device, joy.button_index)
 			else:
-				_character_select.handle_joy_button(joy.button_index)
+				_setup.handle_joy_button(joy.device, joy.button_index)
 		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
@@ -4288,14 +4098,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
 		return
-	if state == Phase.TEAM_SELECT:
-		_team_select.handle_input(k)
+	if state == Phase.ROSTER:
+		_roster.handle_key(k.keycode)
 		return
-	if state == Phase.CHARACTER_SELECT:
-		if team_mode:
-			_character_select.handle_key_for_slot(_keyboard_player(), k.keycode)
-		else:
-			_character_select.handle_key(k.keycode)
+	if state == Phase.MATCH_SETUP:
+		_setup.handle_key(k.keycode)
 		return
 	if state == Phase.TUTORIAL:
 		_tutorial.handle_key(k.keycode)
@@ -4324,13 +4131,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			KEY_F8:
 				_fill_test_super(k.shift_pressed)
 			KEY_1, KEY_2, KEY_3:
-				if uses_grenade(0):
-					players[0].plan.grenade_fuse_seconds = int(k.keycode - KEY_0)
-					banner_text = "FREEPLAY GRENADE FUSE — %dS" % \
-						players[0].plan.grenade_fuse_seconds
-					banner_color = PLAYER_COLORS[0]
-					banner_time = 1.0
-				elif uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
+				if uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
 					_set_shock_attack_mode(0, 0 if k.keycode == KEY_1 else 1)
 				else:
 					_tuning.handle_key(k.keycode, k.shift_pressed)
@@ -4382,23 +4183,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				copy_match_report()
 			return
 
+		if k.keycode in [KEY_ENTER, KEY_KP_ENTER] and online_peer_lost:
+			_claim_abandoned_match()
+			return
 		if k.keycode == KEY_SHIFT:
 			_confirm(online_player)
 			return
 		if state != Phase.PLANNING:
 			return
-		if uses_grenade(online_player):
-			match k.keycode:
-				KEY_1:
-					_set_grenade_fuse(online_player, 1)
-					return
-				KEY_2:
-					_set_grenade_fuse(online_player, 2)
-					return
-				KEY_3:
-					_set_grenade_fuse(online_player, 3)
-					return
-		elif uses_shock(online_player):
+		if uses_shock(online_player):
 			match k.keycode:
 				KEY_1:
 					_set_shock_attack_mode(online_player, 0)
@@ -4406,7 +4199,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				KEY_2:
 					_set_shock_attack_mode(online_player, 1)
 					return
-		var online_map := K_P1
+		var online_map := key_bindings
 		if k.keycode in online_map["super"]:
 			_toggle_super(online_player)
 		elif k.keycode in online_map["rollback"]:
@@ -4488,18 +4281,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if state != Phase.PLANNING:
 		return
 
-	if uses_grenade(keyboard_player):
-		match k.keycode:
-			KEY_1:
-				_set_grenade_fuse(keyboard_player, 1)
-				return
-			KEY_2:
-				_set_grenade_fuse(keyboard_player, 2)
-				return
-			KEY_3:
-				_set_grenade_fuse(keyboard_player, 3)
-				return
-	elif uses_shock(keyboard_player):
+	if uses_shock(keyboard_player):
 		match k.keycode:
 			KEY_1:
 				_set_shock_attack_mode(keyboard_player, 0)
@@ -4520,26 +4302,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_reset_path(i)
 
 
-func _set_grenade_fuse(i: int, seconds: int) -> void:
-	if state != Phase.PLANNING or not uses_grenade(i) or is_ai(i):
-		return
-	var p: Player = players[i]
-	if not p.alive or p.plan.confirmed:
-		return
-	p.plan.grenade_fuse_seconds = clampi(seconds, 1, 3)
-	banner_text = "P%d GRENADE FUSE — %d SECOND%s" % [
-		i + 1, p.plan.grenade_fuse_seconds,
-		"" if p.plan.grenade_fuse_seconds == 1 else "S",
-	]
-	banner_color = p.color
-	banner_time = 1.1
-	if _telemetry != null:
-		_telemetry.record("grenade_fuse_changed", turn, {
-			"player": i + 1, "seconds": p.plan.grenade_fuse_seconds,
-		})
-	p.queue_redraw()
-
-
 func _set_shock_attack_mode(i: int, mode: int) -> void:
 	if state not in [Phase.PLANNING, Phase.FREEPLAY] or not uses_shock(i) or is_ai(i):
 		return
@@ -4547,7 +4309,7 @@ func _set_shock_attack_mode(i: int, mode: int) -> void:
 	if not p.alive or p.plan.confirmed:
 		return
 	p.plan.attack_mode = clampi(mode, 0, 1)
-	banner_text = "P%d SHOCK — %s" % [i + 1,
+	banner_text = "P%d PULSE — %s" % [i + 1,
 		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
 	banner_color = p.color
 	banner_time = 1.1
@@ -4729,9 +4491,9 @@ func _poll_pad_meta(i: int) -> void:
 	if y:
 		_toggle_super(i)
 	if fuse_previous:
-		_cycle_grenade_fuse(i, -1)
+		_cycle_attack_mode(i, -1)
 	if fuse_next:
-		_cycle_grenade_fuse(i, 1)
+		_cycle_attack_mode(i, 1)
 
 
 func _pad_edge(i: int, pad: int, btn: int) -> bool:
@@ -4741,16 +4503,12 @@ func _pad_edge(i: int, pad: int, btn: int) -> bool:
 	return now and not was
 
 
-func _cycle_grenade_fuse(i: int, direction: int) -> void:
-	if direction == 0:
+## The shoulder buttons cycle whichever secondary choice the kit owns. Only
+## The Pulse has one, so for every other fighter this is inert.
+func _cycle_attack_mode(i: int, direction: int) -> void:
+	if direction == 0 or not uses_shock(i):
 		return
-	if uses_shock(i):
-		_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
-		return
-	if not uses_grenade(i):
-		return
-	var current: int = players[i].plan.grenade_fuse_seconds
-	_set_grenade_fuse(i, posmod(current - 1 + direction, 3) + 1)
+	_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
 
 
 ## Free platformer control of the ghost, metered by stamina. Time only advances
@@ -4996,8 +4754,7 @@ func _begin_match_telemetry(mode: String) -> void:
 		return
 	var input_name := "touch" if _touch_controls.enabled else \
 		("gamepad" if not _pads.is_empty() and _pads[0] >= 0 else "keyboard_mouse")
-	_telemetry.begin_match(mode, level_name,
-		"close" if prototype_mode else "wide", input_name)
+	_telemetry.begin_match(mode, level_name, input_name)
 	_telemetry_finished = false
 
 
@@ -5027,14 +4784,14 @@ func _online_state_digest() -> String:
 	var parts := PackedStringArray()
 	parts.append("turn:%d" % turn)
 	parts.append("score:%d,%d" % [score[0], score[1]])
-	parts.append("ids:%d,%d,%d,%d" % [
-		_next_volley, _next_arrow_id, _next_grenade_id, _next_character_projectile_id,
+	parts.append("ids:%d,%d,%d" % [
+		_next_volley, _next_arrow_id, _next_character_projectile_id,
 	])
 	parts.append("kits:%d,%d" % [player_weapons[0], player_weapons[1]])
 	parts.append("rng:%d" % rng.state)
 	for i in players.size():
 		var p: Player = players[i]
-		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 			i,
 			int(round(p.position.x * 10000.0)), int(round(p.position.y * 10000.0)),
 			int(round(p.vel.x * 10000.0)), int(round(p.vel.y * 10000.0)),
@@ -5042,7 +4799,7 @@ func _online_state_digest() -> String:
 			p.drop_ticks, int(round(p.drop_from_y * 10000.0)),
 			1 if p.alive else 0, p.invuln_turns,
 			int(round(super_meter[i] * 1000000.0)), 1 if super_armed[i] else 0,
-			p.plan.grenade_fuse_seconds, p.plan.attack_mode,
+			p.plan.attack_mode,
 		])
 		parts.append("fd%d:%d,%d" % [i, frame_debt_cells[i], frame_debt_units[i]])
 		parts.append("fdl%d:%d" % [i, 1 if frame_debt_locked[i] else 0])
@@ -5050,10 +4807,6 @@ func _online_state_digest() -> String:
 	ordered_arrows.sort_custom(func(a: Arrow, b: Arrow): return a.network_id < b.network_id)
 	for a: Arrow in ordered_arrows:
 		parts.append("a:" + a.lockstep_digest_fragment())
-	var ordered_grenades: Array = grenades.duplicate()
-	ordered_grenades.sort_custom(func(a, b): return a.network_id < b.network_id)
-	for g in ordered_grenades:
-		parts.append("g:" + g.lockstep_digest_fragment())
 	var ordered_dashes: Array = dashblades.duplicate()
 	ordered_dashes.sort_custom(func(a, b): return a.owner_index < b.owner_index)
 	for dash in ordered_dashes:
