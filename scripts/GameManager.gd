@@ -1201,6 +1201,8 @@ func _apply_settings() -> void:
 		_sfx.set_volume(float(_settings["sound"]))
 	if _time_stop != null:
 		_time_stop.reduced_flashes = reduced_flashes
+	if _effects != null:
+		_effects.reduced_flashes = reduced_flashes
 	if _preview != null:
 		_preview.high_contrast = bool(_settings["high_contrast_previews"])
 		_preview.queue_redraw()
@@ -2495,7 +2497,7 @@ func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
 	_effects.add(Effects.Kind.EXPLOSION, orb.position, blast_color,
 		clampf(radius / 108.0, 0.75, 2.75))
 	_remember_aftermath("SHOCK COMBO" if combo else "SHOCK POP", orb.position, blast_color)
-	_sfx.play("explosion")
+	_sfx.play("orb")
 	for player: Player in players:
 		if not combo and player.index == orb.shooter:
 			continue
@@ -2970,7 +2972,7 @@ func _check_core_collection() -> void:
 	if _effects != null:
 		_effects.add(Effects.Kind.CLASH, core_position, Color(1.0, 0.88, 0.36))
 	if _sfx != null:
-		_sfx.play("clash")
+		_sfx.play("core")
 	if collectors.size() > 1:
 		banner_text = "MULTIPLE PLAYERS — SUPER READY"
 		banner_color = Color(1.0, 0.90, 0.48)

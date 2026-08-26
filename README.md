@@ -51,9 +51,9 @@ Godot 4.7. Double-click one of these:
 
 | File | What it does |
 |---|---|
-| **`Play.bat`** | Runs the exported build. Needs nothing installed — this is the one to hand a playtester. |
-| **`Play-Source.bat`** | Runs the current source with Godot, so code edits show up without re-exporting. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
-| **`Build.bat`** | Re-exports Windows + Web and packages both zips for itch. |
+| **`Play.bat`** | Canonical local launcher. Runs the latest working tree through Godot without an export step. |
+| **`Play-Source.bat`** | Source-launch implementation used by `Play.bat`. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
+| **`Build.bat`** | Exports unpacked Windows + Web folders. It never creates ZIP archives. |
 | **`Build-Web.bat`** | Generates and validates the browser build in `build/web`. |
 | **`Deploy-Web.bat`** | Generates the browser build and publishes it to Vercel production. |
 
@@ -606,11 +606,13 @@ it is deliberate — breaking the floor under an opponent is a legitimate play.
 
 ## Sound
 
-Gameplay impacts remain procedurally synthesised, including a double-transient
-knife `clink–clink`. The imported title voice plays at natural pitch when a
-match starts. The SUPER cut-in uses a procedurally synthesised voice-like chant;
-ordinary phase freeze and resume use very short, low-volume cues so they mark
-the rhythm without dominating it. Everything shares an 8-voice pool. `M` mutes.
+Gameplay impacts keep their sharp procedural transients, including a
+double-transient knife `clink–clink`, and now layer in quiet CC0 Kenney material
+sounds for more body and variation. The imported title voice plays at natural
+pitch when a match starts. The SUPER cut-in keeps its procedurally synthesised
+voice-like chant; phase freeze, resume, orb blasts, and Temporal Core pickups
+use distinct restrained layers so they mark the rhythm without dominating it.
+Everything shares a 16-voice pool. `M` mutes.
 
 ## Reading the preview
 

@@ -1,6 +1,8 @@
 extends CanvasLayer
 class_name TeamSelectLayer
 
+const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
+
 ## FIFA-style local side selection. A physical input device must explicitly
 ## join before it can claim a side; unfilled formation slots become CPU allies.
 
@@ -94,7 +96,7 @@ class FateStage:
 			rect.position, rect.position + Vector2(12.0, 0.0),
 		]), Color(accent.r, accent.g, accent.b, 0.95 if ready else 0.58),
 			3.0 if ready else 1.5, true)
-		var font := ThemeDB.fallback_font
+		var font := HUD_FONT
 		draw_string(font, pos + Vector2(18.0, 29.0), str(token["label"]),
 			HORIZONTAL_ALIGNMENT_LEFT, 180.0, 16, IVORY if joined else DIM)
 		draw_string(font, pos + Vector2(18.0, 57.0),

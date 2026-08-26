@@ -8,11 +8,18 @@ func _init() -> void:
 
 
 func _capture() -> void:
+	# Keep the fixed 1280x720 touch layout visible regardless of the desktop's
+	# remembered/maximized window state or DPI scale.
+	root.mode = Window.MODE_WINDOWED
+	root.size = Vector2i(1280, 720)
+	await process_frame
 	var game = MAIN_SCENE.instantiate()
 	game.force_touch_controls = true
 	root.add_child(game)
 	await process_frame
 	game._on_menu_start(true, 0)
+	await process_frame
+	await process_frame
 	await process_frame
 	await process_frame
 

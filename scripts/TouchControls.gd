@@ -20,22 +20,36 @@ const GOLD := Color(0.96, 0.69, 0.18)
 const VIOLET := Color(0.76, 0.30, 1.00)
 const SPECTRAL := Color(0.88, 0.92, 1.00)
 const INK := Color(0.025, 0.01, 0.045)
+const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
 
-const STICK_CENTER := Vector2(112.0, 604.0)
+const TEX_STICK_PAD := preload("res://assets/kenney/touch/joystick-pad.png")
+const TEX_STICK_NUB := preload("res://assets/kenney/touch/joystick-nub.png")
+const TEX_BUTTON_CIRCLE := preload("res://assets/kenney/touch/button-circle.png")
+const TEX_BUTTON_WIDE := preload("res://assets/kenney/touch/button-wide.png")
+const TEX_ICON_JUMP := preload("res://assets/kenney/touch/icon-jump.png")
+const TEX_ICON_FIRE := preload("res://assets/kenney/touch/icon-fire.png")
+const TEX_ICON_LOCK := preload("res://assets/kenney/touch/icon-lock.png")
+const TEX_ICON_MENU := preload("res://assets/kenney/touch/icon-menu.png")
+const TEX_ICON_AIM := preload("res://assets/kenney/touch/icon-aim.png")
+const TEX_ICON_UNDO := preload("res://assets/kenney/touch/icon-undo.png")
+const TEX_ICON_RESET := preload("res://assets/kenney/touch/icon-reset.png")
+const TEX_ICON_SUPER := preload("res://assets/kenney/touch/icon-super.png")
+
+const STICK_CENTER := Vector2(240.0, 604.0)
 const STICK_RADIUS := 78.0
 const STICK_TOUCH_RADIUS := 108.0
 const STICK_KNOB_TRAVEL := 40.0
 const STICK_DEADZONE := 0.24
-const JUMP_CENTER := Vector2(276.0, 648.0)
+const JUMP_CENTER := Vector2(390.0, 648.0)
 const JUMP_RADIUS := 48.0
-const FIRE_CENTER := Vector2(1192.0, 650.0)
+const FIRE_CENTER := Vector2(950.0, 650.0)
 const FIRE_RADIUS := 58.0
 const AIM_ZONE := Rect2(610.0, 205.0, 670.0, 390.0)
-const MENU_RECT := Rect2(14.0, 14.0, 72.0, 42.0)
-const UNDO_RECT := Rect2(718.0, 648.0, 76.0, 48.0)
-const RESET_RECT := Rect2(804.0, 648.0, 76.0, 48.0)
-const SUPER_RECT := Rect2(890.0, 648.0, 76.0, 48.0)
-const LOCK_RECT := Rect2(976.0, 648.0, 104.0, 48.0)
+const MENU_RECT := Rect2(320.0, 14.0, 72.0, 42.0)
+const UNDO_RECT := Rect2(520.0, 648.0, 76.0, 48.0)
+const RESET_RECT := Rect2(606.0, 648.0, 76.0, 48.0)
+const SUPER_RECT := Rect2(692.0, 648.0, 76.0, 48.0)
+const LOCK_RECT := Rect2(778.0, 648.0, 104.0, 48.0)
 const LEVEL_PREV_RECT := Rect2(244.0, 590.0, 70.0, 58.0)
 const LEVEL_NEXT_RECT := Rect2(426.0, 590.0, 70.0, 58.0)
 const REPORT_RECT := Rect2(510.0, 590.0, 170.0, 58.0)
@@ -325,11 +339,14 @@ func _draw_overlay() -> void:
 
 	var aim_color := Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.72 if aim_active else 0.28)
 	_surface.draw_line(Vector2(626.0, 584.0), Vector2(706.0, 584.0), aim_color, 2.0)
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(714.0, 590.0), "DRAG ARENA TO AIM",
+	_surface.draw_string(HUD_FONT, Vector2(714.0, 590.0), "DRAG ARENA TO AIM",
 		HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.44))
 	if aim_active:
 		_surface.draw_circle(aim_position, 18.0, Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.10))
 		_surface.draw_arc(aim_position, 18.0, 0.0, TAU, 28, Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.78), 2.0)
+		_surface.draw_texture_rect(TEX_ICON_AIM,
+			Rect2(aim_position - Vector2(10.0, 10.0), Vector2(20.0, 20.0)), false,
+			Color(0.92, 0.94, 1.0, 0.72))
 		_surface.draw_line(aim_position - Vector2(26.0, 0.0), aim_position - Vector2(8.0, 0.0), aim_color, 2.0)
 		_surface.draw_line(aim_position + Vector2(8.0, 0.0), aim_position + Vector2(26.0, 0.0), aim_color, 2.0)
 		_surface.draw_line(aim_position - Vector2(0.0, 26.0), aim_position - Vector2(0.0, 8.0), aim_color, 2.0)
@@ -355,16 +372,16 @@ func _draw_touch_result_card() -> void:
 	if _gm.winner >= 0:
 		winner_text = "PLAYER %d TAKES THE MATCH" % (_gm.winner + 1)
 		winner_color = _gm.PLAYER_COLORS[_gm.winner].lightened(0.20)
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(310.0, 244.0), winner_text,
+	_surface.draw_string(HUD_FONT, Vector2(310.0, 244.0), winner_text,
 		HORIZONTAL_ALIGNMENT_CENTER, 660.0, 31, winner_color)
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(390.0, 344.0), _gm._score_text(),
+	_surface.draw_string(HUD_FONT, Vector2(390.0, 344.0), _gm._score_text(),
 		HORIZONTAL_ALIGNMENT_CENTER, 500.0, 34, Color(0.94, 0.95, 1.0))
 	var prompt := "CHOOSE THE NEXT ARENA, WATCH THE FIGHT, OR RUN IT BACK"
 	if _gm.online_mode and _gm.online_player != 0:
 		prompt = "THE HOST CHOOSES THE ARENA — WATCH THE FIGHT OR RUN IT BACK"
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(330.0, 417.0), prompt,
+	_surface.draw_string(HUD_FONT, Vector2(330.0, 417.0), prompt,
 		HORIZONTAL_ALIGNMENT_CENTER, 620.0, 13, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.74))
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(330.0, 465.0),
+	_surface.draw_string(HUD_FONT, Vector2(330.0, 465.0),
 		"RESULTS // FINAL FRAME PRESERVED", HORIZONTAL_ALIGNMENT_CENTER, 620.0, 11,
 		Color(GOLD.r, GOLD.g, GOLD.b, 0.58))
 
@@ -373,6 +390,10 @@ func _draw_virtual_stick() -> void:
 	var is_active := _active("stick")
 	var edge_alpha := 0.78 if is_active else 0.42
 	var base_fill := Color(INK.r, INK.g, INK.b, 0.52 if is_active else 0.34)
+	_surface.draw_texture_rect(TEX_STICK_PAD,
+		Rect2(STICK_CENTER - Vector2(STICK_RADIUS, STICK_RADIUS),
+			Vector2(STICK_RADIUS, STICK_RADIUS) * 2.0), false,
+		Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.78 if is_active else 0.48))
 	_surface.draw_circle(STICK_CENTER, STICK_RADIUS, base_fill)
 	_surface.draw_circle(STICK_CENTER, STICK_RADIUS - 4.0,
 		Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.13 if is_active else 0.07))
@@ -390,6 +411,9 @@ func _draw_virtual_stick() -> void:
 			Color(VIOLET.r, VIOLET.g, VIOLET.b, edge_alpha), 2.0)
 
 	var knob_center := STICK_CENTER + stick_vector * STICK_KNOB_TRAVEL
+	_surface.draw_texture_rect(TEX_STICK_NUB,
+		Rect2(knob_center - Vector2(33.0, 33.0), Vector2(66.0, 66.0)), false,
+		Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.86 if is_active else 0.56))
 	_surface.draw_circle(knob_center, 31.0, Color(INK.r, INK.g, INK.b, 0.72))
 	_surface.draw_circle(knob_center, 27.0,
 		Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.48 if is_active else 0.24))
@@ -408,9 +432,9 @@ func _draw_result_level_selector() -> void:
 	if _gm.online_mode:
 		level_caption += "  HOST" if _gm.online_player == 0 \
 			and not _gm._online_waiting_rematch else "  LOCKED"
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(314.0, 610.0), level_caption,
+	_surface.draw_string(HUD_FONT, Vector2(314.0, 610.0), level_caption,
 		HORIZONTAL_ALIGNMENT_CENTER, 112.0, 12, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.62))
-	_surface.draw_string(ThemeDB.fallback_font, Vector2(314.0, 636.0), _gm.rematch_level_name,
+	_surface.draw_string(HUD_FONT, Vector2(314.0, 636.0), _gm.rematch_level_name,
 		HORIZONTAL_ALIGNMENT_CENTER, 112.0, 14, Color(1.0, 0.92, 0.68, 0.88))
 
 
@@ -419,6 +443,9 @@ func _draw_round_button(center: Vector2, radius: float, label: String, action: S
 	var is_active := _active(action)
 	var fill_alpha := 0.48 if is_active else 0.16
 	var edge_alpha := 0.92 if is_active else 0.48
+	_surface.draw_texture_rect(TEX_BUTTON_CIRCLE,
+		Rect2(center - Vector2(radius, radius), Vector2(radius, radius) * 2.0), false,
+		Color(accent.r, accent.g, accent.b, 0.86 if is_active else 0.56))
 	_surface.draw_circle(center, radius, Color(INK.r, INK.g, INK.b, 0.60))
 	_surface.draw_circle(center, radius - 3.0, Color(accent.r, accent.g, accent.b, fill_alpha))
 	_surface.draw_arc(center, radius, 0.0, TAU, 36, Color(accent.r, accent.g, accent.b, edge_alpha), 2.0)
@@ -427,17 +454,44 @@ func _draw_round_button(center: Vector2, radius: float, label: String, action: S
 		var direction := Vector2.from_angle(float(quarter) * PI * 0.5)
 		_surface.draw_line(center + direction * (radius - 7.0), center + direction * (radius - 2.0),
 			Color(accent.r, accent.g, accent.b, edge_alpha), 2.0)
-	_surface.draw_string(ThemeDB.fallback_font, center + Vector2(-radius, float(font_size) * 0.34), label,
+	var icon := _button_icon(action)
+	if icon != null:
+		_surface.draw_texture_rect(icon,
+			Rect2(center + Vector2(-13.0, -25.0), Vector2(26.0, 26.0)), false,
+			Color(1.0, 0.98, 0.90, 0.98 if is_active else 0.78))
+	_surface.draw_string(HUD_FONT, center + Vector2(-radius, radius * 0.42), label,
 		HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, font_size,
 		Color(1.0, 0.98, 0.90, 0.98 if is_active else 0.78))
 
 
 func _draw_rect_button(rect: Rect2, label: String, action: String, accent: Color) -> void:
 	var is_active := _active(action)
+	_surface.draw_texture_rect(TEX_BUTTON_WIDE, rect, false,
+		Color(accent.r, accent.g, accent.b, 0.72 if is_active else 0.38))
 	_surface.draw_rect(rect, Color(INK.r, INK.g, INK.b, 0.70))
 	_surface.draw_rect(rect.grow(-2.0), Color(accent.r, accent.g, accent.b, 0.42 if is_active else 0.13))
 	_surface.draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.88 if is_active else 0.42), false, 2.0)
-	_surface.draw_string(ThemeDB.fallback_font,
-		Vector2(rect.position.x, rect.position.y + rect.size.y * 0.5 + 5.0), label,
-		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 14,
+	var icon := _button_icon(action)
+	var text_inset := 0.0
+	if icon != null and rect.size.x >= 70.0:
+		var icon_size := minf(20.0, rect.size.y - 16.0)
+		_surface.draw_texture_rect(icon, Rect2(Vector2(rect.position.x + 8.0,
+			rect.get_center().y - icon_size * 0.5), Vector2(icon_size, icon_size)), false,
+			Color(1.0, 0.98, 0.92, 0.92 if is_active else 0.62))
+		text_inset = 24.0
+	_surface.draw_string(HUD_FONT,
+		Vector2(rect.position.x + text_inset, rect.position.y + rect.size.y * 0.5 + 5.0), label,
+		HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - text_inset, 11 if text_inset > 0.0 else 14,
 		Color(1.0, 0.98, 0.92, 0.96 if is_active else 0.70))
+
+
+func _button_icon(action: String) -> Texture2D:
+	match action:
+		"jump": return TEX_ICON_JUMP
+		"charge": return TEX_ICON_FIRE
+		"confirm": return TEX_ICON_LOCK
+		"menu": return TEX_ICON_MENU
+		"rollback", "replay": return TEX_ICON_UNDO
+		"reset": return TEX_ICON_RESET
+		"super": return TEX_ICON_SUPER
+		_: return null

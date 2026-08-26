@@ -1,6 +1,7 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM  ZAWARUDO - export Windows + Web and package both for itch.io.
+REM  ZAWARUDO - export unpacked Windows + Web builds.
+REM  ZIP archives are intentionally never created by this default build script.
 REM  Needs Godot 4.7 with export templates installed.
 REM ---------------------------------------------------------------------------
 setlocal
@@ -16,26 +17,22 @@ if not exist "build\itch\windows" mkdir "build\itch\windows"
 if not exist "build\itch\web" mkdir "build\itch\web"
 
 echo.
-echo [1/3] Exporting Windows...
+echo [1/2] Exporting Windows...
 call "%GODOT%" --headless --export-release "Windows" "build/itch/windows/ZAWARUDO.exe" >nul
 if errorlevel 1 goto :failed
 
-echo [2/3] Exporting Web...
+echo [2/2] Exporting Web...
 call "%GODOT%" --headless --export-release "Web" "build/itch/web/index.html" >nul
 if errorlevel 1 goto :failed
+copy /y "itch\WINDOWS-README.txt" "build\itch\windows\README.txt" >nul
 del /q "build\itch\web\*.import" >nul 2>&1
 
-echo [3/3] Packaging zips...
-copy /y "itch\WINDOWS-README.txt" "build\itch\windows\README.txt" >nul
-powershell -NoProfile -Command "Compress-Archive -Path 'build/itch/web/*' -DestinationPath 'build/itch/ZAWARUDO-web.zip' -Force"
-if errorlevel 1 goto :failed
-powershell -NoProfile -Command "Compress-Archive -Path 'build/itch/windows/*' -DestinationPath 'build/itch/ZAWARUDO-windows.zip' -Force"
-if errorlevel 1 goto :failed
-
 echo.
-echo   Done. Upload-ready:
-echo     build\itch\ZAWARUDO-web.zip       ^(itch: HTML5, 1280x720, Click to Play^)
-echo     build\itch\ZAWARUDO-windows.zip   ^(itch: Windows download^)
+echo   Done. Unpacked exports:
+echo     build\itch\web\
+echo     build\itch\windows\
+echo.
+echo   No ZIP archives were created.
 echo.
 pause
 exit /b 0

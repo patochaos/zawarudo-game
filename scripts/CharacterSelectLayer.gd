@@ -1,6 +1,8 @@
 extends CanvasLayer
 class_name CharacterSelectLayer
 
+const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
+
 ## Shared local roster screen. A two-human duel keeps independent controls;
 ## modes with bots or a training dummy let P1 configure the whole formation.
 
@@ -106,7 +108,7 @@ class CharacterCard:
 	func _draw_large() -> void:
 		var panel := _panel(450.0, 462.0)
 		_draw_shell(panel)
-		var font := ThemeDB.fallback_font
+		var font := HUD_FONT
 		draw_string(font, Vector2(24.0, 31.0), "PLAYER %d · %s" % [player_index + 1, role],
 			HORIZONTAL_ALIGNMENT_LEFT, 230.0, 14, accent.lightened(0.28))
 		draw_string(font, Vector2(260.0, 31.0), "LOCKED" if locked else "SELECTING",
@@ -127,7 +129,7 @@ class CharacterCard:
 	func _draw_compact() -> void:
 		var panel := _panel(580.0, 210.0)
 		_draw_shell(panel)
-		var font := ThemeDB.fallback_font
+		var font := HUD_FONT
 		draw_string(font, Vector2(20.0, 28.0), "P%d · %s" % [player_index + 1, role],
 			HORIZONTAL_ALIGNMENT_LEFT, 210.0, 14, accent.lightened(0.28))
 		draw_string(font, Vector2(392.0, 28.0), "LOCKED" if locked else ("ACTIVE" if active else "STANDBY"),

@@ -31,6 +31,7 @@ $tests = @(
     "SuperCutInTest",
     "KineticArenaTest",
     "TouchControlsTest",
+	"KenneyPolishTest",
 	"MenuInteractionTest",
 	"GrenadierTest",
 	"DashbladeTest",

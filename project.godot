@@ -18,6 +18,10 @@ window/size/mode=2
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 
+[gui]
+
+theme/custom_font="res://assets/kenney/fonts/kenney-future.ttf"
+
 [physics]
 
 common/physics_ticks_per_second=60

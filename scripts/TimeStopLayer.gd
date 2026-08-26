@@ -1,5 +1,7 @@
 extends Node2D
 
+const DISPLAY_FONT := preload("res://assets/kenney/fonts/kenney-future.ttf")
+
 ## Procedural phase punctuation. Planning is the stopped world: a restrained
 ## violet grade, clock marks and suspended gold motes remain visible. Entering
 ## either phase adds a short, much stronger pulse so freeze/release reads before
@@ -123,7 +125,7 @@ func _draw_frozen_world() -> void:
 		draw_line(CLOCK_CENTRE + d * inner, CLOCK_CENTRE + d * radius,
 			Color(1.0, 0.86, 0.46, 0.35 * u), 1.0)
 	var text_col := Color(1.0, 0.86, 0.42, minf(1.0, u * 1.8))
-	draw_string(ThemeDB.fallback_font, Vector2(390.0, 304.0), "TIME // SUSPENDED",
+	draw_string(DISPLAY_FONT, Vector2(390.0, 304.0), "TIME // SUSPENDED",
 		HORIZONTAL_ALIGNMENT_CENTER, 500.0, 28, text_col)
 
 
@@ -136,7 +138,7 @@ func _draw_release_pulse(u: float) -> void:
 	draw_line(Vector2((W - width * 0.72) * 0.5, CLOCK_CENTRE.y - 9.0),
 		Vector2((W + width * 0.72) * 0.5, CLOCK_CENTRE.y - 9.0),
 		Color(0.80, 0.42, 1.0, 0.55 * u), 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(440.0, 304.0), "TIME FLOWS",
+	draw_string(DISPLAY_FONT, Vector2(440.0, 304.0), "TIME FLOWS",
 		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 25, Color(1.0, 0.92, 0.66, u))
 
 

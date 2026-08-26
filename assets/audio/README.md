@@ -11,3 +11,7 @@ match starts. Freeze and resume are intentionally silent; their two files remain
 parked here only as discarded references. These are prototype references from a
 user-upload soundboard. Confirm reuse rights or replace them with cleared
 originals before a public/commercial release.
+
+Cleared gameplay layers are vendored separately under `assets/kenney/audio/`;
+their source packs and CC0 license copies are documented in
+`assets/kenney/README.md`.

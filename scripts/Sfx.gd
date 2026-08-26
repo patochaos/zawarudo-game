@@ -11,14 +11,26 @@ class_name Sfx
 
 const RATE := 22050
 const VOLUME_DB := -6.0     # ~50% amplitude
-const VOICES := 8           # round-robin pool, so overlapping hits all sound
+const VOICES := 16          # imported layers need their own overlapping voices
 const CUTOFF_FADE := 0.08
 const TITLE_VOICE := preload("res://assets/audio/za-warudo-title.mp3")
+const K_UI_MOVE := preload("res://assets/kenney/audio/ui-move.ogg")
+const K_UI_ACCEPT := preload("res://assets/kenney/audio/ui-accept.ogg")
+const K_KNIFE_WHOOSH := preload("res://assets/kenney/audio/knife-whoosh.ogg")
+const K_KNIFE_CLASH := preload("res://assets/kenney/audio/knife-clash.ogg")
+const K_KNIFE_THUD := preload("res://assets/kenney/audio/knife-thud.ogg")
+const K_FIGHTER_HIT := preload("res://assets/kenney/audio/fighter-hit.ogg")
+const K_PLATFORM_BREAK := preload("res://assets/kenney/audio/platform-break.ogg")
+const K_FORCE_FIELD := preload("res://assets/kenney/audio/force-field.ogg")
+const K_TEMPORAL_BLAST := preload("res://assets/kenney/audio/temporal-blast.ogg")
+const K_TIME_FREEZE := preload("res://assets/kenney/audio/time-freeze.ogg")
+const K_TIME_RESUME := preload("res://assets/kenney/audio/time-resume.ogg")
 
 var muted: bool = false
 var master_volume: float = 1.0
 
 var _streams: Dictionary = {}
+var _layers: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next: int = 0
 var _rng := RandomNumberGenerator.new()
@@ -27,6 +39,7 @@ var _base_db: Array[float] = []
 var _pitch := {"title": 1.0}
 var _cutoff := {"title": 3.50, "muda": 1.38}
 var _gain_db := {"title": -4.0, "muda": -1.5, "explosion": -3.0,
+	"orb": -5.0, "core": -6.0,
 	"freeze": -18.0, "resume": -20.0,
 	"ui_move": -15.0, "ui_accept": -12.0}
 
@@ -39,12 +52,34 @@ func _ready() -> void:
 	_streams["break"] = _break()
 	_streams["clash"] = _clash()
 	_streams["explosion"] = _explosion()
+	_streams["orb"] = _explosion()
+	_streams["core"] = _clash()
 	_streams["freeze"] = _freeze()
 	_streams["resume"] = _resume()
 	_streams["ui_move"] = _ui_move()
 	_streams["ui_accept"] = _ui_accept()
 	_streams["muda"] = _muda_chant()
 	_streams["title"] = TITLE_VOICE
+	# Kenney samples are supporting material, not replacements. The procedural
+	# layer keeps the exact transient that existing playtests were balanced
+	# around; these quiet tails add material, air and low-end information.
+	_layers = {
+		"shoot": [{"stream": K_KNIFE_WHOOSH, "gain": -11.0, "pitch": 1.08}],
+		"hit": [{"stream": K_FIGHTER_HIT, "gain": -12.0, "pitch": 0.92}],
+		"thud": [{"stream": K_KNIFE_THUD, "gain": -14.0, "pitch": 1.12}],
+		"break": [{"stream": K_PLATFORM_BREAK, "gain": -13.0, "pitch": 0.90}],
+		"clash": [{"stream": K_KNIFE_CLASH, "gain": -11.0, "pitch": 1.05}],
+		"explosion": [{"stream": K_TEMPORAL_BLAST, "gain": -13.0, "pitch": 0.92}],
+		"orb": [
+			{"stream": K_FORCE_FIELD, "gain": -8.0, "pitch": 1.04},
+			{"stream": K_TEMPORAL_BLAST, "gain": -15.0, "pitch": 1.12},
+		],
+		"core": [{"stream": K_FORCE_FIELD, "gain": -10.0, "pitch": 0.82}],
+		"freeze": [{"stream": K_TIME_FREEZE, "gain": -7.0, "pitch": 0.88}],
+		"resume": [{"stream": K_TIME_RESUME, "gain": -5.0, "pitch": 1.10}],
+		"ui_move": [{"stream": K_UI_MOVE, "gain": -5.0, "pitch": 1.04}],
+		"ui_accept": [{"stream": K_UI_ACCEPT, "gain": -4.0, "pitch": 0.98}],
+	}
 	_stop_at.resize(VOICES)
 	_stop_at.fill(0.0)
 	_base_db.resize(VOICES)
@@ -59,16 +94,24 @@ func _ready() -> void:
 func play(which: String) -> void:
 	if muted or not _streams.has(which):
 		return
+	_play_stream(_streams[which], which, 0.0, _pitch.get(which, 1.0),
+		_cutoff.get(which, 0.0))
+	for layer: Dictionary in _layers.get(which, []):
+		_play_stream(layer["stream"], which, float(layer.get("gain", 0.0)),
+			float(layer.get("pitch", 1.0)))
+
+
+func _play_stream(stream: AudioStream, event_name: String, gain_delta: float,
+		pitch_scale: float, cutoff: float = 0.0) -> void:
 	var slot: int = _next
 	var pl: AudioStreamPlayer = _players[slot]
 	_next = (_next + 1) % VOICES
-	pl.stream = _streams[which]
-	pl.pitch_scale = _pitch.get(which, 1.0)
-	_base_db[slot] = VOLUME_DB + _gain_db.get(which, 0.0) \
+	pl.stream = stream
+	pl.pitch_scale = pitch_scale
+	_base_db[slot] = VOLUME_DB + _gain_db.get(event_name, 0.0) + gain_delta \
 		+ linear_to_db(maxf(master_volume, 0.001))
 	pl.volume_db = _base_db[slot]
 	pl.play()
-	var cutoff: float = _cutoff.get(which, 0.0)
 	_stop_at[slot] = float(Time.get_ticks_msec()) * 0.001 + cutoff if cutoff > 0.0 else 0.0
 
 

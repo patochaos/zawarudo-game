@@ -226,6 +226,7 @@ class ControlsSheet:
 	extends Control
 
 	signal back_requested
+	const PROMPTS := preload("res://scripts/InputPrompts.gd")
 
 	var p1_body: Label
 	var p2_body: Label
@@ -240,22 +241,14 @@ class ControlsSheet:
 			"PLAYER 1", GOLD)
 		_add_text(Vector2(104.0, 13.0), Vector2(270.0, 20.0), 11,
 			"KEYBOARD + MOUSE", Color(0.65, 0.69, 0.78))
-		p1_body = _add_text(Vector2(18.0, 40.0), Vector2(360.0, 88.0), 13,
-			"MOVE  A / D\nJUMP  SPACE\nWAIT  S\nCONFIRM  LEFT SHIFT",
-			Color(0.84, 0.87, 0.94))
-		_add_text(Vector2(202.0, 40.0), Vector2(180.0, 88.0), 12,
-			"AIM  MOUSE\nDRAW / FIRE  LMB\nSUPER  T\nUNDO R/RMB*  ·  RESET F\n*WITCH: RMB ORB",
+		p1_body = _add_text(Vector2(18.0, 40.0), Vector2(360.0, 88.0), 10, "",
 			Color(0.84, 0.87, 0.94))
 
 		_add_text(Vector2(438.0, 10.0), Vector2(360.0, 24.0), 16,
 			"PLAYER 2", GOLD)
 		_add_text(Vector2(524.0, 13.0), Vector2(270.0, 20.0), 11,
 			"CONNECTED GAMEPAD", Color(0.65, 0.69, 0.78))
-		p2_body = _add_text(Vector2(438.0, 40.0), Vector2(360.0, 88.0), 13,
-			"MOVE  LEFT STICK / D-PAD\nJUMP  A\nWAIT  STICK DOWN\nCONFIRM  START",
-			Color(0.84, 0.87, 0.94))
-		_add_text(Vector2(642.0, 40.0), Vector2(154.0, 88.0), 12,
-			"AIM  RIGHT STICK\nDRAW / FIRE  R2\nFUSE  L1 / R1\nSUPER  Y\nUNDO B/SELECT · RESET X",
+		p2_body = _add_text(Vector2(438.0, 40.0), Vector2(360.0, 88.0), 10, "",
 			Color(0.84, 0.87, 0.94))
 
 		_add_text(Vector2(18.0, 149.0), Vector2(240.0, 22.0), 14,
@@ -315,12 +308,39 @@ class ControlsSheet:
 		draw_rect(Rect2(420.0, 0.0, 394.0, 132.0), panel)
 		draw_rect(Rect2(0.0, 0.0, 394.0, 132.0), border, false, 1.0)
 		draw_rect(Rect2(420.0, 0.0, 394.0, 132.0), border, false, 1.0)
+		draw_line(Vector2(194.0, 38.0), Vector2(194.0, 124.0),
+			Color(border.r, border.g, border.b, 0.52), 1.0)
+		draw_line(Vector2(614.0, 38.0), Vector2(614.0, 124.0),
+			Color(border.r, border.g, border.b, 0.52), 1.0)
+		var prompt_color := Color(0.90, 0.92, 1.0, 0.94)
+		_draw_prompt_row("MOVE", [&"key_a", &"key_d"], Vector2(18.0, 40.0), prompt_color)
+		_draw_prompt_row("JUMP", [&"key_space"], Vector2(18.0, 61.0), prompt_color)
+		_draw_prompt_row("WAIT", [&"key_s"], Vector2(18.0, 82.0), prompt_color)
+		_draw_prompt_row("LOCK", [&"key_shift"], Vector2(18.0, 103.0), prompt_color)
+		_draw_prompt_row("AIM", [&"mouse_move"], Vector2(204.0, 40.0), prompt_color, 44.0)
+		_draw_prompt_row("DRAW", [&"mouse_left"], Vector2(204.0, 61.0), prompt_color, 44.0)
+		_draw_prompt_row("SUPER", [&"key_t"], Vector2(204.0, 82.0), prompt_color, 44.0)
+		_draw_prompt_row("UNDO", [&"key_r", &"mouse_right"], Vector2(204.0, 103.0), prompt_color, 44.0)
+		_draw_prompt_row("MOVE", [&"pad_left"], Vector2(438.0, 40.0), prompt_color)
+		_draw_prompt_row("JUMP", [&"pad_a"], Vector2(438.0, 61.0), prompt_color)
+		_draw_prompt_row("WAIT", [&"pad_left_down"], Vector2(438.0, 82.0), prompt_color)
+		_draw_prompt_row("LOCK", [&"pad_menu"], Vector2(438.0, 103.0), prompt_color)
+		_draw_prompt_row("AIM", [&"pad_right"], Vector2(624.0, 40.0), prompt_color, 44.0)
+		_draw_prompt_row("DRAW", [&"pad_rt"], Vector2(624.0, 61.0), prompt_color, 44.0)
+		_draw_prompt_row("FUSE", [&"pad_lb", &"pad_rb"], Vector2(624.0, 82.0), prompt_color, 44.0)
+		_draw_prompt_row("SUPER", [&"pad_y"], Vector2(624.0, 103.0), prompt_color, 44.0)
 		draw_rect(Rect2(0.0, 144.0, 814.0, 98.0), Color(0.055, 0.04, 0.09, 0.90))
 		draw_line(Vector2(0.0, 144.0), Vector2(814.0, 144.0), GOLD, 2.0)
 		draw_line(Vector2(258.0, 174.0), Vector2(270.0, 207.0), border, 2.0)
 		draw_line(Vector2(526.0, 174.0), Vector2(538.0, 207.0), border, 2.0)
 		draw_rect(Rect2(0.0, 250.0, 814.0, 58.0), panel)
 		draw_rect(Rect2(0.0, 318.0, 814.0, 36.0), Color(0.45, 0.16, 0.67, 0.78))
+
+	func _draw_prompt_row(label: String, ids: Array, origin: Vector2,
+			color: Color, label_width: float = 52.0) -> void:
+		draw_string(PROMPTS.HUD_FONT, origin + Vector2(0.0, 14.0), label,
+			HORIZONTAL_ALIGNMENT_LEFT, label_width, 10, Color(color.r, color.g, color.b, 0.72))
+		PROMPTS.draw_sequence(self, ids, origin + Vector2(label_width, 0.0), color, 18.0, 3.0)
 
 var level: int = 0
 var ruleset: int = Ruleset.ORIGINAL

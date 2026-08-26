@@ -11,6 +11,7 @@ const VIOLET := Color(0.72, 0.38, 0.95)
 const INK := Color(0.018, 0.010, 0.035, 0.985)
 const PANEL := Color(0.045, 0.026, 0.072, 0.98)
 const DIM := Color(0.68, 0.72, 0.82)
+const PROMPTS := preload("res://scripts/InputPrompts.gd")
 
 ## Verified captures from the real match scene. Keeping these as authored game
 ## screenshots makes the tutorial's examples visually identical to play.
@@ -149,6 +150,48 @@ class TutorialArt:
 			if i == page:
 				draw_circle(Vector2(x + 40.0, 82.0), 5.0, Color(1.0, 0.90, 0.52))
 
+
+class TutorialPromptArt:
+	extends Control
+
+	var page: int = 0
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func set_page(value: int) -> void:
+		page = value
+		queue_redraw()
+
+	func _draw() -> void:
+		var rows: Array = _page_prompts()
+		for row in rows.size():
+			var ids: Array = rows[row]
+			var icon_size := 18.0 if ids.size() >= 3 else 20.0
+			var gap := 1.0 if ids.size() >= 3 else 3.0
+			PROMPTS.draw_sequence(self, ids, Vector2(0.0, 3.0 + float(row) * 34.0),
+				Color(0.92, 0.93, 1.0, 0.90), icon_size, gap)
+
+	func _page_prompts() -> Array:
+		match page:
+			1:
+				return [[&"key_a", &"key_d"], [&"pad_left"], [&"touch_move"]]
+			2:
+				return [[&"key_space", &"pad_a", &"touch_tap"],
+					[&"key_s", &"pad_left_down", &"touch_down"],
+					[&"key_s", &"key_space", &"touch_tap"]]
+			3:
+				return [[&"mouse_move", &"mouse_left"], [&"pad_right", &"pad_rt"],
+					[&"touch_move", &"touch_hold"]]
+			4:
+				return [[&"key_r", &"pad_b", &"touch_tap"],
+					[&"key_f", &"pad_x", &"touch_tap"],
+					[&"key_shift", &"pad_menu", &"touch_tap"]]
+			5:
+				return [[&"key_enter", &"pad_a", &"touch_tap"], [], []]
+			_:
+				return [[], [], []]
+
 var gm
 var active: bool = false
 var page: int = 0
@@ -168,6 +211,7 @@ var _visual_title: Label
 var _visual_caption: Label
 var _row_keys: Array[Label] = []
 var _row_details: Array[Label] = []
+var _prompt_art: TutorialPromptArt
 var _previous_button: Button
 var _next_button: Button
 var _close_button: Button
@@ -208,9 +252,13 @@ func _ready() -> void:
 	for i in 3:
 		var y := 543.0 + float(i) * 34.0
 		var key := _label(Vector2(548.0, y), Vector2(145.0, 28.0), 12, GOLD)
-		var detail := _label(Vector2(706.0, y), Vector2(466.0, 28.0), 13, Color(0.86, 0.88, 0.95))
+		var detail := _label(Vector2(782.0, y), Vector2(390.0, 28.0), 13, Color(0.86, 0.88, 0.95))
 		_row_keys.append(key)
 		_row_details.append(detail)
+	_prompt_art = TutorialPromptArt.new()
+	_prompt_art.position = Vector2(698.0, 540.0)
+	_prompt_art.size = Vector2(78.0, 104.0)
+	add_child(_prompt_art)
 
 	_previous_button = _button(Vector2(548.0, 646.0), Vector2(150.0, 42.0), "←  PREVIOUS")
 	_next_button = _button(Vector2(1010.0, 646.0), Vector2(172.0, 42.0), "NEXT  →")
@@ -226,6 +274,7 @@ func _label(pos: Vector2, dimensions: Vector2, font_size: int, color: Color) -> 
 	label.position = pos
 	label.size = dimensions
 	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_font_override("font", PROMPTS.DISPLAY_FONT)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.86))
 	label.add_theme_constant_override("shadow_offset_x", 1)
@@ -241,6 +290,7 @@ func _button(pos: Vector2, dimensions: Vector2, text_value: String) -> Button:
 	button.size = dimensions
 	button.text = text_value
 	button.add_theme_font_size_override("font_size", 12)
+	button.add_theme_font_override("font", PROMPTS.DISPLAY_FONT)
 	button.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
 	button.add_theme_color_override("font_hover_color", Color(1.0, 0.93, 0.62))
 	button.add_theme_color_override("font_focus_color", Color(1.0, 0.93, 0.62))
@@ -358,6 +408,7 @@ func _refresh_page() -> void:
 	_next_button.text = "DONE  ✓" if page == PAGES.size() - 1 else "NEXT  →"
 	_game_image.texture = GAME_IMAGES[page]
 	_art.set_page(page)
+	_prompt_art.set_page(page)
 
 
 func observe_planning() -> bool:

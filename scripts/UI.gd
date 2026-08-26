@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
+
 ## Compact match HUD. Detailed player-plan panels were deliberately removed so
 ## the arena, ghosts and world-space previews remain the focus.
 
@@ -86,7 +88,7 @@ class FighterSeal:
 		draw_polyline(portrait_frame + PackedVector2Array([portrait_frame[0]]),
 			Color(accent.r, accent.g, accent.b, 0.72), 1.0, true)
 
-		var font := ThemeDB.fallback_font
+		var font := HUD_FONT
 		var name_x := 52.0 if not mirrored else 270.0
 		var name_width := 110.0
 		var name_align := HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT
