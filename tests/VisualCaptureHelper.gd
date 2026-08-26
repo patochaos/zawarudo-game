@@ -18,6 +18,22 @@ extends RefCounted
 const TRANSITION_FRAME_CAP := 240
 
 
+## The design resolution. A reference shot has to be comparable between two
+## machines, and a maximized window is whatever the developer's monitor happens
+## to be, so the menu captures pin the window instead of inheriting it.
+const CAPTURE_SIZE := Vector2i(1280, 720)
+
+
+static func pin_window(tree: SceneTree, size: Vector2i = CAPTURE_SIZE) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	if DisplayServer.window_get_size() != size:
+		DisplayServer.window_set_size(size)
+	await settle(tree, 4)
+
+
 ## Waits for GameManager's full-screen transition wipe to finish, then lets the
 ## destination settle for a few frames. Without this a capture taken right after
 ## a state change documents the animated wipe rather than the screen underneath.

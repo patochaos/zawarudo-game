@@ -5,4 +5,4 @@ class_name Phase
 ## reference them as real constants without a cyclic preload.
 
 enum { PLANNING, COMMITTING, EXECUTING, GAME_OVER, MENU, FREEPLAY, ONLINE_LOBBY, ONLINE_WAIT, REPLAY,
-	CHARACTER_SELECT, TEAM_SELECT, TUTORIAL }
+	ROSTER, MATCH_SETUP, TUTORIAL }

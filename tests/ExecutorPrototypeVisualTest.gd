@@ -16,7 +16,7 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_start(false, 0, 2)
+	game.start_quick_match(false, 0, 2)
 	game._transition.visible = false
 	game._preview.visible = false
 	game.vs_ai = false

@@ -279,19 +279,41 @@ review so earlier discussion still maps.
 - **21 — The 5 s : 0.75 s planning-to-execution ratio.** Nearly 7:1 and the
   defining rhythm of the game. The turn-3 shrink treats the symptom; the ratio
   deserves a deliberate test at 3.5 s planning and 1.0 s execution.
-- **22 — Fighter scale.** 32×48 fighters in a 1280×720 arena read as small stick
-  figures. Close Camera was the previous answer and is now retired, so the answer
-  has to come from arena dimensions or a fixed camera zoom. See pending decision 2.
+- ~~**22 — Fighter scale.**~~ **CLOSED 2026-08-23** — the framing was wrong. See
+  `docs/FIGHTER_SCALE_DECISION_2026-08-23.md` for the measurements. ZAWARUDO's
+  fighters are **6.7 %** of frame height against TowerFall's **7.6 %** and Duck
+  Game's ~6 %: mid-band for a single-screen arena fighter, not small. What
+  differs is drawn mass (28–30 % ink inside the footprint against TowerFall's
+  45 %) and arrangement — three of four fighters are still the placeholder stick
+  renderer. **Camera zoom is structurally unavailable and must not be reopened:**
+  the whole board has to stay visible during planning, which is why Close Camera
+  died. Arena dimensions and the 32×48 box stay. The lever was already approved
+  at Gate 0 — art may occupy 56×82–64×92 logical pixels while collision stays
+  32×48 — and the shipped skins draw at ~58 px, about 59 % of it. **It is an art
+  re-render, not a number:** `Player.muzzle()` is fixed at 22 px from a shoulder
+  6 px above the origin, so enlarging `sprite_draw_rect` would strand the drawn
+  hand ~13 px from the authoritative muzzle against a 1 px Gate 0 budget. A
+  82–92 px fighter has to be proportioned stockier to keep its hand at that
+  reach. Item 22 folds into the fighter-visual workstream plus **27**. One piece
+  of it shipped 2026-08-24: `FighterSkin.apply_player_identity()` gives every slot
+  its own accent, so a fighter is now drawn the same way in any slot instead of
+  the Duelist being animated only for Player 1. **The Pulse and The Eclipse still
+  have no animated art at all** — `_fighter_skin_for()` returns `null` and they
+  fall back to the stick renderer.
 
 ### UI/UX
 
-- **23 — Key rebinding.** `K_P1` is hardcoded keycodes with a comment saying
-  "rebind by editing the keycodes below". Hostile to AZERTY and to anyone with a
-  mobility need. Moving to a Godot input map also fixes **32**.
-- **24 — PARTLY DONE** (`0f4ff58`, `cb6c48c`). The wrong `FIGHT DOSSIER //
-  CONTEXT` header is fixed, and the opponent row gave the panel real content on
-  the setup page. **Still open:** on MAIN and OPTIONS it is still ~45 % of the
-  screen carrying one sentence. That is a layout decision, not a bug.
+- ~~**23 — Key rebinding.**~~ **DONE 2026-08-23.** `K_P1` became
+  `key_bindings`, seeded from `DEFAULT_BINDINGS` and overlaid with the stored
+  layout, which only replaces the actions it names. CONTROLS > REBIND KEYS lists
+  the nine Player 1 actions; a key drives exactly one action, so taking it leaves
+  the other unbound, and Escape is never bindable. Covered by
+  `tests/KeyBindingTest.gd`. **It did not fix 32** — bindings became data without
+  touching the routing, so 32 now stands on its own.
+- ~~**24 — Context panel.**~~ **DONE 2026-08-23.** The plate is sized for the
+  copy it carries (190 px tall, down from 410) on every page, and the row list
+  re-pitches per page rather than reserving a fixed height. The setup page it
+  used to serve no longer exists.
 - ~~**25** — `SUPER` label under its own fill.~~ **DONE** — `0f4ff58`.
 - ~~**26** — phase name smaller than the clock.~~ **DONE** — `0f4ff58`.
   Phase 11→14 px, clock 34→26 px. Neither field can grow sideways: the fighter
@@ -301,20 +323,38 @@ review so earlier discussion still maps.
   live fighter-visual workstream; coordinate before touching `Arena.gd`.
 - ~~**28** — menu shadows read as ghost text.~~ **DONE** — `0f4ff58`. 3×4 → 1×2;
   the 31 px title keeps its own.
-- **29** — Options has five entries: no fullscreen, no resolution, no music/SFX
-  split, no language (the design doc is Spanish; the UI is English-only, with all
-  strings hardcoded in GDScript).
+- **29 — PARTLY DONE 2026-08-23.** Options now carries eight rows. One
+  `DISPLAY` row owns window size (1280×720 / 1600×900 / 1920×1080), maximized and
+  fullscreen together, so a size and a mode cannot disagree. Sound splits into
+  **EFFECTS** and **VOICE** rather than music/SFX — there is no music bed in this
+  build, and the loud cues are the opening shout and the SUPER chant. **Still
+  open: language.** Every UI string is hardcoded English across seven scripts and
+  several suites assert on English substrings; routing it through `tr()` plus a
+  translation table is a project the size of item 30, not an options row. No
+  half-working `LANGUAGE` row was added.
 - **30** — The tutorial is a passive six-page slideshow. One guided turn against
   a scripted opponent would teach more than all six pages. Pairs with **19**.
 
+### Done since this handoff, unnumbered
+
+- **The pre-match screens.** Three fighter-select screens existed and two were
+  unreachable — `MenuLayer` declared five signals that `GameManager` connected
+  and nothing ever emitted, stranding `CharacterSelectLayer.gd` (516) and
+  `TeamSelectLayer.gd` (449). All three collapsed into `scripts/RosterLayer.gd`:
+  a rules ribbon, a four-fighter grid with one cursor per slot, device claiming,
+  per-CPU skill and a slot rail. Net −454 lines across `scripts/`. The online
+  lobby's `‹ FIGHTER ›` spinner became the same grid, both reading the shared
+  `scripts/Roster.gd`. 24/24 suites green.
+
 ### Structure
 
-- **31 — Split `GameManager.gd`.** Now **4,596 lines** (was 5,093). The next
-  clean seam is the remaining `_step_*` / `_spawn_*` weapon blocks into a
-  `Weapons` module.
-- **32 — Replace `_unhandled_key_input`.** ~211 lines of near-duplicate
-  per-mode keycode branches. Both the maintenance hazard and the reason **23**
-  does not exist.
+- **31 — Split `GameManager.gd`.** Now **4,748 lines** (was 4,596; the roster
+  screen added `_open_roster`, `_on_roster_confirmed`, the display and binding
+  plumbing and the quick-match seam). The next clean seam is still the remaining
+  `_step_*` / `_spawn_*` weapon blocks into a `Weapons` module.
+- **32 — Replace `_unhandled_key_input`.** ~205 lines of near-duplicate
+  per-mode keycode branches. **23 shipped without it**, so this is now purely a
+  maintenance item rather than a blocker for rebinding.
 - **33 — Rate-limit `POST /rooms`. WON'T DO** unless abuse actually appears.
   Every creation hits a *different* Durable Object, so there is no shared state
   to throttle against — it would need a global limiter DO or KV existing purely

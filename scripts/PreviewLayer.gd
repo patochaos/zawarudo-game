@@ -22,7 +22,8 @@ func _draw() -> void:
 		return
 
 	if gm.state == Phase.EXECUTING or gm.state == Phase.REPLAY \
-			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU:
+			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU \
+			or gm.state == Phase.ROSTER or gm.state == Phase.MATCH_SETUP:
 		return
 
 	# Where the moving world will be when this window closes is public and

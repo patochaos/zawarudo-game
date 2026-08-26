@@ -13,7 +13,7 @@ func _capture() -> void:
 	game.force_touch_controls = true
 	root.add_child(game)
 	await process_frame
-	game._on_menu_start(true, 0)
+	game.start_quick_match(true, 0)
 	await VisualCapture.await_transition(self, game)
 
 	var error := VisualCapture.save(self, "res://previews/touch-controls-mvp.png",

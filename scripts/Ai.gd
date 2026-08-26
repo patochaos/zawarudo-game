@@ -143,7 +143,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 
 	# A body-dash kit has to search every route, since the route is the attack.
 	var searched: int = scored.size() if gm.uses_dashblade(idx) \
-		else mini(gm.ai_moves_searched, scored.size())
+		else mini(gm.ai_moves_searched_for(idx), scored.size())
 	for i in searched:
 		_cands.append(scored[i])
 	_build_coarse_queue()
@@ -203,7 +203,7 @@ func _arm() -> void:
 	if not _best.has("elev"):
 		return
 	var pl: PlayerPlan = _me.plan
-	var j: float = _gm.ai_aim_jitter
+	var j: float = _gm.ai_aim_jitter_for(_idx)
 	pl.set_aim_from_vector(Vector2(float(_best["side"]), -1.0), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.set_elevation(_best["elev"] + _gm.rng.randf_range(-j, j), _gm.aim_min_angle, _gm.aim_max_angle)
 	pl.power = clampf(_best["power"] + _gm.rng.randf_range(-0.02, 0.02), 0.0, 1.0)

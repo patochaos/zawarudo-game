@@ -13,7 +13,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._start_local_match(false, 0, 2,
+	game.start_quick_match(false, 0, 2,
 		[game.Weapon.DASHBLADE, game.Weapon.SHOCK])
 
 	_check(game.players[0].fighter_style == game.Weapon.DASHBLADE \

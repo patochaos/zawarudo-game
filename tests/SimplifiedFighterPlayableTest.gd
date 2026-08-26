@@ -23,9 +23,21 @@ func _run() -> void:
 		var visual := executor.get_node_or_null("FighterVisual") as FighterVisual
 		_check(visual != null, "P1 must receive the simplified fighter visual")
 		_check(not executor.draw_legacy_visual, "P1 legacy body must be suppressed")
-		_check(opponent.draw_legacy_visual, "opponents must retain distinct legacy silhouettes")
-		_check(opponent.get_node_or_null("FighterVisual") == null,
-			"opponents must not receive a recolored Executor")
+		# A fighter is drawn the same way in every slot. Two people who picked the
+		# same one are told apart by their own accent, not by one of them dropping
+		# back to a wireframe.
+		var rival_visual := opponent.get_node_or_null("FighterVisual") as FighterVisual
+		_check(not opponent.draw_legacy_visual and rival_visual != null,
+			"a second Duelist must be drawn, not left as a stick figure")
+		_check(rival_visual != null and rival_visual.skin.skin_id == visual.skin.skin_id,
+			"both Duelists must load the same authored skin")
+		_check(rival_visual != null \
+				and not rival_visual.skin.sprite_tint.is_equal_approx(visual.skin.sprite_tint),
+			"two players on one fighter must not share a tint")
+		_check(rival_visual != null \
+				and rival_visual.skin.palette[&"body"].is_equal_approx(game.PLAYER_COLORS[1]) \
+				and visual.skin.palette[&"body"].is_equal_approx(game.PLAYER_COLORS[0]),
+			"the label, shadow and SUPER arc must follow the player, not the artwork")
 		_check(executor.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 			"the simplified sprite must not change collision")
 		if visual != null:

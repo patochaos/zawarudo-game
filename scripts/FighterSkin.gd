@@ -185,7 +185,22 @@ static func simplified_executor_proof() -> FighterSkin:
 	return skin
 
 
-static func animated_executor_proof() -> FighterSkin:
+## Pre-rendered art carries one authored colour, so two players who picked the
+## same fighter would be the same figure. A light wash toward the player's own
+## accent separates them without repainting the art: `sprite_tint` multiplies, so
+## near-white stays near-white and only the authored hues shift.
+##
+## The wash alone is deliberately weak — the readable signal is the label, ground
+## shadow, invulnerability ring and SUPER arc, which all read `palette.body`.
+const IDENTITY_WASH := 0.34
+
+
+static func apply_player_identity(skin: FighterSkin, player_color: Color) -> void:
+	skin.sprite_tint = Color.WHITE.lerp(player_color, IDENTITY_WASH)
+	skin.palette[&"body"] = player_color
+
+
+static func animated_executor_proof(player_color: Color) -> FighterSkin:
 	var skin := greybox(0)
 	skin.skin_id = &"gilded_executor_animated_v1"
 	skin.display_name = "The Gilded Executor — animated arena prototype"
@@ -199,8 +214,8 @@ static func animated_executor_proof() -> FighterSkin:
 	# The 224 px authored body height maps to the same ~51 px perceived height
 	# as the accepted single-pose proof. The wider cell preserves cape and limbs.
 	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
-	skin.sprite_tint = Color.WHITE
 	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	apply_player_identity(skin, player_color)
 	skin.ghost_texture = load(
 		"res://assets/art/fighters/gilded-executor-animated-v1/ghost.png"
 	) as Texture2D
@@ -224,7 +239,7 @@ static func animated_executor_proof() -> FighterSkin:
 	return skin
 
 
-static func animated_rook() -> FighterSkin:
+static func animated_rook(player_color: Color) -> FighterSkin:
 	var skin := FighterSkin.new()
 	skin.skin_id = &"rook_animated_v1"
 	skin.display_name = "The Rook — animated arena fighter"
@@ -236,7 +251,6 @@ static func animated_rook() -> FighterSkin:
 	skin.sprite_counts = ROOK_COUNTS.duplicate()
 	skin.sprite_cell_size = Vector2i(384, 256)
 	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
-	skin.sprite_tint = Color.WHITE
 	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
 	skin.ghost_texture = load(
 		"res://assets/art/fighters/rook-animated-v1/ghost.png"
@@ -252,6 +266,7 @@ static func animated_rook() -> FighterSkin:
 		&"ink": Color("111117"),
 		&"defeat": Color(0.18, 0.19, 0.26, 0.82),
 	}
+	apply_player_identity(skin, player_color)
 	skin.ticks_per_frame = 5
 	skin.state_ticks_per_frame = {
 		&"IDLE": 12,

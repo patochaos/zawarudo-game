@@ -12,6 +12,7 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
+	await VisualCapture.pin_window(self)
 	game._menu._activate(game._menu.ROW_ONLINE)
 	game._transition.visible = false
 	await VisualCapture.await_transition(self, game)
@@ -25,6 +26,7 @@ func _capture() -> void:
 	game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
+	await VisualCapture.pin_window(self)
 	game._menu._activate(game._menu.ROW_ONLINE)
 	game._transition.visible = false
 	game._online_lobby.show_room("ZA2W9D", 0)

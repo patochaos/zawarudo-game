@@ -12,6 +12,7 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
+	await VisualCapture.pin_window(self)
 	game._transition.visible = false
 	await VisualCapture.await_transition(self, game)
 	var error := _save("res://previews/menu-main-current.png")

@@ -34,8 +34,8 @@ const DASHBLADE_SCRIPT := preload("res://scripts/Dashblade.gd")
 const CHAKRAM_SCRIPT := preload("res://scripts/Chakram.gd")
 const SHOCK_PLASMA_SCRIPT := preload("res://scripts/ShockPlasma.gd")
 const SHOCK_ORB_SCRIPT := preload("res://scripts/ShockOrb.gd")
-const CHARACTER_SELECT_SCRIPT := preload("res://scripts/CharacterSelectLayer.gd")
-const TEAM_SELECT_SCRIPT := preload("res://scripts/TeamSelectLayer.gd")
+const ROSTER_SCRIPT := preload("res://scripts/RosterLayer.gd")
+const MATCH_SETUP_SCRIPT := preload("res://scripts/MatchSetupLayer.gd")
 
 ## How close a body's feet must be to a moving lip to be carried by it.
 const RIDE_TOLERANCE := 3.0
@@ -47,7 +47,18 @@ const HIT_PAUSE_DURATION := 0.045
 
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
+## Window presets, in the order the options row cycles them.
+const DISPLAY_720 := 0
+const DISPLAY_900 := 1
+const DISPLAY_1080 := 2
+const DISPLAY_MAXIMIZED := 3
+const DISPLAY_FULLSCREEN := 4
+const DISPLAY_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
+
 const MAX_PLAYERS := 4
+## Sentinel device ids: the keyboard-and-mouse seat, and "nobody claimed this".
+const KEYBOARD_DEVICE := -2
+const NO_DEVICE := -1
 const DEFAULT_HITS_TO_WIN := 5
 const MAX_HITS_TO_WIN := 7
 const PLAYER_COLORS := [
@@ -214,8 +225,8 @@ var simplified_fighter_proto_enabled: bool = false
 @export_range(1.0, 32.0, 0.25) var frame_debt_distance_per_cell: float = 2.75
 @export_range(0, 4, 1) var frame_debt_dash_ticks_per_cell: int = 1
 @export_range(0, 3, 1) var frame_debt_full_guard_bonus: int = 1
-@export var chakram_speed_min: float = 200.0
-@export var chakram_speed_max: float = 360.0
+@export var chakram_speed_min: float = 230.0
+@export var chakram_speed_max: float = 420.0
 ## The normal throw follows the committed aim exactly.
 @export var shock_plasma_speed_min: float = 860.0
 @export var shock_plasma_speed: float = 1160.0
@@ -334,6 +345,11 @@ var team_score: Array[int] = [0, 0]
 var winning_team: int = -1
 var player_roles: Array[String] = ["HUMAN", "AI", "AI", "AI"]
 var player_devices: Array[int] = [-2, -1, -1, -1]
+## Each CPU slot owns its preset. The scalar difficulty/exported tuning above
+## remains the fallback for legacy match entry points and editor balancing.
+var player_difficulties: Array[int] = [
+	Difficulty.STANDARD, Difficulty.STANDARD, Difficulty.STANDARD, Difficulty.STANDARD,
+]
 
 var banner_text: String = ""
 var banner_color: Color = Color.WHITE
@@ -344,8 +360,8 @@ var _ai_think: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _ai_searches: Array = [null, null, null, null]
 var _ai_step_cursor: int = 0
 var _menu
-var _character_select: CharacterSelectLayer
-var _team_select: TeamSelectLayer
+var _roster: RosterLayer
+var _setup: MatchSetupLayer
 var _tuning
 var planning_time_left: float = 0.0
 var planning_window_duration: float = 5.0
@@ -401,9 +417,6 @@ var shock_plasmas: Array = []
 var shock_orbs: Array = []
 var player_weapons: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
 var local_weapon_choices: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
-var _character_select_player_count: int = 2
-var _character_select_vs_ai: bool = false
-var _character_select_freeplay: bool = false
 var _next_volley: int = 1
 var _next_arrow_id: int = 1
 var _next_character_projectile_id: int = 100000
@@ -524,13 +537,18 @@ var _hit_pause_left: float = 0.0
 var _hit_pause_used_this_execution: bool = false
 var _secret_triple_match: bool = false
 var _settings: Dictionary = {
-	"sound": 1.0,
+	"sfx": 1.0,
+	"voice": 1.0,
 	"hit_freeze": true,
 	"reduced_flashes": false,
 	"high_contrast_previews": false,
-	"maximized": true,
+	"display": DISPLAY_MAXIMIZED,
+	"bindings": {},
 	"telemetry": true,
 }
+## Tests can point persistence at a disposable file without touching the
+## player's actual preferences.
+var settings_path: String = "user://settings.cfg"
 
 
 func _exit_tree() -> void:
@@ -617,31 +635,28 @@ func _ready() -> void:
 
 	_menu = MENU_SCRIPT.new()
 	add_child(_menu)
-	_menu.start_requested.connect(_on_menu_start)
-	_menu.character_select_requested.connect(_on_menu_character_select)
-	_menu.team_battle_requested.connect(_on_menu_team_battle)
-	_menu.roster_select_requested.connect(_on_menu_roster_select)
-	_menu.configured_match_requested.connect(_on_menu_configured_match)
-	_menu.freeplay_requested.connect(_on_menu_freeplay)
+	_menu.roster_requested.connect(_open_roster)
 	_menu.online_requested.connect(_on_menu_online)
 	_menu.tutorial_requested.connect(_on_menu_tutorial)
 	_menu.option_changed.connect(_on_option_changed)
+	_menu.binding_changed.connect(_on_binding_changed)
+	_menu.bindings_reset.connect(_on_bindings_reset)
 	_menu.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_menu.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
-	_character_select = CHARACTER_SELECT_SCRIPT.new()
-	add_child(_character_select)
-	_character_select.selection_confirmed.connect(_on_local_character_selection)
-	_character_select.canceled.connect(_on_character_select_canceled)
-	_character_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
-	_character_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_roster = ROSTER_SCRIPT.new()
+	add_child(_roster)
+	_roster.lineup_confirmed.connect(_on_lineup_confirmed)
+	_roster.canceled.connect(_on_roster_canceled)
+	_roster.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_roster.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
-	_team_select = TEAM_SELECT_SCRIPT.new()
-	add_child(_team_select)
-	_team_select.formation_confirmed.connect(_on_team_formation_confirmed)
-	_team_select.canceled.connect(_on_team_select_canceled)
-	_team_select.ui_navigated.connect(func(): _sfx.play("ui_move"))
-	_team_select.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_setup = MATCH_SETUP_SCRIPT.new()
+	add_child(_setup)
+	_setup.match_confirmed.connect(_on_roster_confirmed)
+	_setup.canceled.connect(_on_setup_canceled)
+	_setup.ui_navigated.connect(func(): _sfx.play("ui_move"))
+	_setup.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_online_client = ONLINE_CLIENT_SCRIPT.new()
 	add_child(_online_client)
@@ -669,10 +684,8 @@ func _ready() -> void:
 	_assign_pads()
 	Input.joy_connection_changed.connect(func(_d, _c):
 		_assign_pads()
-		if _menu != null:
-			_menu.refresh_controller_assignments()
-		if _team_select != null:
-			_team_select.refresh_connections())
+		if _roster != null:
+			_roster.refresh_connections())
 	_prev_mouse = get_viewport().get_mouse_position()
 	_begin_planning(true)
 	_open_menu()
@@ -684,22 +697,51 @@ func _ready() -> void:
 ## delay moves with them so a weaker opponent also feels less certain.
 func set_difficulty(level: int) -> void:
 	difficulty = clampi(level, Difficulty.NOVICE, Difficulty.RUTHLESS)
-	match difficulty:
+	var tuning := _difficulty_tuning(difficulty)
+	ai_aim_jitter = tuning["aim_jitter"]
+	ai_moves_searched = tuning["moves_searched"]
+	ai_think_min = tuning["think_min"]
+	ai_think_max = tuning["think_max"]
+	player_difficulties.fill(difficulty)
+
+
+func set_player_difficulty(player_index: int, level: int) -> void:
+	if player_index < 0 or player_index >= player_difficulties.size():
+		return
+	player_difficulties[player_index] = clampi(
+		level, Difficulty.NOVICE, Difficulty.RUTHLESS)
+
+
+func player_difficulty(player_index: int) -> int:
+	if player_index < 0 or player_index >= player_difficulties.size():
+		return difficulty
+	return player_difficulties[player_index]
+
+
+func ai_aim_jitter_for(player_index: int) -> float:
+	return float(_difficulty_tuning(player_difficulty(player_index))["aim_jitter"])
+
+
+func ai_moves_searched_for(player_index: int) -> int:
+	return int(_difficulty_tuning(player_difficulty(player_index))["moves_searched"])
+
+
+func ai_think_range_for(player_index: int) -> Vector2:
+	var tuning := _difficulty_tuning(player_difficulty(player_index))
+	return Vector2(float(tuning["think_min"]), float(tuning["think_max"]))
+
+
+func _difficulty_tuning(level: int) -> Dictionary:
+	match clampi(level, Difficulty.NOVICE, Difficulty.RUTHLESS):
 		Difficulty.NOVICE:
-			ai_aim_jitter = 7.0
-			ai_moves_searched = 1
-			ai_think_min = 1.4
-			ai_think_max = 3.0
+			return {"aim_jitter": 7.0, "moves_searched": 1,
+				"think_min": 1.4, "think_max": 3.0}
 		Difficulty.RUTHLESS:
-			ai_aim_jitter = 0.6
-			ai_moves_searched = 5
-			ai_think_min = 0.5
-			ai_think_max = 1.2
+			return {"aim_jitter": 0.6, "moves_searched": 5,
+				"think_min": 0.5, "think_max": 1.2}
 		_:
-			ai_aim_jitter = 2.0
-			ai_moves_searched = 2
-			ai_think_min = 0.8
-			ai_think_max = 2.2
+			return {"aim_jitter": 2.0, "moves_searched": 2,
+				"think_min": 0.8, "think_max": 2.2}
 
 
 func difficulty_name() -> String:
@@ -736,180 +778,165 @@ func _open_menu() -> void:
 	_tuning.visible = false
 	if _online_lobby != null:
 		_online_lobby.close()
-	if _character_select != null:
-		_character_select.close()
-	if _team_select != null:
-		_team_select.close()
+	if _roster != null:
+		_roster.close()
+	if _setup != null:
+		_setup.close()
+		_menu.backdrop_level = _setup.level
 	_menu.open()
 	if _transition != null:
 		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
 
 
-func _on_menu_character_select() -> void:
-	team_mode = false
-	_open_character_select(2, false, false, ["HUMAN", "HUMAN"])
-
-
-func _on_menu_team_battle() -> void:
+## One screen owns every local-match decision, so there is exactly one way in
+## and exactly one configuration coming back out of it.
+func _open_roster() -> void:
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
-	team_mode = true
-	state = Phase.TEAM_SELECT
+	state = Phase.ROSTER
 	_ui.visible = false
 	_tuning.visible = false
 	_menu.close()
-	_character_select.close()
 	if _transition != null:
 		_transition.visible = false
-	_team_select.open(_menu.level)
+	_setup.close()
+	_roster.open()
 
 
-func _on_team_formation_confirmed(slots: Array, selected_level: int) -> void:
-	if slots.size() != MAX_PLAYERS:
-		return
-	for i in MAX_PLAYERS:
-		var slot: Dictionary = slots[i]
-		player_roles[i] = str(slot["role"])
-		player_devices[i] = int(slot["device"])
-		player_teams[i] = int(slot["team"])
-	_menu.level = posmod(selected_level, Levels.count())
-	var roles: Array[String] = []
-	for i in MAX_PLAYERS:
-		roles.append(("CRIMSON" if player_teams[i] == 0 else "AZURE") + " · " + player_roles[i])
-	_team_select.close()
-	_character_select_player_count = MAX_PLAYERS
-	_character_select_vs_ai = true
-	_character_select_freeplay = false
-	state = Phase.CHARACTER_SELECT
-	_character_select.open(local_weapon_choices, MAX_PLAYERS, roles, true, player_roles)
-
-
-func _on_team_select_canceled() -> void:
-	team_mode = false
+func _on_roster_canceled() -> void:
 	state = Phase.MENU
-	_team_select.close()
+	_menu.backdrop_level = _setup.level
 	_menu.open()
-	_menu._show_local_menu()
 
 
-func _on_menu_roster_select(requested_players: int, freeplay: bool) -> void:
-	team_mode = false
-	var count := 2 if freeplay else clampi(requested_players, 2, MAX_PLAYERS)
-	var slot_roles: Array[String] = ["HUMAN"]
-	for i in range(1, count):
-		slot_roles.append("DUMMY" if freeplay else "AI")
-	_open_character_select(count, not freeplay, freeplay, slot_roles)
+## Who is fighting is settled; the rules screen takes it from here.
+func _on_lineup_confirmed(lineup: Dictionary) -> void:
+	state = Phase.MATCH_SETUP
+	_roster.close()
+	_setup.open(lineup)
 
 
-func _on_menu_configured_match(config: Dictionary) -> void:
-	var mode := int(config.get("mode", MENU_SCRIPT.BattleMode.VS))
+## Stepping back is a step, not a reset: the lineup screen reopens holding
+## exactly the fighters it handed over.
+func _on_setup_canceled() -> void:
+	state = Phase.ROSTER
+	_setup.close()
+	_roster.open()
+
+
+func _on_roster_confirmed(config: Dictionary) -> void:
+	var mode := int(config.get("mode", MatchSetupLayer.BattleMode.VS))
 	var count := clampi(int(config.get("player_count", 2)), 2, MAX_PLAYERS)
 	var weapons: Array = config.get("weapons", [])
-	var roles: Array = config.get("roles", [])
-	if mode == MENU_SCRIPT.BattleMode.FREE_PLAY:
+	_menu.backdrop_level = int(config.get("level", 0))
+	if mode == MatchSetupLayer.BattleMode.FREE_PLAY:
 		_start_freeplay(int(config.get("level", 0)), weapons, count,
 			config.get("roles", []), config.get("devices", []))
 		return
-	team_mode = mode == MENU_SCRIPT.BattleMode.TEAM_BATTLE
-	_start_local_match(roles.has("AI"),
-		int(config.get("level", 0)), count, weapons, config)
+	team_mode = mode == MatchSetupLayer.BattleMode.TEAM_BATTLE
+	_start_local_match(int(config.get("level", 0)), count, weapons, config)
 
 
-func _open_character_select(count: int, ai: bool, freeplay: bool, slot_roles: Array) -> void:
-	tutorial_mode = false
-	online_mode = false
-	online_player = -1
-	_character_select_player_count = clampi(count, 2, MAX_PLAYERS)
-	_character_select_vs_ai = ai
-	_character_select_freeplay = freeplay
-	state = Phase.CHARACTER_SELECT
-	_ui.visible = false
-	_tuning.visible = false
-	_menu.close()
-	if _transition != null:
-		_transition.visible = false
-	_character_select.open(local_weapon_choices, _character_select_player_count, slot_roles)
+## Test and capture seam: the roster screen's outcome without driving the
+## roster screen. It still travels the one configuration path a real match
+## uses, so a capture cannot diverge from what a player would get.
+func start_quick_match(ai: bool, lvl: int, requested_players: int = 2,
+		picks: Array = []) -> void:
+	var count := clampi(requested_players, 2, MAX_PLAYERS)
+	_roster._debug_pads.clear()
+	for i in MAX_PLAYERS:
+		_roster.weapons[i] = _roster_weapon_or_default(int(picks[i])) \
+			if i < picks.size() else Weapon.KNIVES
+		if i >= count:
+			_roster.kinds[i] = RosterLayer.SlotKind.OPEN
+		elif i == 0 or not ai:
+			_roster.kinds[i] = RosterLayer.SlotKind.PLAYER
+		else:
+			_roster.kinds[i] = RosterLayer.SlotKind.CPU
+		_roster.devices[i] = KEYBOARD_DEVICE if i == 0 else NO_DEVICE
+		_roster.ready_slots[i] = false
+	if not ai:
+		# Stand in for the pads a local duel's other seats would have claimed.
+		for i in range(1, count):
+			_roster._debug_pads.append(i - 1)
+			_roster.devices[i] = i - 1
+	_roster._normalize()
+	_setup.battle_mode = MatchSetupLayer.BattleMode.VS
+	_setup.level = posmod(lvl, Levels.count())
+	_setup.configure(_roster.build_lineup())
+	_on_roster_confirmed(_setup.build_config())
 
 
-func _on_local_character_selection(weapons: Array) -> void:
-	for i in _character_select_player_count:
-		local_weapon_choices[i] = _roster_weapon_or_default(int(weapons[i]))
-	_character_select.close()
-	if _character_select_freeplay:
-		_start_freeplay(_menu.level, weapons)
-	else:
-		_start_local_match(_character_select_vs_ai, _menu.level,
-			_character_select_player_count, weapons)
-
-
-func _on_character_select_canceled() -> void:
-	if team_mode:
-		state = Phase.TEAM_SELECT
-		_character_select.close()
-		_team_select.open(_menu.level)
-		return
-	state = Phase.MENU
-	_menu.open()
-	_menu._show_local_menu()
-
-
-func _on_menu_start(ai: bool, lvl: int, requested_players: int = 2) -> void:
+## Test and capture seam, as above, for the tuning sandbox.
+func start_quick_freeplay(lvl: int) -> void:
 	team_mode = false
-	_start_local_match(ai, lvl, requested_players, [])
+	_start_freeplay(lvl, [])
 
 
-func _start_local_match(ai: bool, lvl: int, requested_players: int, weapons: Array,
-		setup: Dictionary = {}) -> void:
+## The roster screen is the only source of a local match, so the whole
+## configuration arrives at once instead of being reassembled from defaults.
+func _start_local_match(lvl: int, requested_players: int, weapons: Array,
+		setup: Dictionary) -> void:
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
-	hits_to_win = clampi(_menu.match_lives, 3, MAX_HITS_TO_WIN)
-	# Read off the menu the same way the hit target is, so both entry points
-	# into a local match agree on the rules the player just set.
-	set_difficulty(_menu.difficulty)
-	if not setup.is_empty():
-		var configured_roles: Array = setup.get("roles", [])
-		var configured_devices: Array = setup.get("devices", [])
-		var configured_teams: Array = setup.get("teams", [])
-		for i in MAX_PLAYERS:
-			player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else "AI"
-			player_devices[i] = int(configured_devices[i]) if i < configured_devices.size() else -1
-			player_teams[i] = int(configured_teams[i]) if i < configured_teams.size() else -1
-	elif not team_mode:
+	hits_to_win = clampi(int(setup.get("match_lives", DEFAULT_HITS_TO_WIN)), 3, MAX_HITS_TO_WIN)
+	set_difficulty(int(setup.get("difficulty", difficulty)))
+	var configured_roles: Array = setup.get("roles", [])
+	var configured_devices: Array = setup.get("devices", [])
+	var configured_teams: Array = setup.get("teams", [])
+	var configured_difficulties: Array = setup.get("difficulties", [])
+	if not team_mode:
 		winning_team = -1
 		team_score = [0, 0]
-		for i in MAX_PLAYERS:
-			player_teams[i] = -1
-			player_roles[i] = "HUMAN" if not ai or i == 0 else "AI"
-			player_devices[i] = -2 if i == 0 else -1
-	vs_ai = player_roles.has("AI") if not setup.is_empty() or team_mode else ai
+	for i in MAX_PLAYERS:
+		player_roles[i] = str(configured_roles[i]) if i < configured_roles.size() else "AI"
+		player_devices[i] = int(configured_devices[i]) \
+			if i < configured_devices.size() else NO_DEVICE
+		player_teams[i] = int(configured_teams[i]) if i < configured_teams.size() else -1
+		var player_skill := int(configured_difficulties[i]) \
+			if i < configured_difficulties.size() else difficulty
+		set_player_difficulty(i, player_skill)
+	vs_ai = player_roles.slice(0, requested_players).has("AI")
 	player_weapons.fill(Weapon.KNIVES)
-	if not weapons.is_empty():
-		for i in mini(requested_players, weapons.size()):
-			player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	elif not ai and requested_players == 2:
-		player_weapons[0] = local_weapon_choices[0]
-		player_weapons[1] = local_weapon_choices[1]
+	for i in mini(requested_players, weapons.size()):
+		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
+	for i in mini(requested_players, local_weapon_choices.size()):
+		local_weapon_choices[i] = player_weapons[i]
 	_set_player_count(requested_players)
 	_ui.visible = true
 	_tuning.visible = false
 	_menu.close()
-	_character_select.close()
+	_roster.close()
+	_setup.close()
 	_load_level(lvl)
 	restart()
 	_sfx.play("title")
 	var team_shape := "%dv%d" % [
 		int(ceil(float(requested_players) / 2.0)), int(requested_players / 2),
 	]
-	var telemetry_mode := "local_team_%s" % team_shape if team_mode else \
-		"ai_wide" if ai else \
-		("local_2p_%s_%s" % [weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower()] \
-		if requested_players == 2 else "local_%dp" % requested_players)
+	var telemetry_mode: String
+	if team_mode:
+		telemetry_mode = "local_team_%s" % team_shape
+	elif vs_ai:
+		telemetry_mode = "ai_wide"
+	elif requested_players == 2:
+		telemetry_mode = "local_2p_%s_%s" % [
+			weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower(),
+		]
+	else:
+		telemetry_mode = "local_%dp" % requested_players
 	_begin_match_telemetry(telemetry_mode)
-	var matchup := "CRIMSON VS AZURE // %s" % team_shape.to_upper() if team_mode else \
-		("%dP ROSTER" % requested_players if requested_players > 2 else \
-		("VS AI" if ai else "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)]))
+	var matchup: String
+	if team_mode:
+		matchup = "CRIMSON VS AZURE // %s" % team_shape.to_upper()
+	elif requested_players > 2:
+		matchup = "%dP ROSTER" % requested_players
+	elif vs_ai:
+		matchup = "VS AI"
+	else:
+		matchup = "%s VS %s" % [weapon_short_name(0), weapon_short_name(1)]
 	_transition.play("%s // %s" % [matchup, level_name],
 		"WRITE THE MOVE", PLAYER_COLORS[0], reduced_flashes)
 
@@ -927,14 +954,16 @@ func _on_menu_tutorial() -> void:
 	_transition.visible = false
 
 
-func _on_menu_online(lvl: int) -> void:
+func _on_menu_online() -> void:
 	team_mode = false
 	tutorial_mode = false
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = false
 	state = Phase.ONLINE_LOBBY
-	_online_lobby.open(lvl, local_weapon_choices[0])
+	# The lobby starts from the arena and fighter the roster screen last held,
+	# then lets each side choose its own before the room opens.
+	_online_lobby.open(_setup.level, local_weapon_choices[0])
 	_transition.play("ONLINE DUEL", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
 
 
@@ -1129,14 +1158,9 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 	return ""
 
 
-## Free play: no turns, no freeze. One player under continuous control so the
+## Free play: no turns, no freeze. Players under continuous control so the
 ## movement and shooting can be judged by feel, with the tuning values editable
 ## live. Whatever you set here is what the real match uses afterwards.
-func _on_menu_freeplay(lvl: int) -> void:
-	team_mode = false
-	_start_freeplay(lvl, [])
-
-
 func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 		configured_roles: Array = [], configured_devices: Array = []) -> void:
 	team_mode = false
@@ -1166,11 +1190,23 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 
 
 func _load_settings() -> void:
-	_settings["maximized"] = DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED
 	var cfg := ConfigFile.new()
-	if cfg.load("user://settings.cfg") == OK:
+	if cfg.load(settings_path) == OK:
 		for key in _settings.keys():
 			_settings[key] = cfg.get_value("options", key, _settings[key])
+		# Preserve preferences written before effects/voice and the display preset
+		# became separate options. Saving once after the next change retires these
+		# legacy keys naturally.
+		if not cfg.has_section_key("options", "sfx") \
+				and cfg.has_section_key("options", "sound"):
+			_settings["sfx"] = cfg.get_value("options", "sound", 1.0)
+		if not cfg.has_section_key("options", "voice") \
+				and cfg.has_section_key("options", "sound"):
+			_settings["voice"] = cfg.get_value("options", "sound", 1.0)
+		if not cfg.has_section_key("options", "display") \
+				and cfg.has_section_key("options", "maximized"):
+			_settings["display"] = DISPLAY_MAXIMIZED \
+				if bool(cfg.get_value("options", "maximized", true)) else DISPLAY_720
 	_apply_settings()
 
 
@@ -1178,7 +1214,7 @@ func _save_settings() -> void:
 	var cfg := ConfigFile.new()
 	for key in _settings.keys():
 		cfg.set_value("options", key, _settings[key])
-	var error := cfg.save("user://settings.cfg")
+	var error := cfg.save(settings_path)
 	if error != OK:
 		push_warning("Could not save options (error %d)" % error)
 
@@ -1187,27 +1223,99 @@ func _on_option_changed(key: String, value: Variant) -> void:
 	if not _settings.has(key):
 		return
 	_settings[key] = value
-	_apply_settings()
+	_apply_setting(key)
 	_save_settings()
 
 
+## A stored layout only replaces the actions it actually names, so a binding
+## added later still arrives with its shipped default rather than unbound.
+func _apply_bindings() -> void:
+	key_bindings = DEFAULT_BINDINGS.duplicate(true)
+	var stored: Dictionary = _settings.get("bindings", {})
+	for action in stored.keys():
+		if action in key_bindings:
+			key_bindings[action] = Array(stored[action])
+	if _menu != null:
+		_menu.configure_bindings(key_bindings)
+
+
+## Rebinding is exclusive: a key can drive exactly one action, so taking it
+## leaves whichever action held it empty until the player sets that one too.
+func _on_binding_changed(action: String, codes: Array) -> void:
+	if action not in DEFAULT_BINDINGS:
+		return
+	var stored: Dictionary = _settings.get("bindings", {}).duplicate(true)
+	for other in key_bindings.keys():
+		if other == action:
+			continue
+		var kept: Array = []
+		for code in key_bindings[other]:
+			if code not in codes:
+				kept.append(code)
+		if kept.size() != key_bindings[other].size():
+			stored[other] = kept
+	stored[action] = codes.duplicate()
+	_on_option_changed("bindings", stored)
+
+
+func _on_bindings_reset() -> void:
+	_on_option_changed("bindings", {})
+
+
 func _apply_settings() -> void:
-	hit_freeze_enabled = bool(_settings["hit_freeze"])
-	reduced_flashes = bool(_settings["reduced_flashes"])
-	if _sfx != null:
-		_sfx.set_volume(float(_settings["sound"]))
-	if _time_stop != null:
-		_time_stop.reduced_flashes = reduced_flashes
-	if _preview != null:
-		_preview.high_contrast = bool(_settings["high_contrast_previews"])
-		_preview.queue_redraw()
-	if _telemetry != null:
-		_telemetry.enabled = bool(_settings["telemetry"])
-	if DisplayServer.get_name() != "headless":
-		var desired := DisplayServer.WINDOW_MODE_MAXIMIZED if bool(_settings["maximized"]) \
-			else DisplayServer.WINDOW_MODE_WINDOWED
-		if DisplayServer.window_get_mode() != desired:
-			DisplayServer.window_set_mode(desired)
+	for key in _settings:
+		_apply_setting(str(key))
+
+
+func _apply_setting(key: String) -> void:
+	match key:
+		"sfx":
+			if _sfx != null:
+				_sfx.set_sfx_volume(float(_settings["sfx"]))
+		"voice":
+			if _sfx != null:
+				_sfx.set_voice_volume(float(_settings["voice"]))
+		"hit_freeze":
+			hit_freeze_enabled = bool(_settings["hit_freeze"])
+		"reduced_flashes":
+			reduced_flashes = bool(_settings["reduced_flashes"])
+			if _time_stop != null:
+				_time_stop.reduced_flashes = reduced_flashes
+		"high_contrast_previews":
+			if _preview != null:
+				_preview.high_contrast = bool(_settings["high_contrast_previews"])
+				_preview.queue_redraw()
+		"telemetry":
+			if _telemetry != null:
+				_telemetry.enabled = bool(_settings["telemetry"])
+		"bindings":
+			_apply_bindings()
+		"display":
+			if DisplayServer.get_name() != "headless":
+				_apply_display(int(_settings["display"]))
+
+
+## One row owns the whole window decision, so a size and a mode can never
+## disagree about what the player asked for.
+func _apply_display(preset: int) -> void:
+	var desired := DisplayServer.WINDOW_MODE_WINDOWED
+	if preset == DISPLAY_MAXIMIZED:
+		desired = DisplayServer.WINDOW_MODE_MAXIMIZED
+	elif preset == DISPLAY_FULLSCREEN:
+		desired = DisplayServer.WINDOW_MODE_FULLSCREEN
+	if DisplayServer.window_get_mode() != desired:
+		DisplayServer.window_set_mode(desired)
+	if preset >= DISPLAY_SIZES.size():
+		return
+	var size: Vector2i = DISPLAY_SIZES[preset]
+	if DisplayServer.window_get_size() != size:
+		DisplayServer.window_set_size(size)
+		# Resizing from the top-left corner walks the window off screen over a few
+		# changes, so it is re-centred on the screen it already lives on.
+		var screen := DisplayServer.window_get_current_screen()
+		DisplayServer.window_set_position(
+			DisplayServer.screen_get_position(screen)
+			+ (DisplayServer.screen_get_size(screen) - size) / 2)
 
 
 func _reset_freeplay() -> void:
@@ -1485,12 +1593,14 @@ func _fighter_skin_for(i: int):
 		return null
 	if not simplified_fighter_proto_enabled:
 		return FIGHTER_SKIN_SCRIPT.executor_prototype(i)
+	# A fighter is drawn the same way in every slot; the player's own accent is
+	# what separates two people who picked it, so the roster's duplicate rule
+	# stays legible instead of putting two identical figures on the board.
+	var identity: Color = PLAYER_COLORS[i % PLAYER_COLORS.size()]
 	if player_weapons[i] == Weapon.DASHBLADE:
-		return FIGHTER_SKIN_SCRIPT.animated_rook()
-	if i == 0 and player_weapons[i] == Weapon.KNIVES:
-		# Preserve the isolated Duelist prototype without applying it to roster
-		# members that still use their distinct legacy figures.
-		return FIGHTER_SKIN_SCRIPT.animated_executor_proof()
+		return FIGHTER_SKIN_SCRIPT.animated_rook(identity)
+	if player_weapons[i] == Weapon.KNIVES:
+		return FIGHTER_SKIN_SCRIPT.animated_executor_proof(identity)
 	return null
 
 
@@ -1534,20 +1644,23 @@ func _default_aim_vector(i: int) -> Vector2:
 func _assign_pads() -> void:
 	var list := Input.get_connected_joypads()
 	_pads.fill(-1)
-	if team_mode:
-		for i in mini(players.size(), player_devices.size()):
-			var device := player_devices[i]
-			if device >= 0 and device in list and not is_ai(i):
-				_pads[i] = device
-		return
 	if list.is_empty():
 		return
-	# A local duel has one intentional device split: P1 owns keyboard + mouse;
-	# the first connected pad owns P2. Online still maps the first pad to the
-	# server-assigned local fighter because there is only one person per machine.
+	# Online maps the first pad to the server-assigned local fighter, because
+	# there is only ever one person on this machine.
 	if online_mode and online_player >= 0:
 		_pads[online_player] = list[0]
-	elif players.size() > 1:
+		return
+	# Local play follows what the roster screen recorded: a pad drives the slot
+	# it claimed. Entry points with no roster behind them (tutorial, free play
+	# defaults) keep the old split of P1 keyboard, first pad on P2.
+	var claimed := false
+	for i in mini(players.size(), player_devices.size()):
+		var device := player_devices[i]
+		if device >= 0 and device in list and not is_ai(i):
+			_pads[i] = device
+			claimed = true
+	if not claimed and players.size() > 1:
 		_pads[1] = list[0]
 
 
@@ -1846,6 +1959,10 @@ func _physics_process(delta: float) -> void:
 	match state:
 		Phase.MENU:
 			return
+		Phase.ROSTER:
+			return
+		Phase.MATCH_SETUP:
+			return
 		Phase.ONLINE_LOBBY:
 			return
 		Phase.ONLINE_WAIT:
@@ -1970,16 +2087,16 @@ func _freeplay_tick(delta: float) -> void:
 	var p: Player = players[0]
 
 	var dir := 0
-	if _held(K_P1["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
+	if _held(key_bindings["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
 		dir -= 1
-	if _held(K_P1["right"]) or _pad_right(_pads[0]) or _touch_controls.right_held:
+	if _held(key_bindings["right"]) or _pad_right(_pads[0]) or _touch_controls.right_held:
 		dir += 1
-	var jump_now: bool = _held(K_P1["jump"]) \
+	var jump_now: bool = _held(key_bindings["jump"]) \
 		or (_pads[0] >= 0 and Input.is_joy_button_pressed(_pads[0], JOY_BUTTON_A)) \
 		or _touch_controls.jump_held
 	var jump_edge: bool = jump_now and not _jump_prev[0]
 	_jump_prev[0] = jump_now
-	var wait_now: bool = _held(K_P1["wait"]) or _pad_down(_pads[0]) \
+	var wait_now: bool = _held(key_bindings["wait"]) or _pad_down(_pads[0]) \
 		or _touch_controls.wait_held
 	var drop_now: bool = jump_edge and wait_now
 
@@ -2002,7 +2119,7 @@ func _freeplay_tick(delta: float) -> void:
 	_update_facing()
 
 	# hold to draw, release to loose — immediately, no turn to wait for
-	var primary_held: bool = _held(K_P1["charge"]) or _touch_controls.charge_held
+	var primary_held: bool = _held(key_bindings["charge"]) or _touch_controls.charge_held
 	var secondary_held: bool = uses_shock(0) and not _touch_controls.has_active_touches() \
 		and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	if not _touch_controls.has_active_touches() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
@@ -2120,6 +2237,10 @@ func _step_chakrams(dt: float) -> void:
 		var result: Dictionary = chakram.sim_step(dt, players, simulation_turn)
 		if result["hit_player"] >= 0:
 			_on_player_hit(result["hit_player"], chakram.position, chakram.shooter)
+		if result.get("bounced", false):
+			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.45))
+			_remember_aftermath("CHAKRAM RICOCHET", chakram.position, chakram.color)
+			_sfx.play("clash")
 		if result.get("stuck", false):
 			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.35))
 			_remember_aftermath("CHAKRAM STUCK", chakram.position, chakram.color)
@@ -2866,7 +2987,8 @@ func _begin_planning(first: bool) -> void:
 		var search := Ai.new()
 		search.begin(self, i, target)
 		_ai_searches[i] = search
-		_ai_think[i] = rng.randf_range(ai_think_min, ai_think_max)
+		var think_range := ai_think_range_for(i)
+		_ai_think[i] = rng.randf_range(think_range.x, think_range.y)
 
 
 func _advance_chakrams_for_turn() -> void:
@@ -3803,12 +3925,16 @@ func ghost_end(i: int) -> Vector2:
 #   Rollback   : un-fires the shot and drops the confirmation, keeps the path
 #   Reset path : throws the recorded movement away and refills stamina
 
-const K_P1 := {
+## The shipped layout. `key_bindings` starts here and is replaced, action by
+## action, by whatever the player sets on the controls screen.
+const DEFAULT_BINDINGS := {
 	"left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE, KEY_W, KEY_UP], "wait": [KEY_S],
 	"charge": [], "rollback": [KEY_R], "reset": [KEY_F],
 	"super": [KEY_T],
 	"aim_up": [KEY_Q], "aim_down": [KEY_E],
 }
+var key_bindings: Dictionary = DEFAULT_BINDINGS.duplicate(true)
+
 const K_GAMEPAD_ONLY := {
 	"left": [], "right": [], "jump": [], "wait": [],
 	"charge": [], "rollback": [], "reset": [], "super": [],
@@ -3825,16 +3951,18 @@ func _input_map_for(i: int) -> Dictionary:
 	# machine, regardless of whether the server assigned them slot 0 or slot 1.
 	# In a local duel P2 is gamepad-only so the two players never fight over one
 	# keyboard or accidentally drive each other's plan.
-	return K_P1 if online_mode else (K_P1 if i == _keyboard_player() else K_GAMEPAD_ONLY)
+	return key_bindings if online_mode \
+		else (key_bindings if i == _keyboard_player() else K_GAMEPAD_ONLY)
 
 
+## Whoever claimed the keyboard seat on the roster screen drives it in play,
+## in every mode. Slot 0 is the fallback for entry points with no roster.
 func _keyboard_player() -> int:
 	if online_mode:
 		return online_player
-	if team_mode:
-		for i in player_devices.size():
-			if player_devices[i] == TeamSelectLayer.KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
-				return i
+	for i in player_devices.size():
+		if player_devices[i] == KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
+			return i
 	return 0
 
 
@@ -3947,18 +4075,13 @@ func _cycle_rematch_level(direction: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if state == Phase.TEAM_SELECT:
-		var team_joy := event as InputEventJoypadButton
-		if team_joy != null and team_joy.pressed:
-			_team_select.handle_input(team_joy)
-		return
-	if state == Phase.CHARACTER_SELECT:
+	if state == Phase.ROSTER or state == Phase.MATCH_SETUP:
 		var joy := event as InputEventJoypadButton
 		if joy != null and joy.pressed:
-			if team_mode:
-				_character_select.handle_joy_button_for_slot(_slot_for_device(joy.device), joy.button_index)
+			if state == Phase.ROSTER:
+				_roster.handle_joy_button(joy.device, joy.button_index)
 			else:
-				_character_select.handle_joy_button(joy.button_index)
+				_setup.handle_joy_button(joy.device, joy.button_index)
 		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
@@ -3973,14 +4096,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.echo:
 		return
-	if state == Phase.TEAM_SELECT:
-		_team_select.handle_input(k)
+	if state == Phase.ROSTER:
+		_roster.handle_key(k.keycode)
 		return
-	if state == Phase.CHARACTER_SELECT:
-		if team_mode:
-			_character_select.handle_key_for_slot(_keyboard_player(), k.keycode)
-		else:
-			_character_select.handle_key(k.keycode)
+	if state == Phase.MATCH_SETUP:
+		_setup.handle_key(k.keycode)
 		return
 	if state == Phase.TUTORIAL:
 		_tutorial.handle_key(k.keycode)
@@ -4077,7 +4197,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				KEY_2:
 					_set_shock_attack_mode(online_player, 1)
 					return
-		var online_map := K_P1
+		var online_map := key_bindings
 		if k.keycode in online_map["super"]:
 			_toggle_super(online_player)
 		elif k.keycode in online_map["rollback"]:

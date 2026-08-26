@@ -23,8 +23,11 @@ func _run() -> void:
 		var opponent: Player = game.players[1]
 		var visual := rook.get_node_or_null("FighterVisual") as FighterVisual
 		_check(visual != null, "DASHBLADE must receive the Rook fighter visual")
-		_check(opponent.get_node_or_null("FighterVisual") == null,
-			"a non-Duelist opponent must not receive recolored Rook artwork")
+		# The opponent is a Duelist, so it is drawn too — but with its own skin.
+		# What must never happen is Rook artwork leaking onto another fighter.
+		var rival_visual := opponent.get_node_or_null("FighterVisual") as FighterVisual
+		_check(rival_visual != null and rival_visual.skin.skin_id != &"rook_animated_v1",
+			"a non-Dashblade opponent must never be drawn with Rook artwork")
 		_check(rook.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 			"Rook artwork must not change the authoritative collision box")
 		if visual != null:
@@ -127,7 +130,14 @@ func _run() -> void:
 	var second_skin = game._fighter_skin_for(1)
 	_check(second_skin != null and second_skin.skin_id == &"rook_animated_v1",
 		"Rook selection must follow DASHBLADE identity rather than player index")
+	var first_skin = game._fighter_skin_for(0)
+	_check(first_skin != null \
+			and not first_skin.sprite_tint.is_equal_approx(second_skin.sprite_tint),
+		"two Rooks must carry their own player accents")
+	_check(second_skin.palette[&"body"].is_equal_approx(game.PLAYER_COLORS[1]),
+		"the Rook's authored palette must not override the player's identity colour")
 	second_skin = null
+	first_skin = null
 
 	root.remove_child(game)
 	game.free()

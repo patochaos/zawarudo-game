@@ -14,7 +14,19 @@ func _run() -> void:
 	await process_frame
 	game._sfx.muted = true
 
-	game._on_menu_start(true, 0, 4)
+	game._on_roster_confirmed({
+		"mode": MatchSetupLayer.BattleMode.VS,
+		"player_count": 4,
+		"roles": ["HUMAN", "AI", "AI", "AI"],
+		"devices": [-2, -1, -1, -1],
+		"teams": [-1, -1, -1, -1],
+		"weapons": [0, 0, 0, 0],
+		"level": 0,
+		"match_lives": 5,
+		"difficulty": game.Difficulty.STANDARD,
+		"difficulties": [game.Difficulty.STANDARD, game.Difficulty.STANDARD,
+			game.Difficulty.NOVICE, game.Difficulty.RUTHLESS],
+	})
 	game._ui.refresh()
 	_check(not game._online_state_digest().is_empty(),
 		"the deterministic state digest must serialize every live player field")
@@ -35,6 +47,9 @@ func _run() -> void:
 	for i in range(1, 4):
 		_check(game.is_ai(i), "Player %d must be AI-controlled" % (i + 1))
 		_check(game._ai_searches[i] != null, "Player %d must receive an independent AI search" % (i + 1))
+	_check(game.player_difficulty(2) == game.Difficulty.NOVICE \
+		and game.player_difficulty(3) == game.Difficulty.RUTHLESS,
+		"the configured match must carry each CPU's skill preset into live play")
 
 	var unique_spawns := {}
 	for player in game.players:
@@ -107,7 +122,7 @@ func _run() -> void:
 	for i in range(1, 4):
 		game._ai_searches[i].finish()
 		game._ai_searches[i].apply()
-	game._tick_ai(game.ai_think_max + 0.1)
+	game._tick_ai(3.1)
 	_check(game.players[1].plan.confirmed and game.players[2].plan.confirmed \
 			and game.players[3].plan.confirmed,
 		"all three AIs must finish and confirm independent plans")
@@ -138,14 +153,36 @@ func _run() -> void:
 	_check(not game._hit_pause_used_this_execution and is_zero_approx(game._hit_pause_left),
 		"a new execution must restore one fresh hit-stop opportunity")
 
-	game._on_menu_start(true, 0, 3)
+	game._on_roster_confirmed({
+		"mode": MatchSetupLayer.BattleMode.VS,
+		"player_count": 3,
+		"roles": ["HUMAN", "AI", "AI"],
+		"devices": [-2, -1, -1],
+		"teams": [-1, -1, -1],
+		"weapons": [0, 0, 0],
+		"level": 0,
+		"match_lives": 5,
+		"difficulty": game.Difficulty.STANDARD,
+		"difficulties": [game.Difficulty.STANDARD, game.Difficulty.STANDARD,
+			game.Difficulty.STANDARD],
+	})
 	_check(game.players.size() == 3 and game.is_ai(1) and game.is_ai(2),
 		"three-player mode must spawn one human and two AI rivals")
 	_check(game.platforms.size() == Levels.build(0, 3)["platforms"].size(),
 		"three-player mode must load the arena's authored 3P platform variant")
 
-	game._menu.match_lives = 7
-	game._on_menu_start(false, 0, 2)
+	game._on_roster_confirmed({
+		"mode": MatchSetupLayer.BattleMode.VS,
+		"player_count": 2,
+		"roles": ["HUMAN", "HUMAN"],
+		"devices": [-2, 0],
+		"teams": [-1, -1],
+		"weapons": [0, 0],
+		"level": 0,
+		"match_lives": 7,
+		"difficulty": game.Difficulty.STANDARD,
+		"difficulties": [game.Difficulty.STANDARD, game.Difficulty.STANDARD],
+	})
 	game._ui.refresh()
 	_check(game.players.size() == 2 and not game.is_ai(1),
 		"switching back to local duel must restore two human fighters")

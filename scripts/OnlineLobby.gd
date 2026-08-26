@@ -12,7 +12,69 @@ const VIOLET := Color(0.76, 0.42, 1.0)
 const TEXT := Color(0.84, 0.87, 0.94)
 const DIM := Color(0.56, 0.61, 0.71)
 const ROOM_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-const FIGHTER_ROSTER := [0, 2, 4, 3]
+const FIGHTER_ROSTER := Roster.ORDER
+## Compact copy of the local roster grid: the whole cast on screen at once,
+## sized for the one fighter this machine is choosing.
+const TILE_W := 110.0
+const TILE_H := 92.0
+const TILE_GAP := 12.0
+## The portraits are square and framed for a 264 px plate. At this size the
+## tile has to crop to the head or it reads as a dark smudge.
+const TILE_FACE := Rect2(0.22, 0.05, 0.56, 0.56)
+const TILE_Y := 256.0
+const TILE_ORIGIN_X := 397.0
+
+
+class FighterGrid:
+	extends Control
+
+	var chosen: int = Roster.DUELIST
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func apply(weapon: int) -> void:
+		chosen = weapon
+		queue_redraw()
+
+	func _draw() -> void:
+		for i in Roster.ORDER.size():
+			var weapon: int = Roster.ORDER[i]
+			var rect := Rect2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP),
+				TILE_Y, TILE_W, TILE_H)
+			var picked := weapon == chosen
+			var cut := 10.0
+			var panel := PackedVector2Array([
+				Vector2(rect.position.x + cut, rect.position.y),
+				Vector2(rect.end.x, rect.position.y),
+				Vector2(rect.end.x, rect.end.y - cut),
+				Vector2(rect.end.x - cut, rect.end.y),
+				Vector2(rect.position.x, rect.end.y),
+				Vector2(rect.position.x, rect.position.y + cut),
+			])
+			draw_colored_polygon(panel, Color(0.05, 0.035, 0.09, 1.0))
+			var face := Rect2(TILE_FACE.position,
+				Vector2(TILE_FACE.size.x, TILE_FACE.size.y * rect.size.y / rect.size.x))
+			var uvs := PackedVector2Array()
+			for point: Vector2 in panel:
+				uvs.append(face.position + (point - rect.position) / rect.size * face.size)
+			draw_colored_polygon(panel, Color.WHITE, uvs, Roster.portrait(weapon))
+			if not picked:
+				draw_colored_polygon(panel, Color(0.031, 0.016, 0.055, 0.40))
+			for step in 5:
+				var t := float(step) / 4.0
+				draw_rect(Rect2(rect.position.x, rect.end.y - 38.0 + t * 18.0,
+					rect.size.x, 5.0), Color(0.028, 0.014, 0.050, 0.08 + t * 0.50))
+			# The caption plate follows the cut so the name never spills past it.
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(rect.position.x, rect.end.y - 22.0),
+				Vector2(rect.end.x, rect.end.y - 22.0),
+				Vector2(rect.end.x - cut, rect.end.y),
+				Vector2(rect.position.x, rect.end.y),
+			]), Color(0.028, 0.014, 0.050, 0.92))
+			draw_polyline(panel + PackedVector2Array([panel[0]]),
+				GOLD if picked else Color(0.30, 0.24, 0.40, 0.9),
+				2.4 if picked else 1.0, true)
 
 
 class LobbyChrome:
@@ -46,18 +108,10 @@ class LobbyChrome:
 			draw_rect(Rect2(390.0, 266.0, 500.0, 88.0),
 				Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.62), false, 2.0)
 		else:
-			draw_line(Vector2(390.0, 350.0), Vector2(570.0, 350.0),
+			draw_line(Vector2(390.0, 489.0), Vector2(570.0, 489.0),
 				Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 1.0)
-			draw_line(Vector2(710.0, 350.0), Vector2(890.0, 350.0),
+			draw_line(Vector2(710.0, 489.0), Vector2(890.0, 489.0),
 				Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 1.0)
-		for i in 3:
-			var x := 500.0 + float(i) * 140.0
-			var active := (i == 1) if room_active else (i == 0)
-			draw_circle(Vector2(x, 601.0), 4.0, GOLD if active else Color(0.24, 0.22, 0.30))
-			if i < 2:
-				draw_line(Vector2(x + 8.0, 601.0), Vector2(x + 132.0, 601.0),
-					Color(GOLD.r, GOLD.g, GOLD.b, 0.18), 1.0)
-
 
 var level: int = 0
 var weapon: int = 0
@@ -69,8 +123,9 @@ var _status: Label
 var _status_rule: ColorRect
 var _level_label: Label
 var _fighter_label: Label
-var _fighter_left: Button
-var _fighter_right: Button
+var _fighter_grid: FighterGrid
+var _fighter_buttons: Array[Button] = []
+var _fighter_captions: Array[Label] = []
 var _level_left: Button
 var _level_right: Button
 var _create: Button
@@ -97,16 +152,16 @@ func _ready() -> void:
 	var intro := _label(Vector2(330.0, 184.0), 620.0, 15, TEXT)
 	intro.text = "Each duelist uses their own screen. Plans are revealed only after both players lock fate."
 
-	_create = _button(Vector2(360.0, 250.0), Vector2(560.0, 58.0),
+	_create = _button(Vector2(360.0, 398.0), Vector2(560.0, 54.0),
 		"01   CREATE PRIVATE ROOM", true)
 	_create.pressed.connect(func(): create_requested.emit(level, weapon))
 
-	_join_divider = _label(Vector2(300.0, 329.0), 680.0, 13, DIM)
+	_join_divider = _label(Vector2(300.0, 468.0), 680.0, 13, DIM)
 	_join_divider.text = "OR JOIN AN EXISTING DUEL"
 
 	_code_input = LineEdit.new()
-	_code_input.position = Vector2(360.0, 376.0)
-	_code_input.size = Vector2(356.0, 56.0)
+	_code_input.position = Vector2(360.0, 500.0)
+	_code_input.size = Vector2(356.0, 54.0)
 	_code_input.max_length = 6
 	_code_input.placeholder_text = "6-CHARACTER CODE"
 	_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -130,7 +185,7 @@ func _ready() -> void:
 	_code_input.focus_entered.connect(func(): ui_navigated.emit())
 	add_child(_code_input)
 
-	_join = _button(Vector2(734.0, 376.0), Vector2(186.0, 56.0), "02   JOIN", true)
+	_join = _button(Vector2(734.0, 500.0), Vector2(186.0, 54.0), "02   JOIN", true)
 	_join.pressed.connect(_request_join)
 
 	_room_caption = _label(Vector2(330.0, 235.0), 620.0, 13, DIM)
@@ -138,31 +193,38 @@ func _ready() -> void:
 	_room_caption.visible = false
 	_room_label = _label(Vector2(390.0, 276.0), 500.0, 42, VIOLET)
 	_room_label.visible = false
-	_copy = _button(Vector2(500.0, 377.0), Vector2(280.0, 48.0), "COPY ROOM CODE", true)
+	_copy = _button(Vector2(500.0, 386.0), Vector2(280.0, 46.0), "COPY ROOM CODE", true)
 	_copy.visible = false
 	_copy.pressed.connect(func():
 		DisplayServer.clipboard_set(_room_label.text)
 		set_status("CODE COPIED — SEND IT TO PLAYER 2", false))
 
-	_fighter_left = _button(Vector2(348.0, 446.0), Vector2(52.0, 32.0), "‹")
-	_fighter_left.pressed.connect(func(): _cycle_fighter(-1))
-	_fighter_label = _label(Vector2(410.0, 440.0), 460.0, 13, VIOLET)
-	_fighter_right = _button(Vector2(880.0, 446.0), Vector2(52.0, 32.0), "›")
-	_fighter_right.pressed.connect(func(): _cycle_fighter(1))
-	_level_left = _button(Vector2(348.0, 481.0), Vector2(52.0, 32.0), "‹")
+	_fighter_label = _label(Vector2(300.0, 228.0), 680.0, 13, VIOLET)
+	_fighter_grid = FighterGrid.new()
+	_fighter_grid.size = Vector2(1280.0, 720.0)
+	add_child(_fighter_grid)
+	for i in Roster.ORDER.size():
+		var tile := _tile_button(Vector2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP), TILE_Y))
+		tile.pressed.connect(_pick_fighter.bind(i))
+		_fighter_buttons.append(tile)
+		var caption := _label(Vector2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP),
+			TILE_Y + TILE_H - 20.0), TILE_W, 11, TEXT)
+		caption.text = Roster.short_name(Roster.ORDER[i])
+		_fighter_captions.append(caption)
+	_level_left = _button(Vector2(348.0, 364.0), Vector2(52.0, 32.0), "‹")
 	_level_left.pressed.connect(func(): _cycle_level(-1))
-	_level_label = _label(Vector2(410.0, 475.0), 460.0, 13, GOLD)
-	_level_right = _button(Vector2(880.0, 481.0), Vector2(52.0, 32.0), "›")
+	_level_label = _label(Vector2(410.0, 358.0), 460.0, 13, GOLD)
+	_level_right = _button(Vector2(880.0, 364.0), Vector2(52.0, 32.0), "›")
 	_level_right.pressed.connect(func(): _cycle_level(1))
 	_status_rule = ColorRect.new()
-	_status_rule.position = Vector2(430.0, 523.0)
+	_status_rule.position = Vector2(430.0, 562.0)
 	_status_rule.size = Vector2(420.0, 2.0)
 	_status_rule.color = Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.40)
 	add_child(_status_rule)
-	_status = _label(Vector2(330.0, 532.0), 620.0, 15, Color(0.62, 0.78, 0.70))
+	_status = _label(Vector2(330.0, 568.0), 620.0, 15, Color(0.62, 0.78, 0.70))
 	_status.text = ""
 
-	var back := _button(Vector2(500.0, 582.0), Vector2(280.0, 40.0), "‹  BACK TO MENU")
+	var back := _button(Vector2(500.0, 598.0), Vector2(280.0, 36.0), "‹  BACK TO MENU")
 	back.pressed.connect(func(): cancel_requested.emit())
 	visible = false
 
@@ -217,6 +279,10 @@ func handle_key(code: int) -> bool:
 	if code == KEY_ESCAPE:
 		cancel_requested.emit()
 		return true
+	# The room-code field owns the letter keys, so the grid answers to arrows only.
+	if code in [KEY_LEFT, KEY_RIGHT] and _fighter_grid.visible:
+		_cycle_fighter(-1 if code == KEY_LEFT else 1)
+		return true
 	if code in [KEY_ENTER, KEY_KP_ENTER] and _code_input.visible:
 		_request_join()
 		return true
@@ -224,8 +290,16 @@ func handle_key(code: int) -> bool:
 
 
 func _cycle_fighter(direction: int) -> void:
-	var index := FIGHTER_ROSTER.find(weapon)
-	weapon = FIGHTER_ROSTER[posmod(index + direction, FIGHTER_ROSTER.size())]
+	weapon = Roster.step(weapon, direction)
+	ui_navigated.emit()
+	_refresh_choices()
+
+
+func _pick_fighter(tile: int) -> void:
+	if weapon == Roster.ORDER[tile]:
+		return
+	weapon = Roster.ORDER[tile]
+	ui_navigated.emit()
 	_refresh_choices()
 
 
@@ -235,26 +309,29 @@ func _cycle_level(direction: int) -> void:
 
 
 func _refresh_choices() -> void:
-	_fighter_label.text = "YOUR FIGHTER // %s" % _fighter_name(weapon)
+	_fighter_label.text = "YOUR FIGHTER // %s  ·  %s" % [
+		Roster.full_name(weapon), str(Roster.entry(weapon)["kit"])]
+	_fighter_grid.apply(weapon)
 	_level_label.text = "HOST ARENA // %02d OF %02d  —  %s" % [
 		level + 1, Levels.count(), Levels.build(level)["name"]]
 
 
+## Once the room exists the fighter is fixed on the server, so the grid comes
+## down and the label alone records what this machine chose.
 func _set_choices_visible(can_edit: bool) -> void:
-	_fighter_left.visible = can_edit
-	_fighter_right.visible = can_edit
+	for tile in _fighter_buttons:
+		tile.visible = can_edit
+	for caption in _fighter_captions:
+		caption.visible = can_edit
+	_fighter_grid.visible = can_edit
 	_level_left.visible = can_edit
 	_level_right.visible = can_edit
 	_fighter_label.visible = true
 	_level_label.visible = true
-
-
-func _fighter_name(value: int) -> String:
-	match value:
-		2: return "THE ROOK"
-		3: return "THE ECLIPSE"
-		4: return "THE PULSE"
-		_: return "THE DUELIST"
+	# Once the room exists the grid comes down and the two choices collapse into
+	# a pair of summary lines under the room code.
+	_fighter_label.position.y = 228.0 if can_edit else 452.0
+	_level_label.position.y = 358.0 if can_edit else 478.0
 
 
 func _sanitize_code(value: String) -> void:
@@ -291,6 +368,28 @@ func _label(pos: Vector2, width: float, size: int, color: Color) -> Label:
 	label.add_theme_constant_override("shadow_offset_y", 3)
 	add_child(label)
 	return label
+
+
+## A hit target laid over a tile the grid already drew. It contributes a hover
+## wash and nothing else, so the portrait underneath stays visible.
+func _tile_button(pos: Vector2) -> Button:
+	var button := Button.new()
+	button.position = pos
+	button.size = Vector2(TILE_W, TILE_H)
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var clear := StyleBoxEmpty.new()
+	button.add_theme_stylebox_override("normal", clear)
+	button.add_theme_stylebox_override("pressed", clear)
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.16)
+	hover.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.75)
+	hover.set_border_width_all(1)
+	button.add_theme_stylebox_override("hover", hover)
+	button.mouse_entered.connect(func(): ui_navigated.emit())
+	button.pressed.connect(func(): ui_accepted.emit())
+	add_child(button)
+	return button
 
 
 func _button(pos: Vector2, dimensions: Vector2, text: String, primary: bool = false) -> Button:

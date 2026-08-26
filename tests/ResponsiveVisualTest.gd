@@ -15,7 +15,7 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._transition.visible = false
-	game._on_menu_start(true, 0, 2)
+	game.start_quick_match(true, 0, 2)
 	game._transition.visible = false
 	await VisualCapture.await_transition(self, game)
 	for target: Vector2i in TARGETS:

@@ -1,6 +1,11 @@
 extends SceneTree
 
+## The title screen only chooses a destination. Everything about a local match
+## is decided on the roster screen, so this suite pins that the title stays a
+## short list of destinations and never grows a configuration page again.
+
 const MENU_SCRIPT := preload("res://scripts/MenuLayer.gd")
+const GAME_MANAGER := preload("res://scripts/GameManager.gd")
 var _failures: int = 0
 
 
@@ -13,11 +18,18 @@ func _run() -> void:
 	root.add_child(menu)
 	await process_frame
 
+	menu.configure_bindings(GAME_MANAGER.DEFAULT_BINDINGS.duplicate(true))
+	var controls_node_count: int = menu._controls_sheet.get_child_count()
+	menu.configure_bindings(GAME_MANAGER.DEFAULT_BINDINGS.duplicate(true))
+	_check(menu._controls_sheet.get_child_count() == controls_node_count,
+		"refreshing live bindings must not rebuild the controls sheet")
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
 		"PLAY", "HOW TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
 	], "the main menu must retain its primary destinations")
+	_check(menu._rows[menu.ROWS - 1].visible == false,
+		"rows the current page does not fill must stay hidden")
 	var play_footer: String = menu._footer.text
 	menu._row_buttons[menu.ROW_TUTORIAL].mouse_entered.emit()
 	_check(menu._footer.text != play_footer and "six-screen" in menu._footer.text,
@@ -31,125 +43,104 @@ func _run() -> void:
 	_check(_tree_has_text(menu._controls_sheet, "KEYBOARD + MOUSE") \
 		and _tree_has_text(menu._controls_sheet, "CONNECTED GAMEPAD"),
 		"Controls must explain keyboard and controller ownership")
+	_check(_tree_has_text(menu._controls_sheet, "presses A to take an open slot"),
+		"Controls must explain how a pad claims a roster slot")
 	menu.handle_key(KEY_ESCAPE)
+	_check(menu._page == menu.MenuPage.MAIN and menu._cursor == menu.ROW_CONTROLS,
+		"leaving the reference sheet must return to the row that opened it")
 
+	# Play is a destination, not a page: it hands the whole local match over to
+	# the roster screen rather than unfolding a configuration list in place.
+	var opened := [0]
+	menu.roster_requested.connect(func(): opened[0] += 1)
 	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
-	_check(menu._page == menu.MenuPage.SETUP,
-		"Play must open the single local-match setup screen")
-	var setup_names := menu._page_names()
-	_check(setup_names.size() == 8 and "MODE" in setup_names[0] \
-		and "FIGHTERS" in setup_names[1] and "P1" in setup_names[2] \
-		and "P2" in setup_names[3] and "ARENA" in setup_names[4] \
-		and "MATCH LIVES" in setup_names[5] and "OPPONENT" in setup_names[6] \
-		and setup_names[7] == "START MATCH",
-		"mode, count, classes, arena, lives, opponent skill and Start must coexist")
-	_check(not "GRENADIER" in " ".join(menu._page_names()) \
-		and not "WIDE" in " ".join(menu._page_names()),
-		"the retired Grenadier shortcut and Wide suffix must be absent")
+	_check(opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
+		"Play must request the roster screen instead of opening a setup page")
+	_check(menu.MenuPage.keys() == ["MAIN", "CONTROLS", "OPTIONS", "BINDINGS"],
+		"the title screen must no longer carry a setup page")
 
-	menu._select(menu.SETUP_PLAYERS)
-	menu.handle_key(KEY_RIGHT)
-	menu.handle_key(KEY_RIGHT)
-	_check(menu._page == menu.MenuPage.SETUP and menu.battle_player_count == 4 \
-		and menu._page_names().size() == 10,
-		"changing fighter count must expand the roster without opening another page")
-	_check(menu.battle_roles[0] == "HUMAN" and menu.battle_devices[0] == -2,
-		"P1 must always be keyboard-controlled")
-	var pads := Input.get_connected_joypads()
-	_check((pads.is_empty() and menu.battle_roles[1] == "AI" and menu.battle_devices[1] == -1) \
-		or (not pads.is_empty() and menu.battle_roles[1] == "HUMAN" \
-			and menu.battle_devices[1] == pads[0]),
-		"P2 must be human only when a controller is detected")
-	_check(menu.battle_roles[2] == "AI" and menu.battle_roles[3] == "AI",
-		"extra prototype slots must remain CPU-controlled")
-	menu._select(menu.SETUP_FIRST_FIGHTER)
-	menu.handle_key(KEY_RIGHT)
-	_check(menu._portrait_preview.visible and menu._portrait_preview.texture == menu.ROOK_PORTRAIT \
-		and "LOST FRAMES" in menu._context_meta.text and "LORE" in menu._footer.text,
-		"fighter focus must show the selected portrait, abilities and lore")
-	menu._select(menu.SETUP_FIRST_FIGHTER + 1)
-	menu.handle_key(KEY_RIGHT)
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.battle_weapons.slice(0, 2) == [2, 4] \
-			and "ROOK" in menu._page_names()[2] \
-			and "PULSE" in menu._page_names()[3],
-		"human and CPU classes must be editable inline")
-	menu._select(menu.SETUP_FIRST_FIGHTER + 2)
-	menu.handle_key(KEY_LEFT)
-	_check(menu.battle_weapons[2] == 3 and "ECLIPSE" in menu._page_names()[4] \
-			and menu._portrait_preview.texture == menu.ECLIPSE_PORTRAIT \
-			and "ABSOLUTION" in menu._context_meta.text,
-		"The Eclipse must be the fourth roster choice with a complete dossier")
-	menu._select(menu._setup_arena_row())
-	menu.handle_key(KEY_RIGHT)
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.level == 2 and menu._page == menu.MenuPage.SETUP,
-		"arena selection must stay on the same setup screen")
-	_check(menu._arena_dossier.visible and not menu._portrait_preview.visible \
-		and "LAYOUT READ" in menu._footer.text,
-		"arena focus must replace the portrait with a live layout thumbnail")
-	menu._select(menu._setup_lives_row())
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.match_lives == 7 and "7" in menu._page_names()[menu._setup_lives_row()],
-		"match lives must be adjustable beside the rest of the configuration")
-	_check("P1" in menu._match_card.text and "FIRST TO 7 HITS" in menu._match_card.text,
-		"the live match card must update without a separate review page")
-
-	# Opponent skill is a match rule, so it sits beside lives and arena rather
-	# than in global options. It only means anything when a slot is CPU-driven.
-	menu._select(menu._setup_difficulty_row())
-	_check("STANDARD" in menu._page_names()[menu._setup_difficulty_row()],
-		"the opponent row must start on the standard preset")
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.difficulty == 2 and "RUTHLESS" in menu._page_names()[menu._setup_difficulty_row()],
-		"opponent skill must be adjustable beside the rest of the configuration")
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.difficulty == 0 and "NOVICE" in menu._page_names()[menu._setup_difficulty_row()],
-		"the opponent presets must wrap round rather than clamp")
-	menu.handle_key(KEY_LEFT)
-
-	var final_config := [{}]
-	menu.configured_match_requested.connect(func(config: Dictionary): final_config[0] = config)
-	menu._activate(menu._setup_start_row())
-	_check(final_config[0]["mode"] == menu.BattleMode.VS \
-		and final_config[0]["player_count"] == 4 \
-		and final_config[0]["weapons"] == [2, 4, 3, 0] \
-		and final_config[0]["level"] == 2 \
-		and final_config[0]["match_lives"] == 7 \
-		and final_config[0]["difficulty"] == 2,
-		"Start Match must emit one complete source of truth")
-
-	menu.open()
-	menu._activate(menu.ROW_PLAY)
-	menu._select(menu.SETUP_MODE)
-	menu.handle_key(KEY_RIGHT)
-	menu._select(menu.SETUP_PLAYERS)
-	menu.handle_key(KEY_LEFT)
-	_check(menu.battle_player_count == 3 and menu.battle_teams == [0, 1, 0],
-		"Team Battle must update player count and sides inline")
-	menu._select(menu.SETUP_MODE)
-	menu.handle_key(KEY_RIGHT)
-	_check(menu.battle_mode == menu.BattleMode.FREE_PLAY \
-		and "OFF" in menu._page_names()[menu._setup_lives_row()] \
-		and menu.battle_roles[2] == "DUMMY",
-		"Free Play must replace scoring with visible dummy slots on the same screen")
-
-	menu.open()
 	var changed := [[]]
 	menu.option_changed.connect(func(key, value): changed[0] = [key, value])
 	menu._activate(menu.ROW_OPTIONS)
+	_check(menu._page == menu.MenuPage.OPTIONS and menu._page_names().size() == 8,
+		"Options must open its own seven-setting page plus Back")
 	menu._activate(menu.OPTION_HIT_FREEZE)
 	_check(changed[0].size() == 2 and changed[0][0] == "hit_freeze",
 		"Options must remain functional outside battle setup")
+
+	# Effects and voice are separate channels: this game has no music bed, and the
+	# loud cues people actually want to turn down are the shout and the chant.
+	menu._select(menu.OPTION_SFX)
+	menu.handle_key(KEY_LEFT)
+	_check(changed[0][0] == "sfx" and menu._sfx_percent == 75 and menu._voice_percent == 100,
+		"A / D must adjust one sound channel without activating it or moving the other")
+	menu._select(menu.OPTION_VOICE)
+	menu.handle_key(KEY_LEFT)
+	_check(changed[0][0] == "voice" and menu._voice_percent == 75 and menu._sfx_percent == 75,
+		"the voice channel must carry its own level")
+	menu._select(menu.OPTION_DISPLAY)
+	menu.handle_key(KEY_RIGHT)
+	_check(changed[0][0] == "display" and changed[0][1] == 4 \
+		and "FULLSCREEN" in menu._page_names()[menu.OPTION_DISPLAY],
+		"one display row must own window size and fullscreen together")
 	menu.handle_key(KEY_ESCAPE)
 	_check(menu._page == menu.MenuPage.MAIN,
 		"Escape must return from Options to the main menu")
+
+	# The dossier panel is a caption card now, not a field holding one sentence.
+	_check(menu._footer_plate.polygon[2].y <= 200.0,
+		"the context panel must be sized for its copy instead of half the screen")
+
+	_test_bindings(menu)
+
+	# The mist behind the title is decoration only; the match's arena belongs to
+	# the roster screen and must never be read back out of here.
+	menu.backdrop_level = 3
+	menu._refresh()
+	_check(menu._level_preview != null and not ("level" in menu),
+		"the title screen must hold no match configuration of its own")
 
 	if _failures == 0:
 		print("Menu interactions: all tests passed")
 	else:
 		push_error("Menu interactions: %d test(s) failed" % _failures)
 	quit(_failures)
+
+
+## Rebinding: pressing Enter on an action arms it, the next key takes it, and a
+## key can only ever drive one action at a time.
+func _test_bindings(menu) -> void:
+	menu._activate(menu.ROW_CONTROLS)
+	menu._open_bindings()
+	_check(menu._page == menu.MenuPage.BINDINGS and menu._page_names().size() == 11,
+		"the binding list must reach every rebindable Player 1 action")
+	_check("A" in menu._page_names()[0] and "MOVE LEFT" in menu._page_names()[0],
+		"each row must name its action and the key that currently drives it")
+
+	var bound := [[]]
+	menu.binding_changed.connect(func(action, codes): bound[0] = [action, codes])
+	menu._activate(0)
+	_check(menu._binding_row == 0 and "PRESS A KEY" in menu._page_names()[0],
+		"an armed row must say it is listening")
+	menu.handle_key(KEY_J)
+	_check(bound[0][0] == "left" and bound[0][1] == [KEY_J] and menu._binding_row == -1,
+		"the next key pressed must become the binding and end capture")
+
+	menu._activate(2)
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._binding_row == -1 and bound[0][0] == "left",
+		"Escape must cancel capture without binding anything")
+	_check(not "PRESS A KEY" in menu._rows[2].text,
+		"canceling capture must immediately clear the listening prompt")
+
+	var reset := [0]
+	menu.bindings_reset.connect(func(): reset[0] += 1)
+	menu._activate(menu.BINDING_RESET_ROW)
+	_check(reset[0] == 1, "the list must offer a way back to the shipped layout")
+	menu._activate(menu.BINDING_BACK_ROW)
+	_check(menu._page == menu.MenuPage.CONTROLS,
+		"leaving the binding list must return to the controls reference")
+	menu.handle_key(KEY_ESCAPE)
 
 
 func _check(condition: bool, message: String) -> void:

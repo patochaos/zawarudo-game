@@ -12,6 +12,7 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
+	await VisualCapture.pin_window(self)
 	game._sfx.muted = true
 	game._transition.visible = false
 	game._settings["high_contrast_previews"] = true

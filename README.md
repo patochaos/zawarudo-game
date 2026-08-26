@@ -121,28 +121,68 @@ navigation remains available (`W`/`S` select, `Enter` activate). The redesigned
 command-dossier layout keeps navigation on the left and explains the selected
 fate in a persistent field-note panel on the right.
 **CONTROLS** opens a full reference sheet for the local device split, SUPER
-activation, and playtest shortcuts.
+activation, and playtest shortcuts. Its Player 1 column reads the live bindings,
+and **REBIND KEYS** opens the list: pick an action, press Enter, then press the
+key you want. A key drives exactly one action, so taking it from another leaves
+that one unbound until you set it too; Escape cancels a capture and is never
+itself bindable. **RESET TO DEFAULTS** restores the shipped layout. Bindings are
+stored per install and only override the actions they actually name, so an action
+added later still arrives with its default.
 
-**PLAY** groups the local variants in a second page:
+**OPTIONS** carries display, sound and accessibility:
 
-* **VS AI — WIDE** — Player 2 is driven by `Ai.gd`; choose an authored arena,
-  then configure both the human fighter and AI rival from the full roster.
-* **VS HUMAN** — opens character selection first. P1 and P2 independently pick
-  **The Duelist**, **The Rook** (Dashblade), **The Pulse** (Shock), or
-  **The Eclipse** (Chakram), then play with **open information**:
-  both players see each other's plans and compose them simultaneously on the
-  same machine.
-* **TEAM BATTLE — 2 VS 2** — opens a FIFA-style formation screen. Keyboard and
-  mouse plus up to three gamepads explicitly join, move to Team Crimson or Team
-  Azure, select an arena, and lock their fate. Empty positions become CPU
-  allies. Teams share the selected hit target; friendly fire still removes an
-  ally for the execution window but awards no point.
-* **3 PLAYERS** — Player 1 human against two independent AIs, using each
-  arena's intermediate platform layout.
-* **4 PLAYERS** — local free-for-all with Player 1 human and Players 2–4 driven
-  by independent AIs. Each AI chooses a nearby living rival, so they fight one
-  another as well as the human. The first player to reach the hit limit wins.
-* **FREE PLAY** — see below.
+| Row | Choices |
+|---|---|
+| **DISPLAY** | window at 1280x720, 1600x900 or 1920x1080, maximized, or fullscreen |
+| **EFFECTS VOLUME** | throws, impacts, breaking platforms, freeze cues |
+| **VOICE VOLUME** | the match-opening shout and the SUPER chant |
+| **HIT FREEZE** | the brief stop on a landed hit |
+| **FLASHES** | full, or reduced while keeping gameplay information |
+| **PREVIEW CONTRAST** | strengthens planning lines and player-colour separation |
+| **PLAYTEST LOG** | local anonymous match events for bug reports |
+
+There is no music bed in the build, so sound splits along the axis that actually
+matters: the loud voice cues against everything else.
+
+**PLAY** opens two screens: the lineup, then the rules. Nothing else configures
+a local match.
+
+**The lineup screen** is four slots side by side. Player 1 holds the keyboard and
+mouse, Player 2 starts as a CPU, and slots three and four start open. Nobody
+picks a head count: the match is however many slots are filled, from two to four.
+
+Each slot carries its own fighter carousel — **The Duelist**, **The Rook**
+(Dashblade), **The Pulse** (Shock), and **The Eclipse** (Chakram) — stepped with
+`←`/`→`, so the cast can grow without the screen changing shape. Two slots may
+take the same fighter. Under each one, the **control tile** walks the seat
+through PLAYER, the three CPU skills, and OPEN; two fighters is the floor, so the
+open option is skipped rather than offered and refused.
+
+`↑`/`↓` moves between the fighter, the control tile and the confirm bar, `Tab`
+walks to the next slot, and `Enter` readies a human seat or drops a CPU into an
+empty one. A pad presses `A` to take the seat waiting for it — or the first open
+slot — moves its own fighter with the d-pad, readies with `A`, and gives the seat
+back with `B`. A pad that disconnects leaves a CPU behind rather than a dead seat.
+
+**The rules screen** takes the settled lineup and adds what the whole table
+shares: mode, arena, and match length. The arena is chosen next to a scale
+drawing of its actual layout — solid geometry, breakable cover, spawn sockets,
+hazards and the ends of every moving ledge — so a level is picked on its shape
+rather than on its name. `Esc` steps back to the lineup with every pick intact.
+
+The three modes are:
+
+* **VS** — every fighter scores for themselves. With two slots this is the duel,
+  played with **open information**: both players see each other's plans and
+  compose them simultaneously on the same machine. With three or four slots it
+  is a free-for-all, and each CPU chooses a nearby living rival so they fight one
+  another as well as the human.
+* **TEAM BATTLE** — sides alternate by slot (Crimson, Azure, Crimson, Azure), so
+  which side you fight for is decided by which slot your device claims. Unclaimed
+  positions become CPU allies. Teams share the selected hit target; friendly fire
+  still removes an ally for the execution window but awards no point.
+* **FREE PLAY** — see below. Scoring is retired and unclaimed slots become
+  training dummies.
 
 **HOW TO PLAY** is a six-screen illustrated combat briefing. It explains the
 plan/lock/execute loop, movement stamina, jumping and waiting, attack placement,
@@ -206,9 +246,11 @@ body line score higher. A close projectile fired directly into the possible
 front guard is treated as parry fuel, so the bot may reposition without firing
 or choose a real over/under angle instead.
 
-The **OPPONENT** row on the match setup screen picks how hard it plays. Every
-preset plans blind by the same rules — none of them ever sees your plan. What
-changes is how much of the search it spends and how straight it throws:
+Each CPU fighter carries its own skill preset on its slot plate, so a
+four-player match can mix them (for example, P3 NOVICE and P4 RUTHLESS).
+Every preset plans blind by the same rules — none of them ever sees another
+fighter's plan. What changes is how much of the search that CPU spends and how
+straight it throws:
 
 | Preset | Aim slop | Routes shot-searched | Deliberation |
 |---|---:|---:|---|
@@ -220,8 +262,8 @@ STANDARD is the baseline every balance pass was tuned at. All eleven movement
 candidates are still ranked for safety at every preset; the number above is how
 many of them get a full shot search on top. Setting the preset writes
 `ai_aim_jitter`, `ai_moves_searched` and `ai_think_min` / `ai_think_max` on the
-`Main` node, which stay individually editable for tuning alongside
-`ai_slice_usec`.
+`Main` node as the legacy/default tuning baseline. Live local matches resolve
+those values per CPU slot; `ai_slice_usec` remains the shared frame budget.
 
 ## The loop
 
@@ -239,9 +281,10 @@ PLANNING (5s, frozen; shrinks after turn 3)  ->  COMMITTING (0.25s, locked)  -> 
 
 ## Match structure
 
-**First to 5 hits takes the default match.** Local setup can select 3, 5, or 7
-match lives before play, and the opponent skill preset alongside them. A hit does not end the round — it costs a
-point and takes the victim off the board for the remainder of that window only.
+**First to 5 hits takes the default match.** The rules screen selects 3, 5, or 7
+match lives, and every CPU carries an independent skill preset. A hit
+does not end the round — it costs a point and takes the victim off the board for
+the remainder of that window only.
 Everything else carries on untouched: knives stay in flight, platform damage
 stands, the other player keeps their exact position and velocity.
 
@@ -391,9 +434,10 @@ that asked no prediction of its owner in a game built on prediction, and it read
 in the balance matrix as a kit that beat every other kit. Giving it an arc put
 her back inside the game's own rule rather than nerfing a number.
 
-**The Eclipse**, the fourth selectable fighter, throws one **CORONA** at
-half the former launch speed. It follows the committed aim exactly. A wall or
-hard platform pins it in place without stopping its spin; at the end of its
+**The Eclipse**, the fourth selectable fighter, throws one **CORONA** at a
+deliberate 230–420 px/s. It follows the committed aim exactly. Its first impact
+with permanent HARD terrain ricochets at 82% speed; breakable cover or a second
+terrain impact pins it in place without stopping its spin. At the end of its
 launch window, a midair chakram also holds at its exact position. It remains a
 stationary threat through the following turn and begins returning on its third
 turn. Chakrams launched on different turns recall independently. Any opposing
@@ -432,16 +476,20 @@ movement you piloted, so you can re-aim without rebuilding the run.
 **Reset path** throws the recording away and refills stamina (the shot goes with
 it, since its tick indexes into the path that just vanished).
 
-Rebind the keyboard fighter by editing `K_P1` in `scripts/GameManager.gd`;
-other local human slots are deliberately gamepad-only.
+Rebind the keyboard fighter in **CONTROLS > REBIND KEYS**; `DEFAULT_BINDINGS`
+in `scripts/GameManager.gd` is only the shipped layout. Other local human slots
+are deliberately gamepad-only.
 
 ### Gamepads
 
-In a local duel the first connected pad goes to **Player 2**, giving the
-intended keyboard+mouse vs. gamepad setup. In Team Battle, each pad joins and
-chooses a side independently; its ownership follows that fighter through
-character selection and gameplay. Online, the first pad controls the
-server-assigned local fighter. Aim source follows the local device in use.
+On the lineup screen a pad takes a seat by pressing `A`: the first seat whose
+control tile already says PLAYER, otherwise the first open slot. Set Player 2's
+tile to PLAYER for the intended keyboard+mouse vs. gamepad duel. `B` hands the
+seat back, and a pad that disconnects leaves a CPU behind rather than stranding
+a cursor. Whatever a pad
+claimed there is the fighter it drives in play, in every mode. Online, the first
+pad controls the server-assigned local fighter. Aim source follows the local
+device in use.
 
 ### Descending: down + jump
 
@@ -719,19 +767,20 @@ the thing this prototype exists to test.
 | `scripts/TemporalCore.gd` | Visual telegraph and active-world rendering for the full-SUPER movement objective. |
 | `scripts/UI.gd` | Compact central match HUD, phase progress, portrait seals, banners, and the desktop result action panel. |
 | `scripts/Ai.gd` | The AI opponent. Ranks movements by safety, then searches shots coarse-to-fine against three hypotheses of what you might do. Sliced across frames. |
-| `scripts/MenuLayer.gd` | Title screen, local-mode/arena routing, controls reference, accessibility options, and contextual descriptions. |
-| `scripts/TeamSelectLayer.gd` | Local device joining, Crimson/Azure side assignment, CPU formation fill, and Team Battle arena selection. |
-| `scripts/OnlineLobby.gd` | Private-room create/join screen and room-code status. |
+| `scripts/MenuLayer.gd` | Title screen: destinations, controls reference, accessibility options, and contextual descriptions. It holds no match configuration. |
+| `scripts/Roster.gd` | The cast: names, portraits, movement and ability copy. The roster screen and the online lobby both read it, so a fighter cannot be described two ways. |
+| `scripts/RosterLayer.gd` | The lineup screen: four slots, a fighter carousel inside each, the control tile that makes a seat a player, a CPU or nothing, and device joining and leaving. |
+| `scripts/MatchSetupLayer.gd` | The rules screen: mode, match length, and the arena chosen beside a scale drawing of its layout. It emits the one configuration a local match is built from. |
+| `scripts/OnlineLobby.gd` | Private-room create/join screen: the fighter grid, host arena, room-code entry and status. |
 | `scripts/OnlineClient.gd` | Cloudflare HTTP/WebSocket client, heartbeat, reconnect and lockstep messages. |
 | `backend/src/room.ts` | Hibernating Durable Object room: player slots, plan relay, state-hash barrier, rematches and expiry. |
 | `scripts/Levels.gd` | The seven arena layouts and their 2P/3P/4P platform variants, wrap rules, platform hit points, mover motion data, orb placements and authored Temporal Core sockets. |
 | `scripts/Mover.gd` | Tick-indexed motion for moving geometry and orbs. A pure triangle wave: position is a function of the absolute tick, never an accumulated velocity. |
 | `scripts/Hazard.gd` | The pulse orb — drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
-| `scripts/DuelCamera.gd` | PROTOTYPE. Pushes in during planning and pulls out for execution. Disposable with the rest of `prototype_mode`. |
 | `scripts/Arena.gd` | Platform rendering: gold caps for permanent, warm and cracked for breakable, violet caps and travel chevrons for moving. |
 | `scripts/Backdrop.gd` | Low-contrast procedural scenery families assigned across all seven arenas: ruins, descent shafts, clockwork observatory, pulse cyan and foundry heat stacks. |
 | `scripts/Effects.gd` | Impact sparks, platform shatters, hit bursts. Cosmetic only; runs on real time so it never consumes execution ticks. |
-| `scripts/Sfx.gd` | Procedurally synthesised 8-bit sound effects and the voice pool. |
+| `scripts/Sfx.gd` | Procedurally synthesised 8-bit sound effects and the voice pool, on separate volume channels. |
 | `scripts/TimeStopLayer.gd` | Violet/gold frozen-world grade, clock motif, suspended motes, and freeze/release pulses. |
 | `scripts/TransitionLayer.gd` | Reduced-flash-aware angular ink shutter used when entering modes and arenas. |
 | `scripts/SuperFreezeFrame.gd` | Full-screen SUPER portrait composition, manga panel animation and real-time duration while combat ticks are paused. |

@@ -15,8 +15,14 @@ const VOICES := 8           # round-robin pool, so overlapping hits all sound
 const CUTOFF_FADE := 0.08
 const TITLE_VOICE := preload("res://assets/audio/za-warudo-title.mp3")
 
+## The game has no music bed. The axis that actually matters is the loud,
+## opinionated voice cues against everything else, so that is the split the
+## options screen offers.
+const VOICE_CUES := ["title", "muda"]
+
 var muted: bool = false
-var master_volume: float = 1.0
+var sfx_volume: float = 1.0
+var voice_volume: float = 1.0
 
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
@@ -59,13 +65,15 @@ func _ready() -> void:
 func play(which: String) -> void:
 	if muted or not _streams.has(which):
 		return
+	var gain: float = voice_volume if which in VOICE_CUES else sfx_volume
+	if gain <= 0.001:
+		return
 	var slot: int = _next
 	var pl: AudioStreamPlayer = _players[slot]
 	_next = (_next + 1) % VOICES
 	pl.stream = _streams[which]
 	pl.pitch_scale = _pitch.get(which, 1.0)
-	_base_db[slot] = VOLUME_DB + _gain_db.get(which, 0.0) \
-		+ linear_to_db(maxf(master_volume, 0.001))
+	_base_db[slot] = VOLUME_DB + _gain_db.get(which, 0.0) + linear_to_db(gain)
 	pl.volume_db = _base_db[slot]
 	pl.play()
 	var cutoff: float = _cutoff.get(which, 0.0)
@@ -98,13 +106,24 @@ func toggle_mute() -> bool:
 	return muted
 
 
-func set_volume(value: float) -> void:
-	master_volume = clampf(value, 0.0, 1.0)
-	muted = master_volume <= 0.001
-	if muted:
-		for i in _players.size():
-			_players[i].stop()
-			_stop_at[i] = 0.0
+func set_sfx_volume(value: float) -> void:
+	sfx_volume = clampf(value, 0.0, 1.0)
+	_silence_if_all_quiet()
+
+
+func set_voice_volume(value: float) -> void:
+	voice_volume = clampf(value, 0.0, 1.0)
+	_silence_if_all_quiet()
+
+
+## Turning both channels to zero has to stop what is already sounding, not just
+## refuse the next cue.
+func _silence_if_all_quiet() -> void:
+	if sfx_volume > 0.001 or voice_volume > 0.001:
+		return
+	for i in _players.size():
+		_players[i].stop()
+		_stop_at[i] = 0.0
 
 
 func _exit_tree() -> void:

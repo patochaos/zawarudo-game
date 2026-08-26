@@ -13,7 +13,7 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_start(true, 0, 2)
+	game.start_quick_match(true, 0, 2)
 	await VisualCapture.await_transition(self, game)
 	game.score[0] = 2
 	game.score[1] = 1

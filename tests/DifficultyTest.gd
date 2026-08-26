@@ -16,6 +16,7 @@ func _init() -> void:
 func _run() -> void:
 	_test_presets_are_ordered()
 	_test_out_of_range_is_clamped()
+	_test_player_presets_are_independent()
 	await _test_search_respects_the_preset()
 	if _failures == 0:
 		print("Difficulty: all tests passed")
@@ -59,6 +60,22 @@ func _test_out_of_range_is_clamped() -> void:
 	gm.free()
 
 
+func _test_player_presets_are_independent() -> void:
+	var gm = GAME_MANAGER.new()
+	gm.set_difficulty(gm.Difficulty.STANDARD)
+	gm.set_player_difficulty(2, gm.Difficulty.NOVICE)
+	gm.set_player_difficulty(3, gm.Difficulty.RUTHLESS)
+	_check(gm.player_difficulty(1) == gm.Difficulty.STANDARD \
+		and gm.player_difficulty(2) == gm.Difficulty.NOVICE \
+		and gm.player_difficulty(3) == gm.Difficulty.RUTHLESS,
+		"each CPU slot must retain its own preset")
+	_check(gm.ai_moves_searched_for(2) == 1 and gm.ai_moves_searched_for(3) == 5 \
+		and gm.ai_aim_jitter_for(2) > gm.ai_aim_jitter_for(3) \
+		and gm.ai_think_range_for(2).y > gm.ai_think_range_for(3).y,
+		"per-player presets must independently control search, aim, and think time")
+	gm.free()
+
+
 ## The knob is worthless if the planner ignores it. Ai.begin ranks every movement
 ## candidate for safety but only shot-searches the top ai_moves_searched of them.
 func _test_search_respects_the_preset() -> void:
@@ -75,7 +92,7 @@ func _test_search_respects_the_preset() -> void:
 		var search := Ai.new()
 		search.begin(gm, 1, 0)
 		counts.append(search._cands.size())
-		_check(search._cands.size() <= gm.ai_moves_searched,
+		_check(search._cands.size() <= gm.ai_moves_searched_for(1),
 			"the search must never exceed the candidate budget its preset allows")
 	_check(counts[0] < counts[2],
 		"RUTHLESS must actually evaluate more shot origins than NOVICE")

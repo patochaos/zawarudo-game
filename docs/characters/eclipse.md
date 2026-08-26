@@ -244,8 +244,9 @@ remain active. Never depict the weapon as unique inventory.
 
 ### Holding
 
-- A hard wall or platform pins the corona at the impact point while it continues
-  to spin.
+- The first impact with a permanent hard wall or platform produces one clear
+  ricochet. Breakable cover or the next terrain impact pins the corona at the
+  impact point while it continues to spin.
 - A midair corona stops at its exact position when its outbound window ends.
 - It remains a stationary hazard through the following turn.
 - Spin is calm and constant. Do not make it wobble, hunt targets or orbit The

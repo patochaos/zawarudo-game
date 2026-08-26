@@ -13,7 +13,7 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_start(false, 3, 2)
+	game.start_quick_match(false, 3, 2)
 	game._transition.visible = false
 	game.vs_ai = false
 	game._settings["high_contrast_previews"] = true

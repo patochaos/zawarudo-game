@@ -277,9 +277,10 @@ formar parte de la selección de personajes.
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
 - **The Eclipse / Chakram:** cuarto personaje seleccionable. Lanza una corona
-  viviente a la mitad de su velocidad anterior y sigue exactamente la dirección
-  elegida. No rebota: una pared o plataforma dura lo deja clavado y girando,
-  mientras un lanzamiento que termine en el aire se detiene en ese punto.
+  viviente a 230–420 px/s y sigue exactamente la dirección elegida. Su primer
+  impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
+  cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
+  lanzamiento que termine en el aire se detiene en ese punto.
   Durante el turno siguiente permanece inmóvil y en el tercero regresa; cada
   chakram conserva su propio turno de lanzamiento. Cualquier impacto de otro
   proyectil lo destruye. La SUPER mantiene tres trayectorias frontales bajo el

@@ -19,7 +19,7 @@ func _capture() -> void:
 	game._sfx.muted = true
 	game.local_weapon_choices[0] = game.Weapon.DASHBLADE
 	game.local_weapon_choices[1] = game.Weapon.KNIVES
-	game._on_menu_start(false, 0, 2)
+	game.start_quick_match(false, 0, 2)
 	game._transition.visible = false
 	game.vs_ai = false
 	game.state = Phase.PLANNING

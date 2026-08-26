@@ -2,15 +2,16 @@ extends CanvasLayer
 
 ## Title screen. Keyboard and mouse share the same selection/activation path so
 ## hovering, clicking and pressing Enter always produce identical results.
+##
+## Everything about a local match — the lineup on RosterLayer, then the rules and
+## arena on MatchSetupLayer — is decided elsewhere. This screen only chooses which
+## destination to open.
 
-signal start_requested(vs_ai: bool, level: int, player_count: int)
-signal freeplay_requested(level: int)
-signal online_requested(level: int)
+signal roster_requested
+signal binding_changed(action: String, codes: Array)
+signal bindings_reset
+signal online_requested
 signal tutorial_requested
-signal character_select_requested
-signal team_battle_requested
-signal roster_select_requested(player_count: int, freeplay: bool)
-signal configured_match_requested(config: Dictionary)
 signal option_changed(key: String, value: Variant)
 signal ui_navigated
 signal ui_accepted
@@ -22,40 +23,45 @@ const ROW_CONTROLS := 3
 const ROW_OPTIONS := 4
 const ROW_QUIT := 5
 
-const ROWS := 9
+## Enough physical rows for the longest page, which is the binding list.
+const ROWS := 11
 
-const MATCH_LIFE_OPTIONS := [3, 5, 7]
-const DIFFICULTY_NAMES := ["NOVICE", "STANDARD", "RUTHLESS"]
-
-const OPTION_SOUND := 0
-const OPTION_HIT_FREEZE := 1
-const OPTION_FLASHES := 2
-const OPTION_PREVIEW_CONTRAST := 3
-const OPTION_TELEMETRY := 4
-const OPTION_BACK := 5
+const OPTION_DISPLAY := 0
+const OPTION_SFX := 1
+const OPTION_VOICE := 2
+const OPTION_HIT_FREEZE := 3
+const OPTION_FLASHES := 4
+const OPTION_PREVIEW_CONTRAST := 5
+const OPTION_TELEMETRY := 6
+const OPTION_BACK := 7
 const SOUND_LEVELS := [0, 25, 50, 75, 100]
+const DISPLAY_NAMES := [
+	"WINDOW  1280 x 720", "WINDOW  1600 x 900", "WINDOW  1920 x 1080",
+	"MAXIMIZED", "FULLSCREEN",
+]
 
-enum BattleMode { VS, TEAM_BATTLE, FREE_PLAY }
-enum MenuPage { MAIN, SETUP, CONTROLS, OPTIONS }
+enum MenuPage { MAIN, CONTROLS, OPTIONS, BINDINGS }
 
-const SETUP_MODE := 0
-const SETUP_PLAYERS := 1
-const SETUP_FIRST_FIGHTER := 2
-## Stable ids are not presentation order: Chakram remains id 3 but is appended
-## after The Pulse so it appears as the fourth roster character.
-const WEAPON_ROSTER := [0, 2, 4, 3]
-
-## This is the remembered local choice. The online lobby starts from it, then
-## lets each remote player choose their own fighter before joining the room.
+## Player 1's rebindable actions, in the order they are listed. Aim and firing
+## live on the mouse and are not part of this list.
+const BINDABLE := [
+	["left", "MOVE LEFT"],
+	["right", "MOVE RIGHT"],
+	["jump", "JUMP"],
+	["wait", "WAIT"],
+	["aim_up", "AIM UP"],
+	["aim_down", "AIM DOWN"],
+	["super", "SUPER"],
+	["rollback", "UNDO"],
+	["reset", "RESET PLAN"],
+]
+const BINDING_RESET_ROW := 9
+const BINDING_BACK_ROW := 10
 
 const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
 const GOLD := Color(0.91, 0.66, 0.22)
 const VIOLET := Color(0.45, 0.16, 0.67)
-const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
-const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
-const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
-const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
 
 
 class MangaMenuArt:
@@ -142,87 +148,11 @@ class LevelMistPreview:
 			]), Color(0.92, 0.86, 0.58, 0.10))
 
 
-class ArenaDossierPreview:
-	extends Control
-
-	var _level_data: Dictionary = {}
-
-	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func show_level(index: int, player_count: int) -> void:
-		_level_data = Levels.build(index, player_count)
-		queue_redraw()
-
-	func _draw() -> void:
-		if _level_data.is_empty():
-			return
-		var frame := Rect2(Vector2.ZERO, size)
-		draw_rect(frame, Color(0.012, 0.010, 0.026, 0.94))
-		draw_rect(frame, Color(0.91, 0.66, 0.22, 0.34), false, 1.0)
-
-		# Crop to the playable band so the thumbnail reads like a map instead of
-		# wasting half its height on empty sky.
-		var source := Rect2(0.0, 180.0, Levels.ARENA_W, 460.0)
-		var scale_factor := minf((size.x - 16.0) / source.size.x,
-			(size.y - 16.0) / source.size.y)
-		var drawn_size := source.size * scale_factor
-		var offset := (size - drawn_size) * 0.5
-		var map_rect := Rect2(offset, drawn_size)
-		draw_rect(map_rect, Color(0.09, 0.065, 0.13, 0.72))
-
-		for platform: Dictionary in _level_data.get("platforms", []):
-			var rect: Rect2 = platform["rect"].intersection(source)
-			if rect.size.x <= 0.0 or rect.size.y <= 0.0:
-				continue
-			var local_rect := Rect2(offset + (rect.position - source.position) * scale_factor,
-				rect.size * scale_factor)
-			var motion: Dictionary = platform.get("motion", {})
-			if not motion.is_empty():
-				var travel: Vector2 = Vector2(motion.get("axis", Vector2.ZERO)) \
-					* float(motion.get("travel", 0.0)) * scale_factor
-				draw_line(local_rect.get_center(), local_rect.get_center() + travel,
-					Color(0.18, 0.82, 0.92, 0.42), 2.0)
-			var breakable := int(platform.get("hp", -1)) >= 0
-			draw_rect(local_rect, Color(0.91, 0.66, 0.22, 0.92) if breakable \
-				else Color(0.54, 0.31, 0.72, 0.92))
-
-		var spawn_colors := [
-			Color(0.96, 0.69, 0.18), Color(0.76, 0.30, 1.0),
-			Color(0.18, 0.82, 0.92), Color(1.0, 0.32, 0.42),
-		]
-		for i in _level_data.get("spawns", []).size():
-			var spawn: Vector2 = _level_data["spawns"][i]
-			if not source.has_point(spawn):
-				continue
-			var at := offset + (spawn - source.position) * scale_factor
-			draw_circle(at, 5.0, spawn_colors[i % spawn_colors.size()])
-			draw_circle(at, 8.0, Color(spawn_colors[i % spawn_colors.size()], 0.35), false, 1.0)
-		for hazard: Dictionary in _level_data.get("hazards", []):
-			var home: Vector2 = hazard.get("home", Vector2.ZERO)
-			if not source.has_point(home):
-				continue
-			var at := offset + (home - source.position) * scale_factor
-			var radius := float(hazard.get("blast_radius", 0.0)) * scale_factor
-			draw_circle(at, radius, Color(1.0, 0.32, 0.42, 0.10))
-			draw_circle(at, radius, Color(1.0, 0.42, 0.48, 0.70), false, 1.0)
-
-		var wrap_x := bool(_level_data.get("wrap_x", false))
-		var wrap_y := bool(_level_data.get("wrap_y", false))
-		if wrap_x:
-			draw_line(Vector2(map_rect.position.x, map_rect.position.y + 6.0),
-				Vector2(map_rect.position.x, map_rect.end.y - 6.0), Color(0.18, 0.82, 0.92), 2.0)
-			draw_line(Vector2(map_rect.end.x, map_rect.position.y + 6.0),
-				Vector2(map_rect.end.x, map_rect.end.y - 6.0), Color(0.18, 0.82, 0.92), 2.0)
-		if wrap_y:
-			draw_line(Vector2(map_rect.position.x + 8.0, map_rect.position.y),
-				Vector2(map_rect.end.x - 8.0, map_rect.position.y), Color(0.18, 0.82, 0.92), 2.0)
-
-
 class ControlsSheet:
 	extends Control
 
 	signal back_requested
+	signal rebind_requested
 
 	var p1_body: Label
 	var p2_body: Label
@@ -271,24 +201,40 @@ class ControlsSheet:
 			"Aim and fire normally. The meter\nis spent when the first wave launches.", DIM)
 
 		shortcut_body = _add_text(Vector2(18.0, 251.0), Vector2(778.0, 64.0), 11,
-			"BATTLE SETUP // P1 keyboard · first connected pad owns P2 · remaining slots become CPU\n" \
+			"ROSTER    //  P1 owns the keyboard · a pad presses A to take an open slot · any slot can be a CPU\n" \
 			+ "PLAYTEST  //  F8 fill P1 SUPER  ·  SHIFT + F8 fill P2 SUPER  ·  F7 activate 3-dagger volleys\n" \
 			+ "GLOBAL    //  F9 restart  ·  F10 next arena  ·  M mute  ·  H control bar  ·  ESC menu",
 			Color(0.72, 0.76, 0.84))
 
+		var rebind := Button.new()
+		rebind.position = Vector2(0.0, 318.0)
+		rebind.size = Vector2(407.0, 36.0)
+		rebind.flat = true
+		rebind.focus_mode = Control.FOCUS_NONE
+		rebind.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		rebind.pressed.connect(func(): rebind_requested.emit())
+		add_child(rebind)
+		var rebind_label := _add_text(Vector2(0.0, 323.0), Vector2(407.0, 26.0), 16,
+			"REBIND KEYS", HOT)
+		rebind_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rebind_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 		var back := Button.new()
-		back.position = Vector2(0.0, 318.0)
-		back.size = Vector2(814.0, 36.0)
+		back.position = Vector2(407.0, 318.0)
+		back.size = Vector2(407.0, 36.0)
 		back.flat = true
 		back.focus_mode = Control.FOCUS_NONE
 		back.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		back.pressed.connect(func(): back_requested.emit())
 		add_child(back)
-		var back_label := _add_text(Vector2(0.0, 323.0), Vector2(814.0, 26.0), 16,
+		var back_label := _add_text(Vector2(407.0, 323.0), Vector2(407.0, 26.0), 16,
 			"‹  BACK", HOT)
 		back_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		back_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		queue_redraw()
+
+	func show_bindings(text: String) -> void:
+		p1_body.text = text
 
 	func _add_text(pos: Vector2, dimensions: Vector2, font_size: int,
 			text: String, color: Color) -> Label:
@@ -317,17 +263,13 @@ class ControlsSheet:
 		draw_line(Vector2(258.0, 174.0), Vector2(270.0, 207.0), border, 2.0)
 		draw_line(Vector2(526.0, 174.0), Vector2(538.0, 207.0), border, 2.0)
 		draw_rect(Rect2(0.0, 250.0, 814.0, 58.0), panel)
-		draw_rect(Rect2(0.0, 318.0, 814.0, 36.0), Color(0.45, 0.16, 0.67, 0.78))
+		draw_rect(Rect2(0.0, 318.0, 403.0, 36.0), Color(0.30, 0.14, 0.46, 0.86))
+		draw_rect(Rect2(407.0, 318.0, 407.0, 36.0), Color(0.45, 0.16, 0.67, 0.78))
 
-var level: int = 0
-var match_lives: int = 5
-var difficulty: int = 1
-var battle_mode: int = BattleMode.VS
-var battle_player_count: int = 2
-var battle_roles: Array[String] = ["HUMAN", "AI"]
-var battle_devices: Array[int] = [-2, -1]
-var battle_teams: Array[int] = [-1, -1]
-var battle_weapons: Array = [0, 0, 0, 0]
+
+## Decorative only: which arena's mist drifts behind the title. The match's real
+## arena is chosen on the roster screen.
+var backdrop_level: int = 0
 
 var _bg: ColorRect
 var _level_preview: LevelMistPreview
@@ -339,18 +281,18 @@ var _footer_rule: ColorRect
 var _footer_kicker: Label
 var _context_title: Label
 var _footer: Label
-var _match_card: Label
-var _portrait_preview: TextureRect
-var _arena_dossier: ArenaDossierPreview
-var _context_meta: Label
-var _step_rail: Label
 var _hint: Label
 var _build_label: Label
 var _controls_sheet: ControlsSheet
 var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
 var _page: int = MenuPage.MAIN
-var _sound_percent: int = 100
+## Which binding row is waiting for a key, or -1 when nothing is listening.
+var _binding_row: int = -1
+var _bindings: Dictionary = {}
+var _sfx_percent: int = 100
+var _voice_percent: int = 100
+var _display_preset: int = 3
 var _hit_freeze_enabled: bool = true
 var _reduced_flashes: bool = false
 var _high_contrast_previews: bool = false
@@ -387,16 +329,11 @@ func _ready() -> void:
 	_blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_blurb.text = "Suspend the world · compose 0.75 seconds of movement and one knife volley\n" \
 		+ "lock fate · then watch every plan collide"
-	_step_rail = _label(Vector2(706.0, 166.0), 500.0, 11, Color(0.58, 0.62, 0.72))
-	_step_rail.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	for i in ROWS:
 		var row_y := 184.0 + float(i) * 43.0
 		var plate := Polygon2D.new()
 		plate.position = Vector2(70.0, row_y)
-		plate.polygon = PackedVector2Array([
-			Vector2(12.0, 0.0), Vector2(540.0, 0.0), Vector2(526.0, 37.0), Vector2(0.0, 37.0),
-		])
 		plate.color = Color(0.055, 0.04, 0.09, 0.64)
 		add_child(plate)
 		_row_bgs.append(plate)
@@ -420,7 +357,7 @@ func _ready() -> void:
 	_footer_plate = Polygon2D.new()
 	_footer_plate.position = Vector2(706.0, 198.0)
 	_footer_plate.polygon = PackedVector2Array([
-		Vector2(12.0, 0.0), Vector2(500.0, 0.0), Vector2(474.0, 410.0), Vector2(0.0, 410.0),
+		Vector2(12.0, 0.0), Vector2(500.0, 0.0), Vector2(488.0, 190.0), Vector2(0.0, 190.0),
 	])
 	_footer_plate.color = Color(0.035, 0.025, 0.065, 0.88)
 	add_child(_footer_plate)
@@ -431,36 +368,14 @@ func _ready() -> void:
 	add_child(_footer_rule)
 	_footer_kicker = _label(Vector2(734.0, 220.0), 438.0, 11, GOLD)
 	_footer_kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_footer_kicker.text = "FIGHT DOSSIER // CONTEXT"
-	_context_title = _label(Vector2(734.0, 251.0), 438.0, 30, HOT)
+	_footer_kicker.text = "COMMAND // SELECT"
+	_context_title = _label(Vector2(734.0, 248.0), 438.0, 30, HOT)
 	_context_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_context_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_context_title.size.y = 40.0
+	_context_title.size.y = 56.0
 
-	_portrait_preview = TextureRect.new()
-	_portrait_preview.position = Vector2(734.0, 292.0)
-	_portrait_preview.size = Vector2(182.0, 182.0)
-	_portrait_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_portrait_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_portrait_preview)
-	_arena_dossier = ArenaDossierPreview.new()
-	_arena_dossier.position = Vector2(734.0, 292.0)
-	_arena_dossier.size = Vector2(438.0, 182.0)
-	add_child(_arena_dossier)
-	_context_meta = _label(Vector2(932.0, 292.0), 240.0, 12, Color(0.86, 0.88, 0.92))
-	_context_meta.size.y = 182.0
-	_context_meta.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_context_meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_context_meta.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-
-	_match_card = _label(Vector2(734.0, 292.0), 438.0, 13, Color(0.86, 0.88, 0.92))
-	_match_card.size.y = 286.0
-	_match_card.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_match_card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_match_card.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_footer = _label(Vector2(734.0, 490.0), 438.0, 12, Color(0.62, 0.67, 0.76))
-	_footer.size.y = 102.0
+	_footer = _label(Vector2(734.0, 312.0), 438.0, 12, Color(0.62, 0.67, 0.76))
+	_footer.size.y = 72.0
 	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_footer.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -469,6 +384,7 @@ func _ready() -> void:
 	_controls_sheet.position = Vector2(232.0, 198.0)
 	_controls_sheet.visible = false
 	_controls_sheet.back_requested.connect(_close_controls)
+	_controls_sheet.rebind_requested.connect(_open_bindings)
 	add_child(_controls_sheet)
 
 	_hint = _label(Vector2(72.0, 626.0), 1136.0, 12, Color(0.48, 0.52, 0.62))
@@ -507,19 +423,46 @@ func open() -> void:
 	visible = true
 	_page = MenuPage.MAIN
 	_cursor = 0
-	_rebuild_roster_assignments()
 	_refresh()
 
 
-func refresh_controller_assignments() -> void:
-	_rebuild_roster_assignments()
-	if is_node_ready() and _page == MenuPage.SETUP:
-		_cursor = mini(_cursor, _page_row_count() - 1)
+## Bindings are owned by the match, not by this screen; it only shows them and
+## reports the key the player pressed.
+func configure_bindings(bindings: Dictionary) -> void:
+	_bindings = bindings.duplicate(true)
+	if is_node_ready():
+		_controls_sheet.show_bindings(_p1_summary())
 		_refresh()
 
 
+func _p1_summary() -> String:
+	return "MOVE  %s / %s\nJUMP  %s\nWAIT  %s\nCONFIRM  LEFT SHIFT" % [
+		_keys_text("left"), _keys_text("right"), _keys_text("jump"), _keys_text("wait"),
+	]
+
+
+func _keys_text(action: String) -> String:
+	var codes: Array = _bindings.get(action, [])
+	if codes.is_empty():
+		return "—"
+	var names: Array[String] = []
+	for code in codes:
+		names.append(OS.get_keycode_string(int(code)).to_upper())
+	return " / ".join(names)
+
+
+func _open_bindings() -> void:
+	ui_accepted.emit()
+	_page = MenuPage.BINDINGS
+	_cursor = 0
+	_binding_row = -1
+	_refresh()
+
+
 func configure_options(settings: Dictionary) -> void:
-	_sound_percent = int(round(float(settings.get("sound", 1.0)) * 100.0))
+	_sfx_percent = int(round(float(settings.get("sfx", 1.0)) * 100.0))
+	_voice_percent = int(round(float(settings.get("voice", 1.0)) * 100.0))
+	_display_preset = clampi(int(settings.get("display", 3)), 0, DISPLAY_NAMES.size() - 1)
 	_hit_freeze_enabled = bool(settings.get("hit_freeze", true))
 	_reduced_flashes = bool(settings.get("reduced_flashes", false))
 	_high_contrast_previews = bool(settings.get("high_contrast_previews", false))
@@ -542,42 +485,63 @@ func _select(i: int) -> void:
 
 func _refresh() -> void:
 	var names := _page_names()
+	# Pages differ in length, so a cursor carried across one can outrun the
+	# rows it now has to index.
+	_cursor = clampi(_cursor, 0, maxi(names.size() - 1, 0))
 	var controls_open := _page == MenuPage.CONTROLS
-	var visible_rows := 0 if controls_open else names.size()
-	_level_preview.show_level(level)
+	_level_preview.show_level(backdrop_level)
 	match _page:
-		MenuPage.SETUP:
-			_blurb.text = "LOCAL MATCH · BUILD THE WHOLE FIGHT WITHOUT LEAVING THIS SCREEN"
 		MenuPage.CONTROLS:
 			_blurb.text = "CONTROLS · COMPOSE THE MOVE, THEN RELEASE IT"
 		MenuPage.OPTIONS:
-			_blurb.text = "OPTIONS · PLAYTEST ACCESSIBILITY"
+			_blurb.text = "OPTIONS · DISPLAY, SOUND AND ACCESSIBILITY"
+		MenuPage.BINDINGS:
+			_blurb.text = "CONTROLS · PLAYER 1 KEYS"
 		_:
 			_blurb.text = "STOP TIME · WRITE THE MOVE · RELEASE THE CONSEQUENCE"
-	_refresh_context_dossier(names)
-	_step_rail.text = _step_rail_text()
+	# The panel names whatever the cursor is on; only Options is an options list.
+	_footer_kicker.text = "OPTIONS // DISPLAY, SOUND, ACCESSIBILITY" if _page == MenuPage.OPTIONS \
+		else ("CONTROLS // PLAYER 1 KEYS" if _page == MenuPage.BINDINGS else "COMMAND // SELECT")
+	_context_title.add_theme_font_size_override("font_size",
+		30 if _page == MenuPage.MAIN else 20)
+	_context_title.text = names[_cursor] if not names.is_empty() else ""
+	_footer.text = _page_description()
 	_controls_sheet.visible = controls_open
 	_footer_plate.visible = not controls_open
 	_footer_rule.visible = not controls_open
 	_footer_kicker.visible = not controls_open
 	_context_title.visible = not controls_open
-	_step_rail.visible = _is_setup_page()
 	_footer.visible = not controls_open
 	_hint.text = "ENTER / ESC return" if controls_open else ( \
-		"W / S select      A / D adjust      ENTER adjust / start      ESC back" \
+		"W / S select      ENTER rebind      ESC back" if _page == MenuPage.BINDINGS \
+		else ("W / S select      A / D adjust      ENTER adjust      ESC back" \
 		if _page != MenuPage.MAIN \
-		else "CLICK / TAP or W / S select      ENTER activate      ESC quit")
-	for i in ROWS:
-		var row_visible := i < visible_rows
-		_rows[i].visible = row_visible
-		_row_bgs[i].visible = row_visible
-		_row_buttons[i].visible = row_visible
+		else "CLICK / TAP or W / S select      ENTER activate      ESC quit"))
+	var pitch := 43.0 if names.size() <= 8 else 36.0
+	var plate_h := pitch - 6.0
+	var font_size := 18 if names.size() <= 8 else 15
+	for slot in ROWS:
+		var row_visible := not controls_open and slot < names.size()
+		_rows[slot].visible = row_visible
+		_row_bgs[slot].visible = row_visible
+		_row_buttons[slot].visible = row_visible
 		if not row_visible:
 			continue
+		var row_y := 184.0 + float(slot) * pitch
+		_row_bgs[slot].position = Vector2(70.0, row_y)
+		_row_bgs[slot].polygon = PackedVector2Array([
+			Vector2(12.0, 0.0), Vector2(540.0, 0.0),
+			Vector2(540.0 - plate_h * 0.38, plate_h), Vector2(0.0, plate_h),
+		])
+		_rows[slot].position = Vector2(98.0, row_y + (plate_h - 24.0) * 0.5)
+		_rows[slot].add_theme_font_size_override("font_size", font_size)
+		_row_buttons[slot].position = Vector2(70.0, row_y)
+		_row_buttons[slot].size = Vector2(540.0, plate_h)
+		var is_selected := slot == _cursor
 		# ASCII markers remain crisp in the Web export's reduced fallback font.
-		_rows[i].text = ("◆  " + names[i]) if i == _cursor else ("    " + names[i])
-		_rows[i].add_theme_color_override("font_color", HOT if i == _cursor else DIM)
-		_row_bgs[i].color = Color(0.35, 0.10, 0.52, 0.84) if i == _cursor \
+		_rows[slot].text = ("◆  " + names[slot]) if is_selected else ("    " + names[slot])
+		_rows[slot].add_theme_color_override("font_color", HOT if is_selected else DIM)
+		_row_bgs[slot].color = Color(0.35, 0.10, 0.52, 0.84) if is_selected \
 			else Color(0.045, 0.028, 0.070, 0.74)
 
 
@@ -587,25 +551,31 @@ func _activate(row: int) -> void:
 		_close_controls()
 		return
 	_select(row)
+	if _page == MenuPage.BINDINGS:
+		if row == BINDING_BACK_ROW:
+			_page = MenuPage.CONTROLS
+			_cursor = 0
+			_binding_row = -1
+		elif row == BINDING_RESET_ROW:
+			_binding_row = -1
+			bindings_reset.emit()
+		else:
+			_binding_row = row
+		_refresh()
+		return
 	if _page == MenuPage.OPTIONS:
 		if row == OPTION_BACK:
 			_show_main_menu()
 		else:
 			_change_option(row, 1)
 		return
-	if _page == MenuPage.SETUP:
-		if row == _setup_start_row():
-			configured_match_requested.emit(_build_setup_config())
-		else:
-			_change_setup_value(row, 1)
-		return
 	match row:
 		ROW_PLAY:
-			_show_local_menu()
+			roster_requested.emit()
 		ROW_TUTORIAL:
 			tutorial_requested.emit()
 		ROW_ONLINE:
-			online_requested.emit(level)
+			online_requested.emit()
 		ROW_CONTROLS:
 			_page = MenuPage.CONTROLS
 			_cursor = 0
@@ -619,29 +589,26 @@ func _activate(row: int) -> void:
 
 
 func _page_names() -> Array[String]:
-	if _page == MenuPage.SETUP:
-		var setup_rows: Array[String] = [
-			"MODE  ‹  %s  ›" % _mode_name(),
-			"FIGHTERS  ‹  %d  ›" % battle_player_count,
-		]
-		for i in battle_player_count:
-			setup_rows.append(_fighter_setup_row(i))
-		setup_rows.append("ARENA  ‹  %s  ›" % str(Levels.build(level)["name"]))
-		setup_rows.append("MATCH LIVES  —  OFF" if battle_mode == BattleMode.FREE_PLAY else \
-			"MATCH LIVES  ‹  %d  ›" % match_lives)
-		setup_rows.append("OPPONENT  —  NO AI" if not battle_roles.has("AI") else \
-			"OPPONENT  ‹  %s  ›" % DIFFICULTY_NAMES[difficulty])
-		setup_rows.append("START FREE PLAY" if battle_mode == BattleMode.FREE_PLAY else "START MATCH")
-		return setup_rows
 	if _page == MenuPage.OPTIONS:
 		return [
-			"SOUND  %d%%" % _sound_percent,
+			"DISPLAY  ‹  %s  ›" % DISPLAY_NAMES[_display_preset],
+			"EFFECTS VOLUME  ‹  %d%%  ›" % _sfx_percent,
+			"VOICE VOLUME  ‹  %d%%  ›" % _voice_percent,
 			"HIT FREEZE  %s" % ("ON" if _hit_freeze_enabled else "OFF"),
 			"FLASHES  %s" % ("REDUCED" if _reduced_flashes else "FULL"),
 			"PREVIEW CONTRAST  %s" % ("HIGH" if _high_contrast_previews else "NORMAL"),
 			"PLAYTEST LOG  %s" % ("LOCAL" if _telemetry_enabled else "OFF"),
 			"‹  BACK",
 		]
+	if _page == MenuPage.BINDINGS:
+		var rows: Array[String] = []
+		for i in BINDABLE.size():
+			var action := str(BINDABLE[i][0])
+			rows.append("%s   %s" % [str(BINDABLE[i][1]),
+				"PRESS A KEY…" if _binding_row == i else _keys_text(action)])
+		rows.append("RESET TO DEFAULTS")
+		rows.append("‹  BACK")
+		return rows
 	if _page == MenuPage.CONTROLS:
 		return ["‹  BACK"]
 	return [
@@ -662,35 +629,26 @@ func _page_description() -> String:
 	match _page:
 		MenuPage.MAIN:
 			return [
-				"Local duels, AI fights and the free-play sandbox live here.",
+				"Build the whole local match on one screen: mode, roster, arena and rules.",
 				"Read the six-screen combat briefing. No inputs or live challenges required.",
 				"Create or join a private room for a hidden-plan duel.",
 				"See P1 keyboard + mouse, P2 gamepad, SUPER activation and playtest shortcuts.",
 				"Tune sound, impact feedback, flashes, preview contrast and playtest logs.",
 				"Close ZAWARUDO and return time to the ordinary world.",
 			][_cursor]
-		MenuPage.SETUP:
-			if _cursor == SETUP_MODE:
-				return "VS is every fighter for themselves. Team Battle shares scores. Free Play removes turns and scoring."
-			if _cursor == SETUP_PLAYERS:
-				return "Choose 2, 3 or 4 active fighter slots. The roster updates immediately."
-			if _cursor >= SETUP_FIRST_FIGHTER and _cursor < _setup_arena_row():
-				var slot := _cursor - SETUP_FIRST_FIGHTER
-				return _controller_description(slot) + "  Choose this fighter's class with left or right."
-			if _cursor == _setup_arena_row():
-				return str(Levels.build(level, battle_player_count).get(
-					"feature", "Read the suspended danger before committing."))
-			if _cursor == _setup_lives_row():
-				return "Free Play has no score or win condition." if battle_mode == BattleMode.FREE_PLAY else \
-					"First fighter—or team—to land this many scoring hits wins."
-			if _cursor == _setup_difficulty_row():
-				return "Every slot is human, so nothing here is driven by the AI." \
-					if not battle_roles.has("AI") else \
-					"How much of its search each CPU rival spends, and how precisely it aims."
-			return "The complete match is visible now. Enter the arena when everyone is ready."
+		MenuPage.BINDINGS:
+			if _cursor == BINDING_RESET_ROW:
+				return "Put every Player 1 key back to the shipped layout."
+			if _cursor == BINDING_BACK_ROW:
+				return "Return to the controls reference."
+			return "Press Enter, then press the key you want. " \
+				+ "Taking a key from another action leaves that one unbound until you set it. " \
+				+ "Escape cancels without changing anything."
 		MenuPage.OPTIONS:
 			return [
-				"Set the master sound level for music, throws, impacts and time effects.",
+				"Choose the window size, or hand the whole screen over to the arena.",
+				"Throws, impacts, breaking platforms and the freeze cues.",
+				"The match-opening shout and the SUPER chant, on their own level.",
 				"Add a brief freeze on impact so successful hits land with more weight.",
 				"Reduce bright screen flashes while preserving gameplay information.",
 				"Strengthen planning lines, labels and player-color separation.",
@@ -712,307 +670,24 @@ func _close_controls() -> void:
 	_refresh()
 
 
-func _show_local_menu() -> void:
-	_page = MenuPage.SETUP
-	_cursor = SETUP_MODE
-	_rebuild_roster_assignments()
-	_refresh()
-
-
-func _is_setup_page() -> bool:
-	return _page == MenuPage.SETUP
-
-
-func _step_rail_text() -> String:
-	return "FOCUS A CHOICE   ·   THE DOSSIER EXPLAINS ITS EFFECT" if _is_setup_page() else ""
-
-
-func _refresh_context_dossier(names: Array[String]) -> void:
-	_portrait_preview.visible = false
-	_arena_dossier.visible = false
-	_context_meta.visible = false
-	_match_card.visible = false
-	_footer.visible = _page != MenuPage.CONTROLS
-	_footer.position = Vector2(734.0, 490.0)
-	_footer.size = Vector2(438.0, 102.0)
-	_footer.text = ""
-	_context_title.text = names[_cursor] if not names.is_empty() else ""
-	_context_title.add_theme_font_size_override("font_size", 22 if _is_setup_page() else 30)
-	# The panel names whatever the cursor is on. Only the fight setup is a fight
-	# dossier; labelling the options list one was simply wrong.
-	match _page:
-		MenuPage.OPTIONS: _footer_kicker.text = "OPTIONS // ACCESSIBILITY"
-		MenuPage.SETUP: _footer_kicker.text = "FIGHT DOSSIER // CONTEXT"
-		_: _footer_kicker.text = "COMMAND // SELECT"
-
-	if _page != MenuPage.SETUP:
-		_footer.position.y = 330.0
-		_footer.size.y = 250.0
-		_footer.text = _page_description()
-		return
-	if _cursor >= SETUP_FIRST_FIGHTER and _cursor < _setup_arena_row():
-		var slot := _cursor - SETUP_FIRST_FIGHTER
-		var weapon := int(battle_weapons[slot])
-		_footer_kicker.text = "FIGHTER DOSSIER // P%d" % (slot + 1)
-		_context_title.text = _fighter_title(weapon)
-		_portrait_preview.texture = _fighter_portrait(weapon)
-		_portrait_preview.visible = true
-		_context_meta.text = _fighter_abilities(weapon)
-		_context_meta.visible = true
-		_footer.text = "LORE\n%s\n\n%s" % [_fighter_lore(weapon), _fighter_control_note(slot)]
-		return
-	if _cursor == _setup_arena_row():
-		var arena := Levels.build(level, battle_player_count)
-		_footer_kicker.text = "ARENA DOSSIER // LAYOUT"
-		_context_title.text = str(arena["name"])
-		_arena_dossier.show_level(level, battle_player_count)
-		_arena_dossier.visible = true
-		var wrap := "HORIZONTAL + VERTICAL" if arena.get("wrap_y", false) else \
-			("HORIZONTAL" if arena.get("wrap_x", false) else "CLOSED WALLS")
-		_footer.position.y = 484.0
-		_footer.size.y = 112.0
-		_footer.text = "LAYOUT READ\n%s\n\nBOUNDARIES  //  %s\nGOLD = BREAKABLE   ·   CYAN = MOTION / HAZARD" % [
-			str(arena.get("feature", "Read the suspended danger before committing.")), wrap]
-		return
-
-	_match_card.visible = true
-	match _cursor:
-		SETUP_MODE:
-			_footer_kicker.text = "RULE DOSSIER // MODE"
-			_context_title.text = "CHOOSE THE KIND OF FIGHT"
-			_match_card.text = "VS\nEvery fighter scores for themselves. Last rival standing wins the exchange.\n\nTEAM BATTLE\nCrimson and Azure share hits. Teammates win and lose together.\n\nFREE PLAY\nNo turns, score, or victory screen. Extra slots become training dummies."
-		SETUP_PLAYERS:
-			_footer_kicker.text = "RULE DOSSIER // FIGHTERS"
-			_context_title.text = "%d ACTIVE FIGHTERS" % battle_player_count
-			_match_card.text = "2 FIGHTERS\nFast, readable duel.\n\n3 FIGHTERS\nFree-for-all pressure or uneven teams. P3 is CPU-controlled.\n\n4 FIGHTERS\nFull arena chaos or 2v2. P3 and P4 are CPU-controlled.\n\nP1 is keyboard. P2 becomes human when a gamepad is detected."
-		_:
-			if _cursor == _setup_lives_row():
-				_footer_kicker.text = "RULE DOSSIER // MATCH LIVES"
-				_context_title.text = "NO SCORE" if battle_mode == BattleMode.FREE_PLAY else \
-					"FIRST TO %d HITS" % match_lives
-				_match_card.text = _match_card_text() + ("\n\nFREE PLAY\nLives are disabled; practice continues until you leave." \
-					if battle_mode == BattleMode.FREE_PLAY else \
-					"\n\n3 LIVES  //  quick set\n5 LIVES  //  standard set\n7 LIVES  //  longer adaptation set")
-			elif _cursor == _setup_difficulty_row():
-				_footer_kicker.text = "RULE DOSSIER // OPPONENT"
-				_context_title.text = "NO CPU RIVAL" if not battle_roles.has("AI") else \
-					"%s OPPONENT" % DIFFICULTY_NAMES[difficulty]
-				# The preset names alone cannot say what actually changes, and what
-				# changes is unusual enough to be worth stating: the opponent never
-				# gains information, only search and precision.
-				_match_card.text = "Every preset plans blind. None of them can read your plan; they differ only in how hard they look and how straight they throw.\n\nNOVICE\nCommits to one route and aims loosely.\n\nSTANDARD\nThe balance baseline.\n\nRUTHLESS\nSearches five routes, barely misses, commits fast." \
-					if battle_roles.has("AI") else \
-					_match_card_text() + "\n\nEvery slot is human, so no CPU rival is in this match."
-			else:
-				_footer_kicker.text = "MATCH DOSSIER // READY"
-				_context_title.text = "ENTER THE ARENA"
-				_match_card.text = _match_card_text()
-				_footer.text = "All choices are locked into one match configuration. Press Enter to start; Escape returns without losing the setup."
-
-
-func _fighter_portrait(value: int) -> Texture2D:
-	match value:
-		2: return ROOK_PORTRAIT
-		3: return ECLIPSE_PORTRAIT
-		4: return PULSE_PORTRAIT
-		_: return DUELIST_PORTRAIT
-
-
-func _fighter_title(value: int) -> String:
-	match value:
-		2: return "THE ROOK"
-		3: return "THE ECLIPSE"
-		4: return "THE PULSE"
-		_: return "THE DUELIST"
-
-
-func _fighter_abilities(value: int) -> String:
-	match value:
-		2:
-			return "ABILITIES\nCUT TO END\nDash through the planned line.\nLOST FRAMES\nSlow movement banks dash distance.\nFRONT GUARD\nParry shots during the dash."
-		3:
-			return "ABILITIES\nDECREE\nOne corona follows the exact aim.\nCONSECRATION\nWalls hold it; a midair cast also waits.\nABSOLUTION\nIt returns on its third turn."
-		4:
-			return "ABILITIES\nNEEDLE NOTE\nFast, direct pressure.\nBACKBEAT\nPlace persistent field traps.\nFEEDBACK\nPlasma + orb redirects weapons."
-		_:
-			return "ABILITIES\nTWIN DAGGERS\nReliable direct volleys.\nFAN THROW\nPressure several routes.\nHARD RICOCHET\nBank steel off arena cover."
-
-
-func _fighter_lore(value: int) -> String:
-	match value:
-		2:
-			return "She surrenders every fourth step to time, then spends the stolen distance in one impossible cut."
-		3:
-			return "A perfectly mannered false saint who consecrates the arena with counterfeit halos, then calmly recalls every decree."
-		4:
-			return "A resonance punk who seeds suspended beats, then drives one razor-straight note through them to rewrite every trajectory."
-		_:
-			return "A disciplined survivor of frozen duels who trusts geometry, timing, and two blades more than prophecy."
-
-
-func _fighter_control_note(slot: int) -> String:
-	if battle_devices[slot] == -2:
-		return "CONTROL  //  HUMAN · KEYBOARD + MOUSE"
-	if battle_devices[slot] >= 0:
-		return "CONTROL  //  HUMAN · CONNECTED GAMEPAD"
-	if slot == 1:
-		return "CONTROL  //  CPU · CONNECT A GAMEPAD TO CLAIM P2"
-	return "CONTROL  //  CPU · P1 CHOOSES THIS CLASS"
-
-
-func _mode_name() -> String:
-	match battle_mode:
-		BattleMode.TEAM_BATTLE: return "TEAM BATTLE"
-		BattleMode.FREE_PLAY: return "FREE PLAY"
-		_: return "VS"
-
-
-func _weapon_name(value: int) -> String:
-	match value:
-		2: return "ROOK"
-		3: return "ECLIPSE"
-		4: return "PULSE"
-		_: return "DUELIST"
-
-
-func _match_card_text() -> String:
-	if not _is_setup_page():
-		return ""
-	var lines: Array[String] = ["%s  ·  %d FIGHTERS" % [_mode_name(), battle_player_count]]
-	for i in battle_player_count:
-		var owner := "KEYBOARD" if battle_devices[i] == -2 else \
-			("CPU" if battle_devices[i] < 0 else "GAMEPAD")
-		var fighter := _weapon_name(int(battle_weapons[i]))
-		var side := ""
-		if battle_mode == BattleMode.TEAM_BATTLE:
-			side = ("CRIMSON · " if battle_teams[i] == 0 else "AZURE · ")
-		lines.append("P%d  %s%s  //  %s" % [i + 1, side, owner, fighter])
-	lines.append("%s  ·  NO SCORE" % str(Levels.build(level)["name"]) \
-		if battle_mode == BattleMode.FREE_PLAY else \
-		"%s  ·  FIRST TO %d HITS" % [str(Levels.build(level)["name"]), match_lives])
-	return "\n".join(lines)
-
-
-func _fighter_setup_row(slot: int) -> String:
-	var side := ""
-	if battle_mode == BattleMode.TEAM_BATTLE:
-		side = ("CRIMSON · " if battle_teams[slot] == 0 else "AZURE · ")
-	var owner := battle_roles[slot]
-	if battle_devices[slot] == -2:
-		owner = "KEYBOARD"
-	elif battle_devices[slot] >= 0:
-		owner = "GAMEPAD"
-	elif battle_roles[slot] == "AI":
-		owner = "CPU"
-	return "P%d  %s%s   ‹  %s  ›" % [
-		slot + 1, side, owner, _weapon_name(int(battle_weapons[slot])),
-	]
-
-
-func _controller_description(slot: int) -> String:
-	if battle_devices[slot] == -2:
-		return "P1 is always human-controlled with keyboard and mouse."
-	if battle_devices[slot] >= 0:
-		return "A detected controller automatically owns P2 for this prototype."
-	if slot == 1:
-		return "No controller detected, so P2 is CPU-controlled. Connect a pad to claim this slot."
-	return "Extra prototype slots are CPU-controlled; P1 chooses their classes here."
-
-
-func _setup_arena_row() -> int:
-	return SETUP_FIRST_FIGHTER + battle_player_count
-
-
-func _setup_lives_row() -> int:
-	return _setup_arena_row() + 1
-
-
-func _setup_difficulty_row() -> int:
-	return _setup_arena_row() + 2
-
-
-func _setup_start_row() -> int:
-	return _setup_arena_row() + 3
-
-
-func _change_setup_value(row: int, direction: int) -> void:
-	if direction == 0:
-		return
-	if row == SETUP_MODE:
-		battle_mode = posmod(battle_mode + direction, 3)
-		_rebuild_roster_assignments()
-	elif row == SETUP_PLAYERS:
-		battle_player_count = posmod(battle_player_count - 2 + direction, 3) + 2
-		_rebuild_roster_assignments()
-	elif row >= SETUP_FIRST_FIGHTER and row < _setup_arena_row():
-		var slot := row - SETUP_FIRST_FIGHTER
-		var current := WEAPON_ROSTER.find(int(battle_weapons[slot]))
-		battle_weapons[slot] = WEAPON_ROSTER[posmod(current + direction, WEAPON_ROSTER.size())]
-	elif row == _setup_arena_row():
-		level = posmod(level + direction, Levels.count())
-	elif row == _setup_lives_row() and battle_mode != BattleMode.FREE_PLAY:
-		var current_lives := MATCH_LIFE_OPTIONS.find(match_lives)
-		match_lives = MATCH_LIFE_OPTIONS[posmod(current_lives + direction, MATCH_LIFE_OPTIONS.size())]
-	elif row == _setup_difficulty_row() and battle_roles.has("AI"):
-		difficulty = posmod(difficulty + direction, DIFFICULTY_NAMES.size())
-	else:
-		return
-	ui_navigated.emit()
-	_refresh()
-
-
-func _rebuild_roster_assignments() -> void:
-	var pads := Input.get_connected_joypads()
-	battle_roles.clear()
-	battle_devices.clear()
-	battle_teams.clear()
-	for i in battle_player_count:
-		var role := "AI"
-		var device := -1
-		if i == 0:
-			role = "HUMAN"
-			device = -2
-		elif i == 1 and not pads.is_empty():
-			role = "HUMAN"
-			device = int(pads[0])
-		elif battle_mode == BattleMode.FREE_PLAY:
-			role = "DUMMY"
-		battle_roles.append(role)
-		battle_devices.append(device)
-		battle_teams.append(i % 2 if battle_mode == BattleMode.TEAM_BATTLE else -1)
-
-
-func _build_setup_config() -> Dictionary:
-	return {
-		"mode": battle_mode,
-		"player_count": battle_player_count,
-		"roles": battle_roles.duplicate(),
-		"devices": battle_devices.duplicate(),
-		"teams": battle_teams.duplicate(),
-		"weapons": battle_weapons.slice(0, battle_player_count),
-		"level": level,
-		"match_lives": match_lives,
-		"difficulty": difficulty,
-	}
-
-
-func _change_match_lives(direction: int) -> void:
-	var current := MATCH_LIFE_OPTIONS.find(match_lives)
+func _step_volume(percent: int, direction: int) -> int:
+	var current := SOUND_LEVELS.find(percent)
 	if current < 0:
-		current = MATCH_LIFE_OPTIONS.find(5)
-	match_lives = MATCH_LIFE_OPTIONS[posmod(current + direction, MATCH_LIFE_OPTIONS.size())]
-	ui_navigated.emit()
-	_refresh()
+		current = SOUND_LEVELS.size() - 1
+	return SOUND_LEVELS[posmod(current + direction, SOUND_LEVELS.size())]
 
 
 func _change_option(row: int, direction: int) -> void:
 	match row:
-		OPTION_SOUND:
-			var current := SOUND_LEVELS.find(_sound_percent)
-			if current < 0:
-				current = SOUND_LEVELS.size() - 1
-			_sound_percent = SOUND_LEVELS[posmod(current + direction, SOUND_LEVELS.size())]
-			option_changed.emit("sound", float(_sound_percent) / 100.0)
+		OPTION_DISPLAY:
+			_display_preset = posmod(_display_preset + direction, DISPLAY_NAMES.size())
+			option_changed.emit("display", _display_preset)
+		OPTION_SFX:
+			_sfx_percent = _step_volume(_sfx_percent, direction)
+			option_changed.emit("sfx", float(_sfx_percent) / 100.0)
+		OPTION_VOICE:
+			_voice_percent = _step_volume(_voice_percent, direction)
+			option_changed.emit("voice", float(_voice_percent) / 100.0)
 		OPTION_HIT_FREEZE:
 			_hit_freeze_enabled = not _hit_freeze_enabled
 			option_changed.emit("hit_freeze", _hit_freeze_enabled)
@@ -1030,6 +705,25 @@ func _change_option(row: int, direction: int) -> void:
 
 ## Returns true when the key was consumed.
 func handle_key(code: int) -> bool:
+	if _binding_row >= 0:
+		var action := str(BINDABLE[_binding_row][0])
+		_binding_row = -1
+		# Escape is the universal way out of a menu, so it is never bindable.
+		if code != KEY_ESCAPE:
+			ui_accepted.emit()
+			binding_changed.emit(action, [code])
+		_refresh()
+		return true
+	if _page == MenuPage.BINDINGS:
+		match code:
+			KEY_W, KEY_UP: _select(_cursor - 1)
+			KEY_S, KEY_DOWN: _select(_cursor + 1)
+			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: _activate(_cursor)
+			KEY_ESCAPE:
+				_page = MenuPage.CONTROLS
+				_refresh()
+			_: return false
+		return true
 	if _page == MenuPage.CONTROLS:
 		if code in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]:
 			_close_controls()
@@ -1041,22 +735,18 @@ func handle_key(code: int) -> bool:
 		KEY_S, KEY_DOWN:
 			_select(_cursor + 1)
 		KEY_A, KEY_LEFT:
-			if _page == MenuPage.SETUP:
-				_change_setup_value(_cursor, -1)
-			elif _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
+			if _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
 				_change_option(_cursor, -1)
 		KEY_D, KEY_RIGHT:
-			if _page == MenuPage.SETUP:
-				_change_setup_value(_cursor, 1)
-			elif _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
+			if _page == MenuPage.OPTIONS and _cursor != OPTION_BACK:
 				_change_option(_cursor, 1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_activate(_cursor)
 		KEY_ESCAPE:
-			match _page:
-				MenuPage.SETUP: _show_main_menu()
-				MenuPage.OPTIONS: _show_main_menu()
-				_: get_tree().quit()
+			if _page == MenuPage.OPTIONS:
+				_show_main_menu()
+			else:
+				get_tree().quit()
 		_:
 			return false
 	return true

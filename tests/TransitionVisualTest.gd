@@ -12,7 +12,7 @@ func _capture() -> void:
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
-	game._on_menu_start(true, 3, 2)
+	game.start_quick_match(true, 3, 2)
 	game._transition.set_process(false)
 	game._transition._elapsed = 0.12
 	game._transition._surface.queue_redraw()
