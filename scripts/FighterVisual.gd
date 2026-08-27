@@ -2,8 +2,9 @@ extends Node2D
 class_name FighterVisual
 
 ## Cosmetic observer for Player. Body state is sampled from the authoritative
-## player and world tick. The only presentation-time clock is the terminal
-## defeat sequence, because GAME_OVER intentionally stops the simulation tick.
+## player and world tick. Presentation time is used only for FREEPLAY locomotion
+## (which has no world tick) and the terminal defeat sequence (GAME_OVER also
+## stops simulation).
 ## No animation state supplies root motion or writes back into gameplay.
 
 const IDLE: StringName = &"IDLE"
@@ -22,6 +23,10 @@ var body_frame: int = 0
 var _fighter: Player
 var _aim_arm: Node2D
 var _defeat_elapsed: float = 0.0
+## FREEPLAY has no deterministic world tick: it integrates directly from frame
+## delta. This cosmetic clock lets locomotion animate there without feeding any
+## presentation state back into movement, collision, replay or the online digest.
+var _freeplay_elapsed: float = 0.0
 
 
 class AimArm extends Node2D:
@@ -53,6 +58,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if _fighter != null and (_fighter.cfg == null \
+			or int(_fighter.cfg.state) == Phase.FREEPLAY):
+		_freeplay_elapsed += delta
+	else:
+		_freeplay_elapsed = 0.0
 	sync_from_player()
 	if body_state == DEFEAT:
 		_defeat_elapsed += delta
@@ -74,9 +84,7 @@ func sync_from_player() -> void:
 	if frame_count <= 0:
 		body_frame = 0
 		return
-	var tick := 0
-	if _fighter.cfg != null:
-		tick = int(_fighter.cfg.world_tick)
+	var tick := _presentation_body_tick()
 	var state_ticks := skin.ticks_for_state(body_state)
 	var frame_step: int = tick / state_ticks
 	if body_state == SHOT:
@@ -88,6 +96,13 @@ func sync_from_player() -> void:
 		body_frame = mini(frame_count - 1, frame_step)
 	else:
 		body_frame = posmod(frame_step, frame_count)
+
+
+func _presentation_body_tick() -> int:
+	if _fighter == null or _fighter.cfg == null \
+			or int(_fighter.cfg.state) == Phase.FREEPLAY:
+		return int(_freeplay_elapsed * 60.0)
+	return int(_fighter.cfg.world_tick)
 
 
 func _derive_state() -> StringName:

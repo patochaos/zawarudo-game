@@ -8,6 +8,7 @@ extends CanvasLayer
 ## destination to open.
 
 signal roster_requested
+signal sandbox_requested
 signal binding_changed(action: String, codes: Array)
 signal bindings_reset
 signal online_requested
@@ -17,11 +18,12 @@ signal ui_navigated
 signal ui_accepted
 
 const ROW_PLAY := 0
-const ROW_TUTORIAL := 1
-const ROW_ONLINE := 2
-const ROW_CONTROLS := 3
-const ROW_OPTIONS := 4
-const ROW_QUIT := 5
+const ROW_SANDBOX := 1
+const ROW_TUTORIAL := 2
+const ROW_ONLINE := 3
+const ROW_CONTROLS := 4
+const ROW_OPTIONS := 5
+const ROW_QUIT := 6
 
 ## Enough physical rows for the longest page, which is the binding list.
 const ROWS := 11
@@ -608,6 +610,8 @@ func _activate(row: int) -> void:
 	match row:
 		ROW_PLAY:
 			roster_requested.emit()
+		ROW_SANDBOX:
+			sandbox_requested.emit()
 		ROW_TUTORIAL:
 			tutorial_requested.emit()
 		ROW_ONLINE:
@@ -649,6 +653,7 @@ func _page_names() -> Array[String]:
 		return ["‹  BACK"]
 	return [
 		"PLAY",
+		"SANDBOX",
 		"HOW TO PLAY",
 		"ONLINE",
 		"CONTROLS",
@@ -666,6 +671,7 @@ func _page_description() -> String:
 		MenuPage.MAIN:
 			return [
 				"Build the whole local match on one screen: mode, roster, arena and rules.",
+				"Enter Arena 1 as the Duelist, then change fighters, arenas and a live CPU in place.",
 				"Read the six-screen combat briefing. No inputs or live challenges required.",
 				"Create or join a private room for a hidden-plan duel.",
 				"See P1 keyboard + mouse, P2 gamepad, SUPER activation and playtest shortcuts.",

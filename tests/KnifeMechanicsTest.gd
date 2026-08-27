@@ -39,6 +39,8 @@ func _init() -> void:
 	_test_velocity_response()
 	_test_secret_triple_fan()
 	_test_charge_aware_dagger_reticle()
+	_test_dagger_aim_path_matches_real_flight()
+	_test_character_projectiles_share_aim_preview_cap()
 	_test_drag_collapses_the_arc()
 	_test_deflected_knives_fall_as_debris()
 	_test_preview_uses_platform_material_for_ricochet()
@@ -122,6 +124,55 @@ func _test_charge_aware_dagger_reticle() -> void:
 	_check((low_tip.y - start.y) / (low_tip.x - start.x) \
 			> (high_tip.y - start.y) / (high_tip.x - start.x),
 		"low charge must read as a droopier arc than a full-power throw")
+	preview.free()
+	gm.free()
+
+
+func _test_dagger_aim_path_matches_real_flight() -> void:
+	var gm = GAME_MANAGER.new()
+	var preview = PREVIEW_LAYER.new()
+	preview.gm = gm
+	var start := Vector2(100.0, 100.0)
+	var launch := gm.knife_launch_velocity(Vector2.RIGHT, 1.0)
+	var path := preview._dagger_trajectory_path(start, launch)
+	var full_ticks := int(round(gm.trajectory_preview_time / gm.tick_dt()))
+	var disclosed_ticks := int(round(float(full_ticks) * preview.AIM_PREDICTION_FRACTION))
+	_check(path.size() <= disclosed_ticks + 1 and path.size() < full_ticks + 1,
+		"the Duelist aim path must reveal no more than one tenth of the full prediction")
+	var sample_tick := mini(60, path.size() - 1)
+	var real := _fly(start, launch, sample_tick, gm.tick_dt(), gm, false)
+	_check(path[sample_tick].is_equal_approx(real["pos"]),
+		"the Duelist aim path must use the live dagger integration")
+	_check(path[sample_tick].y > start.y + 15.0,
+		"the Duelist aim path must show the shot's substantial ballistic bend")
+	preview.free()
+	gm.free()
+
+
+func _test_character_projectiles_share_aim_preview_cap() -> void:
+	var gm = GAME_MANAGER.new()
+	var preview = PREVIEW_LAYER.new()
+	preview.gm = gm
+	var start := Vector2(100.0, 100.0)
+	var limit := preview._aim_preview_steps() + 1
+
+	var chakram := preview._chakram_trajectory_path(
+		start, Vector2(gm.chakram_speed_max, 0.0))
+	var orb := preview._shock_orb_trajectory_path(
+		start, Vector2(gm.shock_orb_speed_max, 0.0))
+	var full_plasma: PackedVector2Array = PredictionSystem.predict_plasma(
+		start, Vector2(gm.shock_plasma_speed, 0.0), gm,
+		gm.shock_plasma_range_full)["path"]
+	var plasma := preview._path_tick_limit(full_plasma, preview._aim_preview_steps())
+
+	_check(chakram.size() <= limit and orb.size() <= limit and plasma.size() <= limit,
+		"Eclipse and both Pulse attacks must share the Duelist's ten-percent preview cap")
+	_check(chakram[chakram.size() - 1].y > start.y \
+			and orb[orb.size() - 1].y > start.y \
+			and plasma[plasma.size() - 1].y > start.y,
+		"every ballistic class preview must expose its real opening bend")
+	_check(plasma.size() < full_plasma.size(),
+		"Pulse plasma must not reveal its complete range or impact")
 	preview.free()
 	gm.free()
 

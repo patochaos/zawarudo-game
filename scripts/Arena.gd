@@ -1,8 +1,6 @@
 extends Node2D
 class_name Arena
 
-const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
-
 ## Renders the platform set. Layouts live in Levels.gd; damage state lives in
 ## GameManager. Terrain never damages a player — only arrows do.
 ##
@@ -14,6 +12,7 @@ const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
 ## when every planning overlay is stripped away.
 
 const INDESTRUCTIBLE := -1
+const STAGE_TOP := Levels.STAGE_TOP
 
 const SOLID_FILL := Color(0.105, 0.15, 0.21)
 const SOLID_FACE := Color(0.055, 0.085, 0.13)
@@ -84,7 +83,6 @@ func _draw_solid(r: Rect2, motion: Dictionary = {}) -> void:
 		_draw_travel_marks(r, motion)
 	else:
 		_draw_hard_rivets(r, accent)
-	_draw_material_label(r, "HARD // MOVE" if moving else "HARD", HARD_INK)
 
 
 ## Chevrons along the axis of travel. They say "this moves, and along here" while
@@ -115,7 +113,6 @@ func _draw_breakable(r: Rect2, hp: int, max_hp: int) -> void:
 	draw_rect(Rect2(r.position, Vector2(r.size.x, 5.0)), BREAK_TOP.lerp(BREAK_TOP_BROKEN, wear))
 	draw_rect(r, SOLID_EDGE, false, 2.0)
 	_draw_break_stripes(r)
-	_draw_material_label(r, "BREAK", Color(1.0, 0.84, 0.42))
 
 	# cracks deepen with damage
 	if wear > 0.01:
@@ -170,33 +167,23 @@ func _draw_break_stripes(r: Rect2) -> void:
 		draw_line(a, b, Color(1.0, 0.48, 0.10, 0.55), 3.0)
 
 
-func _draw_material_label(r: Rect2, text: String, col: Color) -> void:
-	if r.size.x < 86.0 or r.size.y < 13.0 or r.position.x < 0.0:
-		return
-	draw_string(HUD_FONT, r.position + Vector2(9.0, minf(13.0, r.size.y - 2.0)),
-		text, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 18.0, 8, Color(col, 0.82))
-
-
 ## A non-wrapping side is an explicit steel bulkhead, never an invisible rule.
 func _draw_hard_side_boundaries() -> void:
 	var accent: Color = HARD_ACCENTS[level_theme]
 	for x in [0.0, 1268.0]:
-		draw_rect(Rect2(x, 190.0, 12.0, 530.0), Color(0.025, 0.055, 0.085, 0.98))
-		draw_rect(Rect2(x, 190.0, 12.0, 530.0), accent, false, 2.0)
-		for y in range(205, 710, 34):
+		draw_rect(Rect2(x, STAGE_TOP, 12.0, 720.0 - STAGE_TOP),
+			Color(0.025, 0.055, 0.085, 0.98))
+		draw_rect(Rect2(x, STAGE_TOP, 12.0, 720.0 - STAGE_TOP), accent, false, 2.0)
+		for y in range(int(STAGE_TOP) + 15, 710, 34):
 			draw_line(Vector2(x + 2.0, float(y)), Vector2(x + 10.0, float(y) + 10.0),
 				HARD_INK, 2.0)
-	draw_string(HUD_FONT, Vector2(16.0, 208.0), "NO PASS // HARD WALL",
-		HORIZONTAL_ALIGNMENT_LEFT, 150.0, 9, Color(HARD_INK, 0.88))
-	draw_string(HUD_FONT, Vector2(1114.0, 208.0), "HARD WALL // NO PASS",
-		HORIZONTAL_ALIGNMENT_RIGHT, 150.0, 9, Color(HARD_INK, 0.88))
 
 
 ## Cyan dashed seams appear only where both horizontal edges are actually open.
 ## Solid side architecture interrupts the seam, so the cue never promises a
 ## portal through a wall that collision will reject.
 func _draw_horizontal_portals() -> void:
-	for y in range(216, 621, 12):
+	for y in range(int(STAGE_TOP), 621, 12):
 		if _point_blocked(Vector2(1.0, float(y))) \
 				or _point_blocked(Vector2(1279.0, float(y))):
 			continue
@@ -206,27 +193,23 @@ func _draw_horizontal_portals() -> void:
 		if y % 24 == 0:
 			draw_line(Vector2(4.0, float(y) - 4.0), Vector2(9.0, float(y)), glow, 1.5)
 			draw_line(Vector2(1276.0, float(y) - 4.0), Vector2(1271.0, float(y)), glow, 1.5)
-	draw_string(HUD_FONT, Vector2(14.0, 208.0), "WRAP →",
-		HORIZONTAL_ALIGNMENT_LEFT, 80.0, 9, Color(0.45, 0.98, 1.0, 0.9))
-	draw_string(HUD_FONT, Vector2(1186.0, 208.0), "← WRAP",
-		HORIZONTAL_ALIGNMENT_RIGHT, 80.0, 9, Color(0.45, 0.98, 1.0, 0.9))
 
 
 ## Vertical wrap is marked as one paired aperture: only x positions open at the
 ## authored ceiling AND floor receive the matching top/bottom portal rail.
 func _draw_vertical_portal() -> void:
 	for x in range(16, 1265, 12):
-		if _point_blocked(Vector2(float(x), 217.0)) \
+		if _point_blocked(Vector2(float(x), STAGE_TOP + 1.0)) \
 				or _point_blocked(Vector2(float(x), 621.0)):
 			continue
 		var glow := Color(0.30, 0.96, 1.0, 0.82)
-		draw_line(Vector2(float(x), 216.0), Vector2(float(x) + 8.0, 216.0), glow, 3.0)
+		draw_line(Vector2(float(x), STAGE_TOP),
+			Vector2(float(x) + 8.0, STAGE_TOP), glow, 3.0)
 		draw_line(Vector2(float(x), 716.0), Vector2(float(x) + 8.0, 716.0), glow, 3.0)
 		if x % 24 == 16:
-			draw_line(Vector2(float(x) + 2.0, 211.0), Vector2(float(x) + 6.0, 216.0), glow, 1.5)
+			draw_line(Vector2(float(x) + 2.0, STAGE_TOP + 5.0),
+				Vector2(float(x) + 6.0, STAGE_TOP), glow, 1.5)
 			draw_line(Vector2(float(x) + 2.0, 721.0), Vector2(float(x) + 6.0, 716.0), glow, 1.5)
-	draw_string(HUD_FONT, Vector2(590.0, 208.0), "WRAP ↑ / ↓",
-		HORIZONTAL_ALIGNMENT_CENTER, 100.0, 9, Color(0.45, 0.98, 1.0, 0.9))
 
 
 func _point_blocked(point: Vector2) -> bool:

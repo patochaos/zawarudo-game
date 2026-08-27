@@ -211,6 +211,8 @@ func _arm() -> void:
 		_aim_dashblade(pl)
 	elif _gm.uses_shock(_idx):
 		_aim_shock(pl)
+	elif _gm.uses_chakram(_idx):
+		_aim_chakram(pl)
 	# The AI has no physical button, but makes the same explicit choice immediately
 	# before placing its shot rather than receiving an automatic upgrade.
 	if _gm.super_meter[_idx] >= 1.0:
@@ -268,6 +270,17 @@ func _aim_shock(plan: PlayerPlan) -> void:
 		plan.power = 1.0
 
 
+func _aim_chakram(plan: PlayerPlan) -> void:
+	plan.attack_mode = int(_best.get("attack_mode", 0))
+	if plan.attack_mode == 1:
+		# ABSOLUTION has no aim choice; movement determines the dangerous return
+		# line. Preserve the existing facing instead of snapping the pose randomly.
+		return
+	# The coarse/refined search already chose this exact elevation and side. Do
+	# not collapse it back onto the stationary foe after evaluating the real arc.
+	plan.power = clampf(float(_best.get("power", plan.power)), 0.0, 1.0)
+
+
 func _chosen_origin() -> Vector2:
 	if _best_cand.is_empty() or not _best_cand.has("path"):
 		return _me.position
@@ -308,7 +321,8 @@ func _build_coarse_queue() -> void:
 				var e := lo
 				while e <= top:
 					for power in COARSE_POWERS:
-						if _gm.uses_dashblade(_idx) or _gm.uses_shock(_idx) or e < 5.0 \
+						if _gm.uses_dashblade(_idx) or _gm.uses_shock(_idx) \
+								or _gm.uses_chakram(_idx) or e < 5.0 \
 								or _plausible(origin, side, e, power):
 							_queue.append([cand, ft, e, power, side])
 					e += COARSE_STEP
@@ -409,7 +423,36 @@ func _threat_paths() -> Array:
 			pos = nxt
 			pts.append(pos)
 		out.append(pts)
+	for chakram in _gm.chakrams:
+		if chakram.shooter == _idx:
+			continue
+		out.append(_chakram_threat_path(chakram))
 	return out
+
+
+func _chakram_threat_path(chakram) -> PackedVector2Array:
+	var pts := PackedVector2Array([chakram.position])
+	var pos: Vector2 = chakram.position
+	var vel: Vector2 = chakram.vel
+	var owner = null
+	for player: Player in _gm.players:
+		if player.index == chakram.shooter:
+			owner = player
+			break
+	for _tick in _gm.exec_ticks():
+		if chakram.is_holding():
+			pts.append(pos)
+			continue
+		if chakram.is_returning() and owner != null and owner.alive:
+			var desired: Vector2 = pos.direction_to(owner.position) * chakram.return_speed
+			vel = vel.move_toward(desired, chakram.return_acceleration * _dt)
+			vel.y += chakram.outbound_gravity * chakram.return_gravity_scale * _dt
+		else:
+			vel.x *= maxf(0.0, 1.0 - chakram.outbound_drag * _dt)
+			vel.y += chakram.outbound_gravity * _dt
+		pos = _gm.wrap_point(pos + vel * _dt)
+		pts.append(pos)
+	return pts
 
 
 func _danger(path: PackedVector2Array, threats: Array) -> float:
@@ -573,6 +616,8 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 		return _fire_dashblade(origin, power, fire_tick, candidate)
 	if _gm.uses_shock(_idx):
 		return _fire_shock(origin, fire_tick, candidate)
+	if _gm.uses_chakram(_idx):
+		return _fire_chakram(origin, side, elev, power, fire_tick, candidate)
 	var ang: float = elev if side > 0 else 180.0 - elev
 	var r := deg_to_rad(ang)
 	var dir := Vector2(cos(r), -sin(r))
@@ -619,6 +664,125 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 	if parry_risk > 0.0:
 		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
 	return {"score": score, "velocity_parry_risk": parry_risk}
+
+
+## Eclipse cannot be evaluated as a reskinned dagger. DECREE is walked through
+## the real corona integrator for the remaining execution window, including its
+## drag, gravity, HARD bank and consecration. ABSOLUTION separately traces every
+## callable corona—including its real platform skid—toward this movement
+## candidate and wins only when the returning formation beats a new threat.
+func _fire_chakram(origin: Vector2, side: int, elev: float, power: float,
+		fire_tick: int, candidate: Dictionary = {}) -> Dictionary:
+	var ang: float = elev if side > 0 else 180.0 - elev
+	var direction := Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
+	var decree := _score_chakram_decree(origin, direction, power, fire_tick, candidate)
+	var absolution := _score_chakram_absolution(fire_tick, candidate)
+	return absolution if float(absolution["score"]) > float(decree["score"]) else decree
+
+
+func _score_chakram_decree(origin: Vector2, direction: Vector2, power: float,
+		fire_tick: int, candidate: Dictionary) -> Dictionary:
+	var disc := Chakram.new()
+	disc.cfg = _gm
+	disc.shooter = _idx
+	disc.begin_lifecycle(_gm.turn)
+	disc.position = Player.shoulder_at(origin) + direction.normalized() * 24.0
+	disc.prev_pos = disc.position
+	disc.vel = _gm.chakram_launch_velocities(direction, power)[0]
+	var launch_speed: float = disc.vel.length()
+	var covered := [false, false, false]
+	var closest := INF
+	for local_tick in maxi(0, _gm.exec_ticks() - fire_tick):
+		var world_t := fire_tick + local_tick
+		var result: Dictionary = disc.sim_step(_dt, [], _gm.turn)
+		for h in _futures.size():
+			var future: PackedVector2Array = _futures[h]
+			var fi := clampi(world_t, 0, future.size() - 1)
+			var miss: float = _gm.wrap_delta(disc.position, future[fi]).length()
+			closest = minf(closest, miss)
+			if not covered[h] and _hits_body(disc.prev_pos, disc.position, future[fi]):
+				covered[h] = true
+		if not result["alive"]:
+			break
+	var endpoint_value := 0.0
+	for future: PackedVector2Array in _futures:
+		var endpoint: Vector2 = future[future.size() - 1]
+		var distance: float = _gm.wrap_delta(disc.position, endpoint).length()
+		# Consecrating near several plausible endpoints is useful even before a
+		# direct hit; distance prevents random empty-corner placements from tying.
+		endpoint_value += maxf(0.0, 260.0 - distance) * 0.42
+	var hits := covered.count(true)
+	var score := float(hits) * 1125.0 + endpoint_value \
+		- closest * 0.055 - float(fire_tick) * 0.2
+	var parry_risk := _velocity_front_parry_risk(
+		origin, direction, launch_speed, fire_tick, candidate)
+	if parry_risk > 0.0:
+		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
+	disc.free()
+	return {"score": score, "attack_mode": 0,
+		"velocity_parry_risk": parry_risk}
+
+
+func _score_chakram_absolution(fire_tick: int, candidate: Dictionary) -> Dictionary:
+	var callable: Array = _gm.recallable_chakrams(_idx)
+	if callable.is_empty() or not candidate.has("path"):
+		return {"score": -INF, "attack_mode": 1}
+	var owner_path: PackedVector2Array = candidate["path"]
+	var owner := Player.new()
+	owner.cfg = _gm
+	owner.index = _idx
+	owner.alive = true
+	var returning: Array = []
+	var preview_discs: Array = []
+	for live_disc in callable:
+		var disc := Chakram.new()
+		disc.cfg = _gm
+		disc.shooter = _idx
+		disc.network_id = live_disc.network_id
+		disc.launch_turn = live_disc.launch_turn
+		disc.age_ticks = live_disc.age_ticks
+		disc.position = live_disc.position
+		disc.prev_pos = live_disc.position
+		disc.outbound_gravity = live_disc.outbound_gravity
+		disc.return_speed = live_disc.return_speed
+		disc.return_acceleration = live_disc.return_acceleration
+		disc.return_gravity_scale = live_disc.return_gravity_scale
+		disc.max_lifetime_ticks = live_disc.max_lifetime_ticks
+		disc.force_recall()
+		returning.append(disc)
+		preview_discs.append(disc)
+	var covered := [false, false, false]
+	var closest := INF
+	for world_t in range(fire_tick, _gm.exec_ticks()):
+		var owner_tick := clampi(world_t, 0, owner_path.size() - 1)
+		owner.position = owner_path[owner_tick]
+		var still_returning: Array = []
+		for disc in returning:
+			var result: Dictionary = disc.sim_step(_dt, [owner], _gm.turn)
+			for h in _futures.size():
+				var future: PackedVector2Array = _futures[h]
+				var fi := clampi(world_t, 0, future.size() - 1)
+				closest = minf(closest,
+					_gm.wrap_delta(disc.position, future[fi]).length())
+				if not covered[h] and _hits_body(
+						disc.prev_pos, disc.position, future[fi]):
+					covered[h] = true
+			if result["alive"]:
+				still_returning.append(disc)
+		returning = still_returning
+		if returning.is_empty():
+			break
+	var hits := covered.count(true)
+	# A recall without a credible crossing should lose to establishing another
+	# corona. Calling several established threats is modestly valuable even when
+	# only one supplies the actual crossing.
+	var score := float(hits) * 1325.0 - closest * 0.07 \
+		+ float(callable.size() - 1) * 65.0 - float(fire_tick) * 0.2 \
+		- (180.0 if hits == 0 else 0.0)
+	for disc in preview_discs:
+		disc.free()
+	owner.free()
+	return {"score": score, "attack_mode": 1}
 
 
 ## Trace the real dash body against the same left/hold/right futures used by the

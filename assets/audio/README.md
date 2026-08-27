@@ -6,12 +6,10 @@ These three user-selected reference clips come from MyInstants:
 - `time-stop.mp3`: https://www.myinstants.com/en/instant/time-stop-sound-60795/
 - `time-resume.mp3`: https://www.myinstants.com/en/instant/za-warudo-time-resume-86944/
 
-Only `za-warudo-title.mp3` is active at runtime, at natural pitch, once when a
-match starts. Freeze and resume are intentionally silent; their two files remain
-parked here only as discarded references. These are prototype references from a
-user-upload soundboard. Confirm reuse rights or replace them with cleared
-originals before a public/commercial release.
+None of these clips are active at runtime. They remain parked only as discarded
+references from a user-upload soundboard and must not ship in a public or
+commercial release without confirmed reuse rights.
 
-Cleared gameplay layers are vendored separately under `assets/kenney/audio/`;
-their source packs and CC0 license copies are documented in
+All active runtime audio is vendored separately under `assets/kenney/audio/`;
+its source packs and CC0 license copies are documented in
 `assets/kenney/README.md`.

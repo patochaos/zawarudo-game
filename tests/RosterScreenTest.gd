@@ -232,8 +232,8 @@ func _test_four_fighters(game) -> void:
 		"the chakram must follow the player's exact aim direction")
 	_check(is_equal_approx(game.chakrams[0].vel.length(), lerpf(
 		game.chakram_speed_min, game.chakram_speed_max, 0.5)) \
-			and is_equal_approx(game.chakram_speed_min, 230.0) \
-			and is_equal_approx(game.chakram_speed_max, 420.0),
+			and is_equal_approx(game.chakram_speed_min, 300.0) \
+			and is_equal_approx(game.chakram_speed_max, 520.0),
 		"the throw must use the extended Chakram launch-speed range")
 	_check(preview_launches.size() == 1 \
 			and preview_launches[0].is_equal_approx(game.chakrams[0].vel),
@@ -253,8 +253,9 @@ func _test_four_fighters(game) -> void:
 	game.turn += 1
 	game._advance_chakrams_for_turn()
 	_check(second_generation.all(func(chakram): return chakram.is_returning()) \
-			and game.chakrams.size() == 1,
-		"each chakram must recall and expire according to its own launch turn")
+			and first_generation.all(func(chakram): return chakram.is_returning()) \
+			and game.chakrams.size() == 2,
+		"each chakram must remain live after recall until Eclipse catches it")
 
 
 func _test_duplicates_and_teams(game) -> void:

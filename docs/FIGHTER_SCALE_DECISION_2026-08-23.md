@@ -85,14 +85,14 @@ top of that envelope. No shipped skin uses it:
 |---|---:|---|
 | `FighterSkin` default | **92** | nothing — the sanctioned envelope |
 | `animated_rook` | 54 | The Rook, any slot |
-| `animated_executor_proof` | 54 | The Duelist, **Player 1's slot only** |
+| `animated_executor_proof` | 54 | The Duelist, any slot |
+| `animated_pulse` | 54 | The Pulse, any slot |
+| `animated_eclipse` | 54 | The Eclipse, any slot |
 | `simplified_executor_proof` | 54 | not wired into `_fighter_skin_for` |
 | `executor_prototype` | 128 | only when `simplified_fighter_proto_enabled` is off |
 
-`_fighter_skin_for()` returns `null` for everything else, which falls back to the
-stick renderer. So today: **The Rook and a Player-1 Duelist are drawn; The Pulse,
-The Eclipse, and a Duelist in any other slot are still sticks.** The same Duelist
-is a character in P1 and a wireframe in P2.
+`_fighter_skin_for()` now returns an authored skin for every roster identity, so
+**The Duelist, The Rook, The Pulse and The Eclipse are drawn in every slot.**
 
 The drawn fighters declare **54 px of visual bounds against a sanctioned 82–92**
 — about 59 % of the height the roadmap already approved. `animated_executor_proof`
@@ -140,9 +140,10 @@ in `FighterSkin.gd` or `FighterVisual.gd` was edited for this decision.
 - **Re-render at the real envelope.** Author the fighters at 82–92 px with the
   hand at a 22 px reach, per the constraint above, instead of calibrating down to
   the legacy figure's ~51 px.
-- **The Pulse and The Eclipse have no animated skin at all.** `_fighter_skin_for()`
-  returns `null` for them, so they fall back to the stick renderer. There is no
-  art to wire up.
+- ~~**The Pulse and The Eclipse have no animated skin at all.**~~ **DONE
+  2026-08-26.** `pulse-animated-v2` and `eclipse-animated-v1` supply the same
+  30-frame state set, planning-ghost atlases and per-player identity treatment
+  as the Duelist and Rook.
 - ~~**The Duelist's Player-1-only rule.**~~ **DONE 2026-08-24.** The rule existed
   because the animated skin had `sprite_tint = Color.WHITE` and a fixed palette,
   so a second slot would have put two identical gold figures on the board —

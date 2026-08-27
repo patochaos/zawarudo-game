@@ -22,6 +22,27 @@ const SKY_BOTTOMS := [
 	Color(0.105, 0.045, 0.16), # Collision Course — deep clock violet
 ]
 
+# One quiet Kenney line motif per arena. These stay behind the authored scenery
+# and are tinted here so the source artwork never dictates the level palette.
+const PATTERN_TEXTURES := [
+	preload("res://assets/kenney/patterns/crosshair-court.png"),
+	preload("res://assets/kenney/patterns/endless-descent.png"),
+	preload("res://assets/kenney/patterns/pendulum.png"),
+	preload("res://assets/kenney/patterns/pulse-chamber.png"),
+	preload("res://assets/kenney/patterns/shattered-sanctum.png"),
+	preload("res://assets/kenney/patterns/foundry.png"),
+	preload("res://assets/kenney/patterns/collision-course.png"),
+]
+const PATTERN_COLORS := [
+	Color(0.96, 0.76, 0.30, 0.022),
+	Color(0.40, 0.68, 1.00, 0.026),
+	Color(0.72, 0.52, 1.00, 0.020),
+	Color(0.30, 0.96, 1.00, 0.018),
+	Color(0.90, 0.66, 0.30, 0.016),
+	Color(1.00, 0.38, 0.26, 0.020),
+	Color(0.86, 0.47, 1.00, 0.018),
+]
+
 var horizon: float = 620.0
 var _stars: PackedVector2Array = PackedVector2Array()
 var level_theme: int = 0
@@ -69,6 +90,7 @@ func _draw() -> void:
 	for s in _stars:
 		var a: float = 0.10 + 0.22 * fposmod(s.x * 0.013 + s.y * 0.007, 1.0)
 		draw_circle(s, 1.0, Color(0.75, 0.82, 1.0, a))
+	_draw_pattern_atmosphere()
 
 	# two silhouette ridges for depth
 	_ridge(horizon, 150.0, 210.0, HILL_FAR)
@@ -94,6 +116,19 @@ func _draw() -> void:
 		var t: float = float(i) / 9.0
 		draw_rect(Rect2(0.0, horizon - 90.0 * (1.0 - t), W, 10.0),
 			Color(0.35, 0.45, 0.70, 0.020 * t))
+
+
+func _draw_pattern_atmosphere() -> void:
+	var texture: Texture2D = PATTERN_TEXTURES[level_theme]
+	var tint: Color = PATTERN_COLORS[level_theme]
+	var tile_size := Vector2(288.0, 288.0)
+	# Offset adjacent rows to stop the repeated source tile reading as wallpaper.
+	for row in 3:
+		for column in 6:
+			var x := float(column) * tile_size.x - 92.0 \
+				+ (tile_size.x * 0.5 if row % 2 == 1 else 0.0)
+			var y := float(row) * tile_size.y - 108.0
+			draw_texture_rect(texture, Rect2(Vector2(x, y), tile_size), false, tint)
 
 
 func _ridge(base: float, height: float, period: float, col: Color) -> void:
@@ -179,13 +214,16 @@ func _draw_descent_towers() -> void:
 	# Tall rails continue beyond the frame and make vertical wrapping feel like
 	# one impossible shaft rather than an arbitrary teleport.
 	for x in [118.0, 214.0, 1066.0, 1162.0]:
-		draw_rect(Rect2(x - 24.0, 190.0, 48.0, 430.0), stone)
-		draw_line(Vector2(x - 16.0, 205.0), Vector2(x - 16.0, 610.0), edge, 2.0)
-		draw_line(Vector2(x + 16.0, 205.0), Vector2(x + 16.0, 610.0), edge, 2.0)
-		for rung in 8:
-			var y := 226.0 + float(rung) * 48.0
+		draw_rect(Rect2(x - 24.0, Levels.STAGE_TOP,
+			48.0, 620.0 - Levels.STAGE_TOP), stone)
+		draw_line(Vector2(x - 16.0, Levels.STAGE_TOP),
+			Vector2(x - 16.0, 610.0), edge, 2.0)
+		draw_line(Vector2(x + 16.0, Levels.STAGE_TOP),
+			Vector2(x + 16.0, 610.0), edge, 2.0)
+		for rung in 10:
+			var y := Levels.STAGE_TOP + 24.0 + float(rung) * 54.0
 			draw_line(Vector2(x - 13.0, y), Vector2(x + 13.0, y), edge, 1.0)
-	for y in [270.0, 370.0, 470.0]:
+	for y in [150.0, 270.0, 390.0, 510.0]:
 		draw_arc(Vector2(640.0, y), 54.0, 0.15, PI - 0.15, 26,
 			Color(0.62, 0.82, 1.0, 0.045), 2.0)
 

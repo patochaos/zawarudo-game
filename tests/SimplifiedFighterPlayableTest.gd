@@ -11,12 +11,10 @@ func _init() -> void:
 
 func _run() -> void:
 	var game = GAME_MANAGER.new()
-	game.simplified_fighter_proto_enabled = true
-	game.fighter_visuals_enabled = true
 	root.add_child(game)
 	await process_frame
 
-	_check(game.players.size() == 2, "prototype match must spawn both duelists")
+	_check(game.players.size() == 2, "normal match must spawn both Duelists")
 	if game.players.size() >= 2:
 		var executor: Player = game.players[0]
 		var opponent: Player = game.players[1]

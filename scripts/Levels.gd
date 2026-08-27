@@ -11,11 +11,11 @@ class_name Levels
 ##
 ## WRAPPING (TowerFall style)
 ##   wrap_x — leaving one side re-enters the other. Side walls are omitted.
-##   wrap_y — falling off the bottom re-enters at the top, inside the band
-##            [WRAP_TOP, ARENA_H]. The HUD owns the screen above WRAP_TOP, so a
-##            wrap-y level MUST have a solid ceiling everywhere except a gap in
-##            the middle third, and its floor gap must sit inside that ceiling
-##            gap. Then re-entry always lands in open, un-occluded space.
+##   wrap_y — leaving the actual top or bottom of the screen re-enters at the
+##            opposite edge. A wrap-y level MUST have a solid gate below the
+##            HUD everywhere except a gap in the middle third, and its floor gap
+##            must sit inside that top gap. Then re-entry always reaches open,
+##            un-occluded space instead of teleporting at an interior seam.
 ##
 ## MOVING GEOMETRY
 ##   A platform may carry a `motion` dictionary (see Mover.gd). It then sweeps
@@ -43,9 +43,10 @@ class_name Levels
 
 const ARENA_W := 1280.0
 const ARENA_H := 720.0
-## Vertical wrapping happens inside this band. Chosen so a body re-entering at
-## the top has its head at y=192, clear of the lowest HUD text at y=186.
-const WRAP_TOP := 216.0
+## Wrapping is a screen-edge rule. STAGE_TOP is separately the lower edge of the
+## compact HUD rail and is where visible arena architecture begins.
+const WRAP_TOP := 0.0
+const STAGE_TOP := 58.0
 
 const GROUND := {"rect": Rect2(0, 620, 1280, 100), "hp": -1}
 const WALL_L := {"rect": Rect2(-60, -1400, 60, 2100), "hp": -1}
@@ -186,62 +187,50 @@ static func _crosshair_court() -> Dictionary:
 		"hazards": [],
 	}
 
-## A four-corner sanctum built around forced vertical circulation. P1/P2 enter
-## from the floor while P3/P4 own permanent upper balconies. Three short side
-## tiers connect those openings; the warm middle steps are destructible, but a
-## permanent route always survives through each outer gallery.
+## Two vertical wrap chutes flank a bridge that can be dismantled piece by
+## piece. Early turns happen across the bridge; later turns spill through the
+## holes it leaves and return from the opposite screen edge.
 static func _shattered_sanctum() -> Dictionary:
 	return {
 		"name": "SHATTERED SANCTUM",
-		"feature": "BREAKABLE // destroy cover now to author the firing lanes of later turns.",
+		"feature": "COLLAPSE // break the middle bridge to open two vertical wrap chutes.",
 		"wrap_x": true,
+		"wrap_y": true,
+		"skip_ground": true,
 		"spawns": [
-			Vector2(210.0, 596.0), Vector2(1070.0, 596.0),
-			Vector2(135.0, 296.0), Vector2(1145.0, 296.0),
+			Vector2(140.0, 596.0), Vector2(1140.0, 596.0),
+			Vector2(390.0, 296.0), Vector2(890.0, 296.0),
 		],
 		"respawn_points": [
-			Vector2(180.0, 596.0), Vector2(400.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1100.0, 596.0),
-			Vector2(100.0, 446.0), Vector2(1180.0, 446.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
-			Vector2(370.0, 396.0), Vector2(910.0, 396.0),
-			Vector2(580.0, 261.0), Vector2(700.0, 261.0),
+			Vector2(120.0, 596.0), Vector2(640.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(390.0, 296.0), Vector2(890.0, 296.0),
+			Vector2(120.0, 430.0), Vector2(1160.0, 390.0), Vector2(640.0, 476.0),
 		],
-		"core_spawns": [Vector2(125.0, 420.0), Vector2(640.0, 345.0), Vector2(1155.0, 420.0)],
+		"core_spawns": [Vector2(390.0, 250.0), Vector2(640.0, 450.0), Vector2(1100.0, 350.0)],
 		"platforms": [
-			# Hard lower gates close the seam near the ground. Above y=370 the
-			# horizontal seam is open to both fighters and knives.
-			{"rect": Rect2(0, 370, 54, 250), "hp": -1},
-			{"rect": Rect2(1226, 370, 54, 250), "hp": -1},
-			# Permanent side galleries make both former dead-end alcoves useful.
-			{"rect": Rect2(0, 470, 180, 18), "hp": -1},
-			{"rect": Rect2(1100, 470, 180, 18), "hp": -1},
-			# P3/P4 spawn here. Spawn support is permanent; the crown across the
-			# middle blocks a free opening shot between the upper corners.
-			{"rect": Rect2(40, 320, 190, 16), "hp": -1},
-			{"rect": Rect2(1050, 320, 190, 16), "hp": -1},
-			# Breakable middle stairs add a second route between the upper spawn
-			# balconies and the permanent inner terraces.
-			{"rect": Rect2(220, 370, 90, 14), "hp": 2},
-			{"rect": Rect2(970, 370, 90, 14), "hp": 2},
-			# A permanent inner pair keeps a route alive after every breakable falls.
-			{"rect": Rect2(290, 420, 160, 16), "hp": -1},
-			{"rect": Rect2(830, 420, 160, 16), "hp": -1},
-			# Low sacrificial steps reward breaking the floor under an opponent.
-			{"rect": Rect2(270, 540, 150, 16), "hp": 2},
-			{"rect": Rect2(860, 540, 150, 16), "hp": 2},
-			# The shrine blocks the direct spawn-to-spawn firing line permanently.
-			{"rect": Rect2(610, 390, 60, 230), "hp": -1},
-			# Breakable shoulders create close-range positions around the shrine.
-			{"rect": Rect2(475, 500, 80, 16), "hp": 3},
-			{"rect": Rect2(725, 500, 80, 16), "hp": 3},
-			# The solid crown is the stable high objective; its satellites are not.
-			{"rect": Rect2(535, 285, 210, 16), "hp": -1},
-			{"rect": Rect2(290, 270, 160, 16), "hp": 2},
-			{"rect": Rect2(830, 270, 160, 16), "hp": 2},
-			{"rect": Rect2(70, 550, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(1100, 550, 110, 14), "hp": 2, "min_players": 4},
+			# Two paired top/floor apertures make separate vertical circuits.
+			{"rect": Rect2(0, STAGE_TOP, 250, 16), "hp": -1},
+			{"rect": Rect2(530, STAGE_TOP, 220, 16), "hp": -1},
+			{"rect": Rect2(1030, STAGE_TOP, 250, 16), "hp": -1},
+			{"rect": Rect2(0, 620, 300, 70), "hp": -1},
+			{"rect": Rect2(500, 620, 280, 70), "hp": -1},
+			{"rect": Rect2(980, 620, 300, 70), "hp": -1},
+			# Permanent islands remain after every destructible piece is gone.
+			{"rect": Rect2(280, 320, 220, 16), "hp": -1},
+			{"rect": Rect2(780, 320, 220, 16), "hp": -1},
+			{"rect": Rect2(0, 454, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 414, 240, 16), "hp": -1},
+			{"rect": Rect2(560, 500, 160, 16), "hp": -1},
+			# The bridge is the arena's temporary starting state, not its final one.
+			{"rect": Rect2(380, 400, 160, 16), "hp": 2},
+			{"rect": Rect2(560, 400, 160, 16), "hp": 3},
+			{"rect": Rect2(740, 400, 160, 16), "hp": 2},
+			{"rect": Rect2(250, 510, 110, 16), "hp": 2},
+			{"rect": Rect2(920, 470, 110, 16), "hp": 2},
+			{"rect": Rect2(380, 535, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(790, 535, 110, 14), "hp": 2, "min_players": 4},
 		],
+		"hazards": [],
 	}
 
 ## A four-corner vertical loop over a hole in the world. P1/P2 start on the
@@ -270,8 +259,10 @@ static func _endless_descent() -> Dictionary:
 		],
 		"core_spawns": [Vector2(290.0, 440.0), Vector2(640.0, 510.0), Vector2(990.0, 440.0)],
 		"platforms": [
-			{"rect": Rect2(0, 216, 360, 16), "hp": -1},      # ceiling, gap 360..920
-			{"rect": Rect2(920, 216, 360, 16), "hp": -1},
+			# The gate sits directly below the HUD, but its opening continues to the
+			# real top edge. Bodies and knives wrap only once they leave the screen.
+			{"rect": Rect2(0, STAGE_TOP, 360, 16), "hp": -1}, # top gate, gap 360..920
+			{"rect": Rect2(920, STAGE_TOP, 360, 16), "hp": -1},
 			# Safe high-corner spawn perches, with enough headroom below the ceiling.
 			{"rect": Rect2(70, 300, 210, 16), "hp": -1},
 			{"rect": Rect2(1000, 300, 210, 16), "hp": -1},
@@ -285,9 +276,9 @@ static func _endless_descent() -> Dictionary:
 			# Faster inner stairs can be destroyed to reopen diagonal knife lanes.
 			{"rect": Rect2(300, 385, 170, 16), "hp": 2},
 			{"rect": Rect2(810, 385, 170, 16), "hp": 2},
-			# Anchored to the ceiling and touching the centre beam: it blocks the
+			# Anchored to the top gate and touching the centre beam: it blocks the
 			# P3/P4 opening line but leaves a vertical portal on either side.
-			{"rect": Rect2(620, 216, 40, 119), "hp": -1},
+			{"rect": Rect2(620, STAGE_TOP, 40, 277), "hp": -1},
 			{"rect": Rect2(540, 335, 200, 16), "hp": 3},
 			{"rect": Rect2(575, 545, 130, 14), "hp": 2},     # the tempting perch
 			{"rect": Rect2(445, 485, 110, 14), "hp": 2, "min_players": 3},
@@ -298,249 +289,193 @@ static func _endless_descent() -> Dictionary:
 
 # ----------------------------------------------------------- kinetic arenas --
 
-## Thesis: the ledge you are aiming at is not where it will be.
-##
-## Two wide lifts rise and fall in opposite phase on either side of a permanent
-## spine, so the mid-field alternates between one high floor and one low one
-## every two and a half seconds. Everything else is static and permanent enough
-## to plan from: the lifts change what a route COSTS, not whether one exists.
-##
-## No hazards compete for attention here. The level teaches one timing read:
-## where each lift will be when a player or persistent knife reaches it.
+## A single lift joins a vertical-only loop. It is useful, but never mandatory:
+## the fastest route may be to jump through the bottom and return from above.
 static func _pendulum() -> Dictionary:
 	return {
 		"name": "PENDULUM",
-		"feature": "MOVING PLATFORMS // plan against two readable lifts that trade high ground.",
+		"feature": "VERTICAL LOOP // ride the lift or beat it through the top/bottom portal.",
+		"wrap_y": true,
+		"skip_ground": true,
 		"spawns": [
-			Vector2(250.0, 596.0), Vector2(1030.0, 596.0),
-			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
+			Vector2(180.0, 596.0), Vector2(1100.0, 596.0),
+			Vector2(420.0, 326.0), Vector2(860.0, 236.0),
 		],
 		"respawn_points": [
-			Vector2(160.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(860.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(110.0, 296.0), Vector2(1170.0, 296.0),
-			Vector2(120.0, 446.0), Vector2(1160.0, 446.0),
-			Vector2(600.0, 476.0), Vector2(680.0, 476.0),
+			Vector2(120.0, 596.0), Vector2(360.0, 596.0),
+			Vector2(940.0, 596.0), Vector2(1160.0, 596.0),
+			Vector2(170.0, 456.0), Vector2(420.0, 326.0),
+			Vector2(860.0, 236.0), Vector2(1120.0, 406.0),
 		],
-		"core_spawns": [Vector2(390.0, 250.0), Vector2(640.0, 568.0), Vector2(890.0, 250.0)],
+		"core_spawns": [Vector2(220.0, 410.0), Vector2(640.0, 125.0), Vector2(1060.0, 360.0)],
 		"platforms": [
-			# Upper balconies: P3/P4 spawn support and the arena's side facade.
-			{"rect": Rect2(0, 320, 220, 16), "hp": -1},
-			{"rect": Rect2(1060, 320, 220, 16), "hp": -1},
-			# The spine denies a free upper-corner exchange and gives the lifts
-			# something fixed to be read against.
-			{"rect": Rect2(616, 232, 48, 200), "hp": -1},
-			# THE LIFTS. Opposite phase, so the field is never symmetric and the
-			# two halves are never equally reachable at the same moment.
+			{"rect": Rect2(0, STAGE_TOP, 500, 16), "hp": -1},
+			{"rect": Rect2(780, STAGE_TOP, 500, 16), "hp": -1},
+			{"rect": Rect2(0, 620, 500, 70), "hp": -1},
+			{"rect": Rect2(780, 620, 500, 70), "hp": -1},
+			# Static landings form one rising zig-zag around the central shaft.
+			{"rect": Rect2(70, 480, 200, 16), "hp": -1},
+			{"rect": Rect2(320, 350, 200, 16), "hp": -1},
+			{"rect": Rect2(760, 260, 200, 16), "hp": -1},
+			{"rect": Rect2(1010, 430, 220, 16), "hp": -1},
+			# One lift owns the open shaft; its entire sweep stays readable.
 			{
-				"rect": Rect2(250, 300, 180, 16), "hp": -1,
-				"motion": {"axis": Vector2.DOWN, "travel": 190.0, "period": 300, "phase": 0.0},
+				"rect": Rect2(565, 470, 150, 16), "hp": -1,
+				"motion": {"axis": Vector2.UP, "travel": 220.0, "period": 300, "phase": 0.0},
 			},
-			{
-				"rect": Rect2(850, 300, 180, 16), "hp": -1,
-				"motion": {"axis": Vector2.DOWN, "travel": 190.0, "period": 300, "phase": 0.5},
-			},
-			# Permanent galleries: the climb that works no matter where a lift is.
-			{"rect": Rect2(45, 470, 175, 16), "hp": -1},
-			{"rect": Rect2(1060, 470, 175, 16), "hp": -1},
-			# A permanent centre landing keeps the low middle worth contesting.
-			{"rect": Rect2(545, 500, 190, 16), "hp": -1},
-			# Breakable shoulders tight against the spine — destroying one opens a
-			# lane the lifts cannot close again.
-			{"rect": Rect2(480, 380, 110, 14), "hp": 2},
-			{"rect": Rect2(690, 380, 110, 14), "hp": 2},
-			# Low sacrificial steps, out of the lift corridors.
-			{"rect": Rect2(330, 545, 150, 14), "hp": 2},
-			{"rect": Rect2(800, 545, 150, 14), "hp": 2},
-			{"rect": Rect2(485, 565, 105, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(690, 565, 105, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(390, 550, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(780, 535, 110, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [],
 	}
 
 
-## Thesis: a hazard is a temporary promise, not ambient random damage.
-##
-## The three pulse orbs advertise their exact blast radius. A knife can spend a
-## charged orb to bend fighters and persistent knives away from their expected
-## futures; the dark recharge pips then guarantee a quiet interval. More crowded
-## matches add flank landings and a matching flank orb so available safe space
-## grows with the number of simultaneous plans.
+## An asymmetric horizontal loop with two loaded pulse orbs. The terrain aims
+## movement toward them, so a deliberate detonation can slingshot a whole fight
+## across the seam instead of merely disturbing a symmetric firing lane.
 static func _pulse_chamber() -> Dictionary:
 	return {
 		"name": "PULSE CHAMBER",
-		"feature": "TEMPORARY HAZARDS // shoot charged orbs to bend danger, then exploit their visible cooldown.",
+		"feature": "SLINGSHOT // paired pulse orbs turn the wrap route into a pinball table.",
 		"wrap_x": true,
 		"spawns": [
-			Vector2(230.0, 596.0), Vector2(1050.0, 596.0),
-			Vector2(150.0, 286.0), Vector2(1130.0, 286.0),
+			Vector2(170.0, 596.0), Vector2(1110.0, 596.0),
+			Vector2(330.0, 336.0), Vector2(900.0, 246.0),
 		],
 		"respawn_points": [
-			Vector2(160.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(860.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(110.0, 286.0), Vector2(1170.0, 286.0),
-			Vector2(100.0, 456.0), Vector2(1180.0, 456.0),
-			Vector2(330.0, 376.0), Vector2(950.0, 376.0),
-			Vector2(580.0, 496.0), Vector2(700.0, 496.0),
+			Vector2(100.0, 596.0), Vector2(500.0, 596.0),
+			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(90.0, 446.0), Vector2(330.0, 336.0), Vector2(610.0, 416.0),
+			Vector2(900.0, 246.0), Vector2(930.0, 496.0), Vector2(1190.0, 306.0),
 		],
-		"core_spawns": [Vector2(260.0, 450.0), Vector2(640.0, 575.0), Vector2(1020.0, 450.0)],
+		"core_spawns": [Vector2(110.0, 400.0), Vector2(640.0, 350.0), Vector2(1050.0, 270.0)],
 		"platforms": [
-			{"rect": Rect2(0, 310, 230, 16), "hp": -1},
-			{"rect": Rect2(1050, 310, 230, 16), "hp": -1},
-			{"rect": Rect2(0, 480, 210, 16), "hp": -1},
-			{"rect": Rect2(1070, 480, 210, 16), "hp": -1},
-			{"rect": Rect2(250, 400, 190, 16), "hp": -1},
-			{"rect": Rect2(840, 400, 190, 16), "hp": -1},
-			# A thin centre baffle blocks the opening upper volley without hiding an orb.
-			{"rect": Rect2(620, 230, 40, 130), "hp": -1},
-			{"rect": Rect2(530, 350, 220, 16), "hp": -1},
-			{"rect": Rect2(500, 520, 280, 16), "hp": -1},
-			{"rect": Rect2(330, 545, 130, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(820, 545, 130, 14), "hp": 2, "min_players": 4},
+			# Staggered islands create a loop with no mirrored firing row.
+			{"rect": Rect2(0, 470, 180, 16), "hp": -1},
+			{"rect": Rect2(1100, 330, 180, 16), "hp": -1},
+			{"rect": Rect2(220, 360, 220, 16), "hp": -1},
+			{"rect": Rect2(520, 440, 180, 16), "hp": -1},
+			{"rect": Rect2(800, 270, 200, 16), "hp": -1},
+			{"rect": Rect2(820, 520, 220, 16), "hp": -1},
+			{"rect": Rect2(50, 290, 120, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(1030, 450, 120, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
-				"home": Vector2(640.0, 455.0),
-				"blast_radius": 175.0,
+				"home": Vector2(430.0, 420.0),
+				"blast_radius": 165.0,
 				"recharge_windows": 2,
 			},
 			{
-				"home": Vector2(300.0, 335.0),
-				"motion": {"axis": Vector2.RIGHT, "travel": 100.0, "period": 300, "phase": 0.0},
-				"blast_radius": 155.0,
-				"min_players": 3,
+				"home": Vector2(850.0, 360.0),
+				"blast_radius": 165.0,
+				"recharge_windows": 2,
 			},
 			{
-				"home": Vector2(980.0, 335.0),
-				"motion": {"axis": Vector2.LEFT, "travel": 100.0, "period": 300, "phase": 0.0},
-				"blast_radius": 155.0,
+				"home": Vector2(640.0, 255.0),
+				"motion": {"axis": Vector2.DOWN, "travel": 90.0, "period": 300, "phase": 0.0},
+				"blast_radius": 140.0,
 				"min_players": 4,
 			},
 		],
 	}
 
 
-## Thesis: the direct lane exists, but only half the time and only on one side.
-##
-## A single wide shutter slides the whole width of the mid-field, sealing the
-## left half and then the right. A knife thrown across the open half arrives; a
-## knife thrown at the shutter feeds the wall. Because the shutter is permanent
-## it cannot be destroyed — it can only be waited out or gone around.
-##
-## Unlike the final arena, no pulse orb can rewrite the timing. The shutter's
-## visible rail is the single clock both players are solving.
+## A full-height shutter patrols the open middle. It creates two honest routes—
+## over and under—and horizontal wrap adds a third route around the outside.
 static func _foundry() -> Dictionary:
 	return {
 		"name": "FOUNDRY",
-		"feature": "SHUTTER // one side of the direct shot opens while the other side closes.",
+		"feature": "GUILLOTINE // route above, below or around one roaming wall.",
 		"wrap_x": true,
 		"spawns": [
-			Vector2(240.0, 596.0), Vector2(1040.0, 596.0),
-			Vector2(140.0, 276.0), Vector2(1140.0, 276.0),
+			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
 		],
 		"respawn_points": [
-			Vector2(120.0, 596.0), Vector2(360.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(920.0, 596.0), Vector2(1160.0, 596.0),
-			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
-			Vector2(100.0, 446.0), Vector2(1180.0, 446.0),
+			Vector2(100.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(860.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
+			Vector2(130.0, 476.0), Vector2(1150.0, 476.0),
 		],
-		"core_spawns": [Vector2(150.0, 350.0), Vector2(640.0, 560.0), Vector2(1130.0, 350.0)],
+		"core_spawns": [Vector2(160.0, 370.0), Vector2(640.0, 570.0), Vector2(1120.0, 370.0)],
 		"platforms": [
-			# Upper perches, permanent, doubling as the seam-side architecture.
-			{"rect": Rect2(0, 300, 210, 16), "hp": -1},
-			{"rect": Rect2(1070, 300, 210, 16), "hp": -1},
-			# The chimney blocks the upper-corner opening line and splits the top.
-			{"rect": Rect2(600, 232, 56, 140), "hp": -1},
-			# THE SHUTTER. One long horizontal sweep; whichever half it is over is
-			# closed to a flat shot and open to an arc.
+			# Deep side rooms remain useful as the middle changes allegiance.
+			{"rect": Rect2(0, 320, 300, 16), "hp": -1},
+			{"rect": Rect2(980, 320, 300, 16), "hp": -1},
+			{"rect": Rect2(0, 500, 260, 16), "hp": -1},
+			{"rect": Rect2(1020, 500, 260, 16), "hp": -1},
+			{"rect": Rect2(0, 190, 260, 16), "hp": -1},
+			{"rect": Rect2(1020, 190, 260, 16), "hp": -1},
+			# THE GUILLOTINE. Its 90px lower clearance is a real body route.
 			{
-				"rect": Rect2(240, 400, 300, 18), "hp": -1,
-				"motion": {"axis": Vector2.RIGHT, "travel": 500.0, "period": 420, "phase": 0.0},
+				"rect": Rect2(360, 230, 48, 300), "hp": -1,
+				"motion": {"axis": Vector2.RIGHT, "travel": 512.0, "period": 420, "phase": 0.0},
 			},
-			# Permanent galleries reach the perches without ever using the shutter.
-			{"rect": Rect2(0, 470, 200, 16), "hp": -1},
-			{"rect": Rect2(1080, 470, 200, 16), "hp": -1},
-			# Breakable counterweights sit at either end of the shutter's run, just
-			# clear of it. The shutter seals against one of them at each extreme,
-			# so destroying one leaves that half of the mid lane open for good —
-			# the only permanent answer to a barrier that cannot be broken.
-			{"rect": Rect2(20, 400, 190, 16), "hp": 2},
-			{"rect": Rect2(1070, 400, 190, 16), "hp": 2},
-			# Breakable upper shoulders either side of the chimney.
-			{"rect": Rect2(400, 330, 150, 14), "hp": 2},
-			{"rect": Rect2(706, 330, 150, 14), "hp": 2},
-			# Low terraces, clear of the orb columns.
-			{"rect": Rect2(300, 540, 170, 14), "hp": 2},
-			{"rect": Rect2(810, 540, 170, 14), "hp": 2},
-			{"rect": Rect2(500, 545, 100, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(680, 545, 100, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(40, 410, 190, 16), "hp": 2},
+			{"rect": Rect2(1050, 410, 190, 16), "hp": 2},
+			{"rect": Rect2(270, 560, 100, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(910, 560, 100, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [],
 	}
 
 
-## Thesis: mastery means reading where several deterministic systems intersect.
-##
-## Two horizontal ferries squeeze the firing lane toward a permanent mast while
-## a pulse orb patrols vertically through the remaining gap. Nothing is random:
-## the rails, current positions and blast footprint expose the entire puzzle.
-## The safest plan is often to collide a knife early so its falling future misses
-## the next crossing rather than merely aiming at a fighter's current position.
+## The final arena keeps Level 2's four-way freedom and removes most of its safe
+## architecture. Two ferries cross the void at different heights; a low pulse
+## orb can eject bodies or knives straight through the bottom portal.
 static func _collision_course() -> Dictionary:
 	return {
 		"name": "COLLISION COURSE",
-		"feature": "MASTERY // moving cover and a pulsing crossing make future knife collisions the real target.",
+		"feature": "ZERO-G CROSSING // ferries and a pulse launcher feed a four-way void.",
+		"wrap_x": true,
+		"wrap_y": true,
+		"skip_ground": true,
 		"spawns": [
-			Vector2(240.0, 596.0), Vector2(1040.0, 596.0),
-			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
+			Vector2(150.0, 596.0), Vector2(1130.0, 596.0),
+			Vector2(210.0, 296.0), Vector2(1090.0, 236.0),
 		],
 		"respawn_points": [
-			Vector2(120.0, 596.0), Vector2(360.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(920.0, 596.0), Vector2(1160.0, 596.0),
-			Vector2(110.0, 296.0), Vector2(1170.0, 296.0),
-			Vector2(120.0, 456.0), Vector2(1160.0, 456.0),
-			Vector2(600.0, 486.0), Vector2(680.0, 486.0),
+			Vector2(140.0, 596.0), Vector2(1140.0, 596.0),
+			Vector2(210.0, 296.0), Vector2(1090.0, 236.0),
+			Vector2(190.0, 476.0), Vector2(1070.0, 406.0), Vector2(640.0, 366.0),
 		],
-		"core_spawns": [Vector2(360.0, 455.0), Vector2(640.0, 555.0), Vector2(920.0, 455.0)],
+		"core_spawns": [Vector2(250.0, 420.0), Vector2(640.0, 330.0), Vector2(1030.0, 350.0)],
 		"platforms": [
-			{"rect": Rect2(0, 320, 220, 16), "hp": -1},
-			{"rect": Rect2(1060, 320, 220, 16), "hp": -1},
-			{"rect": Rect2(45, 480, 175, 16), "hp": -1},
-			{"rect": Rect2(1060, 480, 175, 16), "hp": -1},
-			{"rect": Rect2(616, 232, 48, 158), "hp": -1},
-			# Ferries converge on the mast but preserve a readable 16px air seam.
+			{"rect": Rect2(0, STAGE_TOP, 300, 16), "hp": -1},
+			{"rect": Rect2(980, STAGE_TOP, 300, 16), "hp": -1},
+			{"rect": Rect2(0, 620, 340, 70), "hp": -1},
+			{"rect": Rect2(940, 620, 340, 70), "hp": -1},
+			# Sparse fixed islands leave the portals as first-class routes.
+			{"rect": Rect2(80, 320, 260, 16), "hp": -1},
+			{"rect": Rect2(980, 260, 220, 16), "hp": -1},
+			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
+			{"rect": Rect2(940, 430, 260, 16), "hp": -1},
+			{"rect": Rect2(570, 390, 140, 16), "hp": -1},
+			# Ferries cross at different heights, never forming a safe mirrored row.
 			{
-				"rect": Rect2(260, 380, 160, 16), "hp": -1,
-				"motion": {"axis": Vector2.RIGHT, "travel": 180.0, "period": 360, "phase": 0.0},
+				"rect": Rect2(340, 520, 180, 16), "hp": -1,
+				"motion": {"axis": Vector2.RIGHT, "travel": 400.0, "period": 360, "phase": 0.0},
 			},
 			{
-				"rect": Rect2(860, 380, 160, 16), "hp": -1,
-				"motion": {"axis": Vector2.LEFT, "travel": 180.0, "period": 360, "phase": 0.0},
+				"rect": Rect2(760, 250, 180, 16), "hp": -1,
+				"motion": {"axis": Vector2.LEFT, "travel": 400.0, "period": 360, "phase": 0.5},
 			},
-			{"rect": Rect2(545, 510, 190, 16), "hp": -1},
-			{"rect": Rect2(300, 550, 150, 14), "hp": 2},
-			{"rect": Rect2(830, 550, 150, 14), "hp": 2},
-			{"rect": Rect2(455, 445, 105, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(720, 445, 105, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(400, 450, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(770, 450, 110, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
-				"home": Vector2(640.0, 420.0),
-				"motion": {"axis": Vector2.DOWN, "travel": 115.0, "period": 240, "phase": 0.0},
+				"home": Vector2(640.0, 570.0),
+				"motion": {"axis": Vector2.UP, "travel": 120.0, "period": 240, "phase": 0.0},
 				"blast_radius": 165.0,
 				"recharge_windows": 3,
 			},
 			{
-				"home": Vector2(300.0, 270.0),
-				"motion": {"axis": Vector2.RIGHT, "travel": 150.0, "period": 360, "phase": 0.5},
+				"home": Vector2(420.0, 175.0),
+				"motion": {"axis": Vector2.RIGHT, "travel": 440.0, "period": 360, "phase": 0.5},
 				"blast_radius": 145.0,
 				"min_players": 3,
-			},
-			{
-				"home": Vector2(980.0, 270.0),
-				"motion": {"axis": Vector2.LEFT, "travel": 150.0, "period": 360, "phase": 0.5},
-				"blast_radius": 145.0,
-				"min_players": 4,
 			},
 		],
 	}

@@ -11,13 +11,11 @@ func _init() -> void:
 
 func _run() -> void:
 	var game = GAME_MANAGER.new()
-	game.simplified_fighter_proto_enabled = true
-	game.fighter_visuals_enabled = true
 	game.player_weapons[0] = game.Weapon.DASHBLADE
 	root.add_child(game)
 	await process_frame
 
-	_check(game.players.size() == 2, "Rook prototype match must spawn two fighters")
+	_check(game.players.size() == 2, "normal Rook match must spawn two fighters")
 	if game.players.size() >= 2:
 		var rook: Player = game.players[0]
 		var opponent: Player = game.players[1]
@@ -26,12 +24,12 @@ func _run() -> void:
 		# The opponent is a Duelist, so it is drawn too — but with its own skin.
 		# What must never happen is Rook artwork leaking onto another fighter.
 		var rival_visual := opponent.get_node_or_null("FighterVisual") as FighterVisual
-		_check(rival_visual != null and rival_visual.skin.skin_id != &"rook_animated_v1",
+		_check(rival_visual != null and rival_visual.skin.skin_id != &"rook_animated_v2",
 			"a non-Dashblade opponent must never be drawn with Rook artwork")
 		_check(rook.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 			"Rook artwork must not change the authoritative collision box")
 		if visual != null:
-			_check(visual.skin.skin_id == &"rook_animated_v1",
+			_check(visual.skin.skin_id == &"rook_animated_v2",
 				"DASHBLADE must select only the Rook skin")
 			_check(visual.skin.sprite_cell_size == Vector2i(384, 256),
 				"Rook atlases must use 384x256 cells")
@@ -128,7 +126,7 @@ func _run() -> void:
 
 	game.player_weapons[1] = game.Weapon.DASHBLADE
 	var second_skin = game._fighter_skin_for(1)
-	_check(second_skin != null and second_skin.skin_id == &"rook_animated_v1",
+	_check(second_skin != null and second_skin.skin_id == &"rook_animated_v2",
 		"Rook selection must follow DASHBLADE identity rather than player index")
 	var first_skin = game._fighter_skin_for(0)
 	_check(first_skin != null \

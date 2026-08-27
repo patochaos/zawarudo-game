@@ -14,7 +14,7 @@ const ARROW_SCRIPT := preload("res://scripts/Arrow.gd")
 enum FlightState { OUTBOUND, HOLDING, RETURNING }
 enum ClashKind { REJECTED, DEFLECTED, BROKEN }
 
-const COLLISION_RADIUS := 9.0
+const COLLISION_RADIUS := 12.0
 const OWNER_CATCH_RADIUS := 25.0
 const OWNER_HIT_GRACE_TICKS := 8
 const PLAYER_REHIT_GRACE_TICKS := 12
@@ -51,11 +51,20 @@ var destroy_on_player_hit: bool = false
 var bounce_limit: int = 1
 var bounce_retention: float = 0.82
 var bounce_count: int = 0
+## A normal corona takes a full two-projectile commitment to clear. Every
+## accepted impact spends the striking projectile, so denying a multi-turn
+## setup is an exchange rather than a free pass-through. SUPER coronas override
+## this to one integrity when spawned.
+var max_integrity: int = 2
+var integrity: int = 2
 
 var _player_hit_cooldowns: Dictionary = {}
 var _stuck_platform_index: int = -1
 var _stuck_rect_index: int = -1
 var _stuck_rect_offset := Vector2.ZERO
+var _return_skid_active: bool = false
+var _return_skid_direction := Vector2.ZERO
+var _return_skid_platform_index: int = -1
 var trail := PackedVector2Array()
 
 
@@ -67,7 +76,7 @@ func configure(options: Dictionary) -> void:
 			"freeplay_window_ticks", "max_lifetime_ticks", "outbound_gravity",
 			"outbound_drag", "return_speed", "return_acceleration",
 			"return_gravity_scale", "stationary_spin_speed", "destroy_on_player_hit",
-			"bounce_limit", "bounce_retention",
+			"bounce_limit", "bounce_retention", "max_integrity", "integrity",
 		]:
 			set(key, options[key])
 	freeplay_window_ticks = maxi(1, freeplay_window_ticks)
@@ -76,6 +85,14 @@ func configure(options: Dictionary) -> void:
 	return_acceleration = maxf(0.0, return_acceleration)
 	bounce_limit = maxi(0, bounce_limit)
 	bounce_retention = clampf(bounce_retention, 0.0, 1.0)
+	max_integrity = maxi(1, max_integrity)
+	integrity = clampi(integrity, 1, max_integrity)
+
+
+func set_integrity(value: int) -> void:
+	max_integrity = maxi(1, value)
+	integrity = max_integrity
+	queue_redraw()
 
 
 func is_returning() -> bool:
@@ -97,6 +114,10 @@ func begin_lifecycle(current_turn: int) -> void:
 ## whose return was obstructed or whose owner was too far away.
 func advance_to_turn(current_turn: int) -> bool:
 	if launch_turn < 0:
+		return true
+	# Once called home, a corona belongs to its return path rather than its old
+	# turn schedule. It remains live until Eclipse actually catches it.
+	if flight_state == FlightState.RETURNING:
 		return true
 	var elapsed := current_turn - launch_turn
 	if elapsed >= 3:
@@ -130,6 +151,9 @@ func force_recall() -> void:
 	vel = Vector2.ZERO
 	_stuck_platform_index = -1
 	_stuck_rect_index = -1
+	_return_skid_active = false
+	_return_skid_direction = Vector2.ZERO
+	_return_skid_platform_index = -1
 	trail.clear()
 	queue_redraw()
 
@@ -156,6 +180,7 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 		"hit_platform": -1,
 		"stuck": false,
 		"bounced": false,
+		"skidded": false,
 		"recalled": false,
 	}
 	var was_returning := is_returning()
@@ -164,7 +189,8 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 			result["alive"] = false
 			return result
 	else:
-		if age_ticks >= freeplay_window_ticks * 3:
+		if flight_state != FlightState.RETURNING \
+				and age_ticks >= freeplay_window_ticks * 3:
 			result["alive"] = false
 			return result
 		if age_ticks >= freeplay_window_ticks * 2 and not return_started:
@@ -192,8 +218,17 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 		vel.x *= maxf(0.0, 1.0 - outbound_drag * dt)
 		vel.y += outbound_gravity * dt
 	elif owner != null and owner.alive:
-		var home: Vector2 = owner.position
-		var desired := position.direction_to(home) * return_speed
+		var home: Vector2 = position + _home_delta(owner.position)
+		# Stay on the chosen edge until the direct lane is genuinely clear. This
+		# prevents acceleration toward Eclipse from repeatedly driving the corona
+		# back into the same face of a platform.
+		if _return_skid_active and _first_terrain_contact(position, home).is_empty():
+			_return_skid_active = false
+			_return_skid_direction = Vector2.ZERO
+			_return_skid_platform_index = -1
+		var desired_direction: Vector2 = _return_skid_direction \
+			if _return_skid_active else position.direction_to(home)
+		var desired := desired_direction * return_speed
 		vel = vel.move_toward(desired, return_acceleration * dt)
 		vel.y += outbound_gravity * return_gravity_scale * dt
 
@@ -228,6 +263,14 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 		var rect_index: int = terrain_contact[3]
 		position = position.lerp(raw, hit_fraction) + normal * 1.5
 		result["hit_platform"] = platform_index
+		if flight_state == FlightState.RETURNING:
+			_begin_return_skid(normal, platform_index, rect_index,
+				owner.position if owner != null else position)
+			result["skidded"] = true
+			prev_pos = position
+			trail.clear()
+			queue_redraw()
+			return result
 		if _can_bounce(normal, cfg.platforms[platform_index]):
 			vel = vel.bounce(normal) * bounce_retention
 			bounce_count += 1
@@ -245,8 +288,8 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 	if not position.is_equal_approx(raw):
 		prev_pos = position
 		trail.clear()
-	if age_ticks >= max_lifetime_ticks \
-			or not cfg.world_bounds.grow(COLLISION_RADIUS * 2.0).has_point(position):
+	if flight_state != FlightState.RETURNING and (age_ticks >= max_lifetime_ticks \
+			or not cfg.world_bounds.grow(COLLISION_RADIUS * 2.0).has_point(position)):
 		result["alive"] = false
 		return result
 
@@ -260,10 +303,19 @@ func sim_step(dt: float, players: Array, current_turn: int = -1) -> Dictionary:
 
 ## Manager clash hook. The caller owns swept contact detection and applies the
 ## returned `other_velocity` to the other projectile (usually via Arrow.deflect).
-## A projectile impact always breaks the chakram. The striking projectile keeps
-## its incoming velocity and continues through the clash.
-func resolve_projectile_clash(other_velocity: Vector2, other_id: int = -1) -> Dictionary:
-	return _clash_result(ClashKind.BROKEN, false, other_velocity)
+## Clearing a corona costs the opposing projectile. Ordinary daggers deal one
+## integrity; heavier callers such as plasma and a guarded CUT TO END deal two.
+func resolve_projectile_clash(other_velocity: Vector2, other_id: int = -1,
+		damage: int = 1) -> Dictionary:
+	# Recall is a commitment with a guaranteed resolution: once ABSOLUTION (or
+	# the natural lifecycle) begins, nothing can break the corona before it gets
+	# home. Incoming projectiles still trade into the returning threat.
+	if flight_state == FlightState.RETURNING:
+		return _clash_result(ClashKind.DEFLECTED, true, other_velocity, true)
+	integrity = maxi(0, integrity - maxi(1, damage))
+	queue_redraw()
+	return _clash_result(ClashKind.BROKEN if integrity <= 0 else ClashKind.DEFLECTED,
+		integrity > 0, other_velocity, true)
 
 
 func can_clash_with_projectile(other_id: int) -> bool:
@@ -275,13 +327,54 @@ func stable_id() -> int:
 
 
 func lockstep_digest_fragment() -> String:
-	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
+	return "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
 		network_id, shooter, volley, age_ticks, int(flight_state),
 		int(round(position.x * 10000.0)), int(round(position.y * 10000.0)),
 		int(round(vel.x * 10000.0)), int(round(vel.y * 10000.0)),
 		launch_turn, 1 if return_started else 0, _stuck_platform_index,
-		_stuck_rect_index, bounce_count,
+		_stuck_rect_index, bounce_count, integrity, max_integrity,
+		1 if _return_skid_active else 0,
+		int(round(_return_skid_direction.x * 10000.0)),
+		int(round(_return_skid_direction.y * 10000.0)),
 	]
+
+
+## Selects the shorter deterministic route around the contacted rectangle and
+## commits to its tangent. At the corner, the direct line-of-sight check in the
+## next ticks releases the skid and homing resumes normally.
+func _begin_return_skid(normal: Vector2, platform_index: int, rect_index: int,
+		home: Vector2) -> void:
+	var tangent := normal.orthogonal().normalized()
+	if tangent.is_zero_approx():
+		tangent = Vector2.UP
+	var local_home: Vector2 = position + _home_delta(home)
+	var rect: Rect2 = cfg.platforms[platform_index]["rects"][rect_index]
+	var expanded := rect.grow(COLLISION_RADIUS + 2.0)
+	var forward_exit := position
+	var backward_exit := position
+	if absf(tangent.x) >= absf(tangent.y):
+		forward_exit.x = expanded.end.x if tangent.x > 0.0 else expanded.position.x
+		backward_exit.x = expanded.position.x if tangent.x > 0.0 else expanded.end.x
+	else:
+		forward_exit.y = expanded.end.y if tangent.y > 0.0 else expanded.position.y
+		backward_exit.y = expanded.position.y if tangent.y > 0.0 else expanded.end.y
+	var forward_cost := position.distance_to(forward_exit) \
+		+ forward_exit.distance_to(local_home)
+	var backward_cost := position.distance_to(backward_exit) \
+		+ backward_exit.distance_to(local_home)
+	_return_skid_direction = tangent if forward_cost <= backward_cost else -tangent
+	_return_skid_active = true
+	_return_skid_platform_index = platform_index
+	# Remove all inward momentum immediately so the visible motion reads as a
+	# clean surface skid rather than a series of tiny bounces.
+	vel = _return_skid_direction * maxf(return_speed * 0.65,
+		absf(vel.dot(_return_skid_direction)))
+
+
+func _home_delta(home: Vector2) -> Vector2:
+	if cfg != null and cfg.has_method("wrap_delta"):
+		return cfg.wrap_delta(position, home)
+	return home - position
 
 
 func _can_bounce(normal: Vector2, platform: Dictionary) -> bool:
@@ -357,12 +450,13 @@ func _tick_cooldowns(cooldowns: Dictionary) -> void:
 			cooldowns[key] = remaining
 
 
-func _clash_result(kind: ClashKind, alive: bool, other_velocity: Vector2) -> Dictionary:
+func _clash_result(kind: ClashKind, alive: bool, other_velocity: Vector2,
+		destroy_other: bool = false) -> Dictionary:
 	return {
 		"accepted": kind != ClashKind.REJECTED,
 		"kind": kind,
 		"alive": alive,
-		"destroy_other": false,
+		"destroy_other": destroy_other,
 		"other_velocity": other_velocity,
 		"position": position,
 	}
@@ -388,6 +482,14 @@ func _draw() -> void:
 			var angle := TAU * float(spoke) / 4.0 + rotation
 			draw_line(Vector2.from_angle(angle) * 16.0,
 				Vector2.from_angle(angle) * 21.0, color.lightened(0.35), 1.8)
+
+	# Integrity is state, not hidden health: the outer vows extinguish as rival
+	# projectiles spend them, making the remaining answer readable in planning.
+	for pip in max_integrity:
+		var pip_angle := -PI * 0.5 + float(pip) * PI
+		var pip_color := color.lightened(0.55) if pip < integrity \
+			else Color(color.r, color.g, color.b, 0.16)
+		draw_circle(Vector2.from_angle(pip_angle) * 18.0, 2.3, pip_color)
 
 	# Flying-squirrel glider: spread membrane, head/ears, feet, and absurdly long
 	# curled tail. It reads as a creature at rest and a chakram-like disc in spin.

@@ -237,8 +237,8 @@ remain active. Never depict the weapon as unique inventory.
 
 ### Outbound
 
-- Charge changes speed from a deliberate cast to a firmer decree; corona size
-  and blade count stay constant.
+- Charge changes speed from a deliberate 300 px/s cast to a firmer 520 px/s
+  decree; corona size and blade count stay constant.
 - The committed aim is exact. Visual ornament must not bend the launch line.
 - A thin wine-red circular echo remains at the cast origin for one stepped frame.
 
@@ -256,9 +256,17 @@ remain active. Never depict the weapon as unique inventory.
 
 ### Returning
 
-- Return begins on that corona's third turn, independently of newer casts.
+- Return begins automatically on that corona's third turn, independently of
+  newer casts.
+- **ABSOLUTION** calls every active corona home early. The call consumes
+  Eclipse's attack for that turn and begins at the chosen point in his movement
+  route; he does not create a new corona at the same time.
 - The corona accelerates directly back toward The Eclipse, ignoring ordinary
   gravity during recall.
+- A returning corona cannot break, expire or be stopped by another projectile.
+- If terrain blocks the direct lane, it skids along the platform's edge until
+  it finds a clear path, then resumes homing. It never becomes a stationary
+  hazard again after return begins.
 - He opens both hands and allows it to pass into the permanent aureole; he does
   not catch the blade physically.
 - The return path remains dangerous and visually distinct through inward-facing
@@ -266,7 +274,12 @@ remain active. Never depict the weapon as unique inventory.
 
 ### Counterplay
 
-- One opposing projectile impact destroys a deployed corona immediately.
+- Before recall, a normal corona displays two integrity vows. An ordinary opposing projectile
+  is consumed and strips one vow; a second destroys the corona. Plasma is
+  consumed and strips both vows at once. A guarded CUT TO END may also strip
+  both by spending one point of front guard.
+- Each THREEFOLD EDICT corona has one integrity vow and therefore breaks in one
+  fair projectile exchange before its return begins.
 - Destruction breaks the rose-gold blades into twelve short nonlethal light
   facets, then collapses the black ring. The fragments must not look like new
   projectiles.
@@ -420,6 +433,8 @@ Before accepting an Eclipse asset, answer yes to all of these:
 
 - Master sheet: `docs/concepts/chakram-rework/eclipse-master-sheet-v1.png`
 - Runtime portrait: `assets/art/portraits/eclipse-portrait-v1.png`
+- Simplified animated arena source: `art_source/sprites/eclipse-animated-v1/`
+- Runtime animation atlases: `assets/art/fighters/eclipse-animated-v1/`
 - Approved personality/costume mockup: `docs/concepts/chakram-rework/eclipse-false-saint-mockup-v1.png`
 - Mechanics implementation: `scripts/Chakram.gd`
 - Roster mechanics summary: `README.md`

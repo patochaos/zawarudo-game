@@ -89,14 +89,14 @@ const ANIMATED_EXECUTOR_GHOST_PATHS := {
 }
 
 const ROOK_ATLAS_PATHS := {
-	&"IDLE": "res://assets/art/fighters/rook-animated-v1/idle.png",
-	&"WALK": "res://assets/art/fighters/rook-animated-v1/walk.png",
-	&"RUN": "res://assets/art/fighters/rook-animated-v1/run.png",
-	&"RISE": "res://assets/art/fighters/rook-animated-v1/rise.png",
-	&"FALL": "res://assets/art/fighters/rook-animated-v1/fall.png",
-	&"SHOT": "res://assets/art/fighters/rook-animated-v1/shot.png",
-	&"LOCK": "res://assets/art/fighters/rook-animated-v1/lock.png",
-	&"DEFEAT": "res://assets/art/fighters/rook-animated-v1/defeat.png",
+	&"IDLE": "res://assets/art/fighters/rook-animated-v2/idle.png",
+	&"WALK": "res://assets/art/fighters/rook-animated-v2/walk.png",
+	&"RUN": "res://assets/art/fighters/rook-animated-v2/run.png",
+	&"RISE": "res://assets/art/fighters/rook-animated-v2/rise.png",
+	&"FALL": "res://assets/art/fighters/rook-animated-v2/fall.png",
+	&"SHOT": "res://assets/art/fighters/rook-animated-v2/shot.png",
+	&"LOCK": "res://assets/art/fighters/rook-animated-v2/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/rook-animated-v2/defeat.png",
 }
 
 const ROOK_COUNTS := {
@@ -111,14 +111,80 @@ const ROOK_COUNTS := {
 }
 
 const ROOK_GHOST_PATHS := {
-	&"IDLE": "res://assets/art/fighters/rook-animated-v1/ghost-idle.png",
-	&"WALK": "res://assets/art/fighters/rook-animated-v1/ghost-walk.png",
-	&"RUN": "res://assets/art/fighters/rook-animated-v1/ghost-run.png",
-	&"RISE": "res://assets/art/fighters/rook-animated-v1/ghost-rise.png",
-	&"FALL": "res://assets/art/fighters/rook-animated-v1/ghost-fall.png",
-	&"SHOT": "res://assets/art/fighters/rook-animated-v1/ghost-shot.png",
-	&"LOCK": "res://assets/art/fighters/rook-animated-v1/ghost-lock.png",
-	&"DEFEAT": "res://assets/art/fighters/rook-animated-v1/ghost-defeat.png",
+	&"IDLE": "res://assets/art/fighters/rook-animated-v2/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/rook-animated-v2/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/rook-animated-v2/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/rook-animated-v2/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/rook-animated-v2/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/rook-animated-v2/ghost-shot.png",
+	&"LOCK": "res://assets/art/fighters/rook-animated-v2/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/rook-animated-v2/ghost-defeat.png",
+}
+
+const PULSE_ATLAS_PATHS := {
+	&"IDLE": "res://assets/art/fighters/pulse-animated-v2/idle.png",
+	&"WALK": "res://assets/art/fighters/pulse-animated-v2/walk.png",
+	&"RUN": "res://assets/art/fighters/pulse-animated-v2/run.png",
+	&"RISE": "res://assets/art/fighters/pulse-animated-v2/rise.png",
+	&"FALL": "res://assets/art/fighters/pulse-animated-v2/fall.png",
+	&"SHOT": "res://assets/art/fighters/pulse-animated-v2/shot.png",
+	&"LOCK": "res://assets/art/fighters/pulse-animated-v2/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/pulse-animated-v2/defeat.png",
+}
+
+const PULSE_COUNTS := {
+	&"IDLE": 4,
+	&"WALK": 6,
+	&"RUN": 6,
+	&"RISE": 2,
+	&"FALL": 2,
+	&"SHOT": 4,
+	&"LOCK": 2,
+	&"DEFEAT": 4,
+}
+
+const PULSE_GHOST_PATHS := {
+	&"IDLE": "res://assets/art/fighters/pulse-animated-v2/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/pulse-animated-v2/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/pulse-animated-v2/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/pulse-animated-v2/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/pulse-animated-v2/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/pulse-animated-v2/ghost-shot.png",
+	&"LOCK": "res://assets/art/fighters/pulse-animated-v2/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/pulse-animated-v2/ghost-defeat.png",
+}
+
+const ECLIPSE_ATLAS_PATHS := {
+	&"IDLE": "res://assets/art/fighters/eclipse-animated-v1/idle.png",
+	&"WALK": "res://assets/art/fighters/eclipse-animated-v1/walk.png",
+	&"RUN": "res://assets/art/fighters/eclipse-animated-v1/run.png",
+	&"RISE": "res://assets/art/fighters/eclipse-animated-v1/rise.png",
+	&"FALL": "res://assets/art/fighters/eclipse-animated-v1/fall.png",
+	&"SHOT": "res://assets/art/fighters/eclipse-animated-v1/shot.png",
+	&"LOCK": "res://assets/art/fighters/eclipse-animated-v1/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/eclipse-animated-v1/defeat.png",
+}
+
+const ECLIPSE_COUNTS := {
+	&"IDLE": 4,
+	&"WALK": 6,
+	&"RUN": 6,
+	&"RISE": 2,
+	&"FALL": 2,
+	&"SHOT": 4,
+	&"LOCK": 2,
+	&"DEFEAT": 4,
+}
+
+const ECLIPSE_GHOST_PATHS := {
+	&"IDLE": "res://assets/art/fighters/eclipse-animated-v1/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/eclipse-animated-v1/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/eclipse-animated-v1/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/eclipse-animated-v1/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/eclipse-animated-v1/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/eclipse-animated-v1/ghost-shot.png",
+	&"LOCK": "res://assets/art/fighters/eclipse-animated-v1/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/eclipse-animated-v1/ghost-defeat.png",
 }
 
 
@@ -241,8 +307,8 @@ static func animated_executor_proof(player_color: Color) -> FighterSkin:
 
 static func animated_rook(player_color: Color) -> FighterSkin:
 	var skin := FighterSkin.new()
-	skin.skin_id = &"rook_animated_v1"
-	skin.display_name = "The Rook — animated arena fighter"
+	skin.skin_id = &"rook_animated_v2"
+	skin.display_name = "The Rook — simplified animated arena fighter"
 	skin.sprite_atlases = {}
 	for state: StringName in ROOK_ATLAS_PATHS:
 		var texture := load(ROOK_ATLAS_PATHS[state]) as Texture2D
@@ -253,7 +319,7 @@ static func animated_rook(player_color: Color) -> FighterSkin:
 	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
 	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
 	skin.ghost_texture = load(
-		"res://assets/art/fighters/rook-animated-v1/ghost.png"
+		"res://assets/art/fighters/rook-animated-v2/ghost.png"
 	) as Texture2D
 	skin.ghost_atlases = {}
 	for state: StringName in ROOK_GHOST_PATHS:
@@ -265,6 +331,92 @@ static func animated_rook(player_color: Color) -> FighterSkin:
 		&"secondary": Color("c45128"),
 		&"ink": Color("111117"),
 		&"defeat": Color(0.18, 0.19, 0.26, 0.82),
+	}
+	apply_player_identity(skin, player_color)
+	skin.ticks_per_frame = 5
+	skin.state_ticks_per_frame = {
+		&"IDLE": 12,
+		&"WALK": 6,
+		&"RUN": 4,
+		&"RISE": 6,
+		&"FALL": 6,
+		&"SHOT": 3,
+		&"LOCK": 8,
+		&"DEFEAT": 5,
+	}
+	skin.procedural_aim_arm_enabled = false
+	return skin
+
+
+static func animated_pulse(player_color: Color) -> FighterSkin:
+	var skin := FighterSkin.new()
+	skin.skin_id = &"pulse_animated_v2"
+	skin.display_name = "The Pulse — simplified animated arena fighter"
+	skin.sprite_atlases = {}
+	for state: StringName in PULSE_ATLAS_PATHS:
+		var texture := load(PULSE_ATLAS_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = PULSE_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(384, 256)
+	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
+	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	skin.ghost_texture = load(
+		"res://assets/art/fighters/pulse-animated-v2/ghost.png"
+	) as Texture2D
+	skin.ghost_atlases = {}
+	for state: StringName in PULSE_GHOST_PATHS:
+		var texture := load(PULSE_GHOST_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.ghost_atlases[state] = texture
+	skin.palette = {
+		&"body": Color("c6f25b"),
+		&"secondary": Color("6d3e99"),
+		&"ink": Color("211426"),
+		&"defeat": Color(0.13, 0.08, 0.15, 0.82),
+	}
+	apply_player_identity(skin, player_color)
+	skin.ticks_per_frame = 5
+	skin.state_ticks_per_frame = {
+		&"IDLE": 12,
+		&"WALK": 6,
+		&"RUN": 4,
+		&"RISE": 6,
+		&"FALL": 6,
+		&"SHOT": 3,
+		&"LOCK": 8,
+		&"DEFEAT": 5,
+	}
+	skin.procedural_aim_arm_enabled = false
+	return skin
+
+
+static func animated_eclipse(player_color: Color) -> FighterSkin:
+	var skin := FighterSkin.new()
+	skin.skin_id = &"eclipse_animated_v1"
+	skin.display_name = "The Eclipse — simplified animated arena fighter"
+	skin.sprite_atlases = {}
+	for state: StringName in ECLIPSE_ATLAS_PATHS:
+		var texture := load(ECLIPSE_ATLAS_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = ECLIPSE_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(384, 256)
+	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
+	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	skin.ghost_texture = load(
+		"res://assets/art/fighters/eclipse-animated-v1/ghost.png"
+	) as Texture2D
+	skin.ghost_atlases = {}
+	for state: StringName in ECLIPSE_GHOST_PATHS:
+		var texture := load(ECLIPSE_GHOST_PATHS[state]) as Texture2D
+		if texture != null:
+			skin.ghost_atlases[state] = texture
+	skin.palette = {
+		&"body": Color("551d35"),
+		&"secondary": Color("e8e1d4"),
+		&"ink": Color("111016"),
+		&"defeat": Color(0.12, 0.07, 0.10, 0.82),
 	}
 	apply_player_identity(skin, player_color)
 	skin.ticks_per_frame = 5

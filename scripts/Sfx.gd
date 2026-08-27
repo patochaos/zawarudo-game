@@ -1,88 +1,158 @@
 extends Node
 class_name Sfx
 
-## Compact sound pool. Gameplay impacts are procedurally generated into
-## AudioStreamWAV buffers; the match-opening voice is an imported MP3 reference
-## played at its natural pitch. Freeze/resume use tiny, low-level cues: they
-## mark the rhythm without becoming a loud sound heard every few seconds.
+## Compact sound pool. Core impacts keep their procedural transients while
+## cleared Kenney recordings supply material, variation and fighter identity.
+## Freeze/resume stay tiny and low-level: they mark the rhythm without becoming
+## a loud sound heard every few seconds.
 ##
 ## Everything is short and quiet on purpose: the sounds are there to confirm
 ## that something happened during the 0.75s execution burst, not to be heard.
 
 const RATE := 22050
 const VOLUME_DB := -6.0     # ~50% amplitude
-const VOICES := 16          # imported layers need their own overlapping voices
+const VOICES := 24          # class hits and SUPER layers can overlap in one tick
 const CUTOFF_FADE := 0.08
-const TITLE_VOICE := preload("res://assets/audio/za-warudo-title.mp3")
 const K_UI_MOVE := preload("res://assets/kenney/audio/ui-move.ogg")
 const K_UI_ACCEPT := preload("res://assets/kenney/audio/ui-accept.ogg")
 const K_KNIFE_WHOOSH := preload("res://assets/kenney/audio/knife-whoosh.ogg")
 const K_KNIFE_CLASH := preload("res://assets/kenney/audio/knife-clash.ogg")
+const K_KNIFE_CLASH_ALT := preload("res://assets/kenney/audio/knife-clash-alt.ogg")
 const K_KNIFE_THUD := preload("res://assets/kenney/audio/knife-thud.ogg")
+const K_KNIFE_THUD_ALT := preload("res://assets/kenney/audio/knife-thud-alt.ogg")
+const K_KNIFE_SUPER_A := preload("res://assets/kenney/audio/knife-super-a.ogg")
+const K_KNIFE_SUPER_B := preload("res://assets/kenney/audio/knife-super-b.ogg")
+const K_KNIFE_SUPER_C := preload("res://assets/kenney/audio/knife-super-c.ogg")
+const K_KNIFE_RICOCHET := preload("res://assets/kenney/audio/knife-ricochet.ogg")
+const K_KNIFE_HIT := preload("res://assets/kenney/audio/knife-hit.ogg")
 const K_FIGHTER_HIT := preload("res://assets/kenney/audio/fighter-hit.ogg")
+const K_FIGHTER_HIT_ALT := preload("res://assets/kenney/audio/fighter-hit-alt.ogg")
 const K_PLATFORM_BREAK := preload("res://assets/kenney/audio/platform-break.ogg")
 const K_FORCE_FIELD := preload("res://assets/kenney/audio/force-field.ogg")
 const K_TEMPORAL_BLAST := preload("res://assets/kenney/audio/temporal-blast.ogg")
 const K_TIME_FREEZE := preload("res://assets/kenney/audio/time-freeze.ogg")
 const K_TIME_RESUME := preload("res://assets/kenney/audio/time-resume.ogg")
+const K_DASH := preload("res://assets/kenney/audio/dash.ogg")
+const K_DASH_SUPER := preload("res://assets/kenney/audio/dash-super.ogg")
+const K_DASH_GUARD := preload("res://assets/kenney/audio/dash-guard.ogg")
+const K_DASH_WALL := preload("res://assets/kenney/audio/dash-wall.ogg")
+const K_DASH_HIT := preload("res://assets/kenney/audio/dash-hit.ogg")
+const K_CHAKRAM_THROW := preload("res://assets/kenney/audio/chakram-throw.ogg")
+const K_CHAKRAM_RECALL := preload("res://assets/kenney/audio/chakram-recall.ogg")
+const K_CHAKRAM_BOUNCE := preload("res://assets/kenney/audio/chakram-bounce.ogg")
+const K_CHAKRAM_STICK := preload("res://assets/kenney/audio/chakram-stick.ogg")
+const K_CHAKRAM_CLASH := preload("res://assets/kenney/audio/chakram-clash.ogg")
+const K_CHAKRAM_BREAK := preload("res://assets/kenney/audio/chakram-break.ogg")
+const K_CHAKRAM_SUPER := preload("res://assets/kenney/audio/chakram-super.ogg")
+const K_CHAKRAM_HIT := preload("res://assets/kenney/audio/chakram-hit.ogg")
+const K_PLASMA_SHOT := preload("res://assets/kenney/audio/plasma-shot.ogg")
+const K_PLASMA_IMPACT := preload("res://assets/kenney/audio/plasma-impact.ogg")
+const K_PLASMA_HIT := preload("res://assets/kenney/audio/plasma-hit.ogg")
+const K_ORB_CAST := preload("res://assets/kenney/audio/orb-cast.ogg")
+const K_ORB_DEFLECT := preload("res://assets/kenney/audio/orb-deflect.ogg")
+const K_ORB_POP := preload("res://assets/kenney/audio/orb-pop.ogg")
+const K_ORB_COMBO := preload("res://assets/kenney/audio/orb-combo.ogg")
+const K_SHOCK_SUPER := preload("res://assets/kenney/audio/shock-super.ogg")
+const K_SUPER_READY := preload("res://assets/kenney/audio/super-ready.ogg")
+const K_MATCH_START := preload("res://assets/kenney/audio/match-start.ogg")
+const K_VICTORY := preload("res://assets/kenney/audio/victory.ogg")
 
 ## The game has no music bed. The axis that actually matters is the loud,
 ## opinionated voice cues against everything else, so that is the split the
 ## options screen offers.
-const VOICE_CUES := ["title", "muda"]
+const VOICE_CUES := ["match_start", "victory", "muda"]
 
 var muted: bool = false
 var sfx_volume: float = 1.0
 var voice_volume: float = 1.0
 
 var _streams: Dictionary = {}
+var _stream_variants: Dictionary = {}
 var _layers: Dictionary = {}
 var _players: Array[AudioStreamPlayer] = []
 var _next: int = 0
 var _rng := RandomNumberGenerator.new()
 var _stop_at: Array[float] = []
 var _base_db: Array[float] = []
-var _pitch := {"title": 1.0}
-var _cutoff := {"title": 3.50, "muda": 1.38}
-var _gain_db := {"title": -4.0, "muda": -1.5, "explosion": -3.0,
-	"orb": -5.0, "core": -6.0,
-	"freeze": -18.0, "resume": -20.0,
+var _variant_cursor: Dictionary = {}
+var _pitch := {"match_start": 1.0, "victory": 1.0}
+var _cutoff := {"muda": 1.38, "knife_super": 0.44,
+	"chakram_bounce": 0.52, "plasma_hit": 0.56,
+	"orb_cast": 0.72, "orb_deflect": 0.62, "orb_pop": 0.85,
+	"orb_combo": 1.05, "shock_super": 0.62,
+	"hazard_blast": 0.80, "core_collect": 0.75}
+var _gain_db := {"match_start": -4.0, "victory": -5.0, "muda": -1.5,
+	"knife_super": -8.0, "knife_ricochet": -8.0, "knife_hit": -8.0,
+	"dash": 5.0, "dash_super": 9.0, "dash_guard": -9.0,
+	"dash_wall": -7.0, "dash_hit": -8.0,
+	"chakram_throw": -7.0, "chakram_recall": 4.0,
+	"chakram_bounce": -9.0, "chakram_stick": -2.0,
+	"chakram_clash": -8.0, "chakram_break": -8.0,
+	"chakram_super": 6.0, "chakram_hit": -8.0,
+	"plasma": -6.0, "plasma_impact": -9.0, "plasma_hit": -9.0,
+	"orb_cast": -13.0, "orb_deflect": -13.0, "orb_pop": -10.0,
+	"orb_combo": -11.0, "shock_super": -10.0,
+	"hazard_blast": -11.0, "core_collect": -12.0, "super_ready": 7.0,
+	"time_freeze": -18.0, "time_resume": -20.0,
 	"ui_move": -15.0, "ui_accept": -12.0}
 
 
 func _ready() -> void:
 	_rng.seed = 1337
-	_streams["shoot"] = _shoot()
-	_streams["hit"] = _hit()
-	_streams["thud"] = _thud()
-	_streams["break"] = _break()
-	_streams["clash"] = _clash()
-	_streams["explosion"] = _explosion()
-	_streams["orb"] = _explosion()
-	_streams["core"] = _clash()
-	_streams["freeze"] = _freeze()
-	_streams["resume"] = _resume()
+	_streams["knife_throw"] = _shoot()
+	_streams["knife_super"] = K_KNIFE_SUPER_A
+	_stream_variants["knife_super"] = [K_KNIFE_SUPER_A, K_KNIFE_SUPER_B, K_KNIFE_SUPER_C]
+	_streams["knife_impact"] = _thud()
+	_streams["knife_ricochet"] = K_KNIFE_RICOCHET
+	_streams["knife_clash"] = _clash()
+	_streams["knife_hit"] = K_KNIFE_HIT
+	_streams["fighter_hit"] = _hit()
+	_streams["platform_break"] = _break()
+	_streams["hazard_blast"] = K_TEMPORAL_BLAST
+	_streams["core_collect"] = K_FORCE_FIELD
+	_streams["time_freeze"] = _freeze()
+	_streams["time_resume"] = _resume()
 	_streams["ui_move"] = _ui_move()
 	_streams["ui_accept"] = _ui_accept()
 	_streams["muda"] = _muda_chant()
-	_streams["title"] = TITLE_VOICE
-	# Kenney samples are supporting material, not replacements. The procedural
-	# layer keeps the exact transient that existing playtests were balanced
-	# around; these quiet tails add material, air and low-end information.
+	_streams["dash"] = K_DASH
+	_streams["dash_super"] = K_DASH_SUPER
+	_streams["dash_guard"] = K_DASH_GUARD
+	_streams["dash_wall"] = K_DASH_WALL
+	_streams["dash_hit"] = K_DASH_HIT
+	_streams["chakram_throw"] = K_CHAKRAM_THROW
+	_streams["chakram_recall"] = K_CHAKRAM_RECALL
+	_streams["chakram_bounce"] = K_CHAKRAM_BOUNCE
+	_streams["chakram_stick"] = K_CHAKRAM_STICK
+	_streams["chakram_clash"] = K_CHAKRAM_CLASH
+	_streams["chakram_break"] = K_CHAKRAM_BREAK
+	_streams["chakram_super"] = K_CHAKRAM_SUPER
+	_streams["chakram_hit"] = K_CHAKRAM_HIT
+	_streams["plasma"] = K_PLASMA_SHOT
+	_streams["plasma_impact"] = K_PLASMA_IMPACT
+	_streams["plasma_hit"] = K_PLASMA_HIT
+	_streams["orb_cast"] = K_ORB_CAST
+	_streams["orb_deflect"] = K_ORB_DEFLECT
+	_streams["orb_pop"] = K_ORB_POP
+	_streams["orb_combo"] = K_ORB_COMBO
+	_streams["shock_super"] = K_SHOCK_SUPER
+	_streams["super_ready"] = K_SUPER_READY
+	_streams["match_start"] = K_MATCH_START
+	_streams["victory"] = K_VICTORY
+	# Legacy global transients retain their procedural core and a quiet imported
+	# tail. Class-owned events use separate Kenney recordings as their primaries,
+	# so no fighter identity depends on re-pitching another fighter's cue.
 	_layers = {
-		"shoot": [{"stream": K_KNIFE_WHOOSH, "gain": -11.0, "pitch": 1.08}],
-		"hit": [{"stream": K_FIGHTER_HIT, "gain": -12.0, "pitch": 0.92}],
-		"thud": [{"stream": K_KNIFE_THUD, "gain": -14.0, "pitch": 1.12}],
-		"break": [{"stream": K_PLATFORM_BREAK, "gain": -13.0, "pitch": 0.90}],
-		"clash": [{"stream": K_KNIFE_CLASH, "gain": -11.0, "pitch": 1.05}],
-		"explosion": [{"stream": K_TEMPORAL_BLAST, "gain": -13.0, "pitch": 0.92}],
-		"orb": [
-			{"stream": K_FORCE_FIELD, "gain": -8.0, "pitch": 1.04},
-			{"stream": K_TEMPORAL_BLAST, "gain": -15.0, "pitch": 1.12},
-		],
-		"core": [{"stream": K_FORCE_FIELD, "gain": -10.0, "pitch": 0.82}],
-		"freeze": [{"stream": K_TIME_FREEZE, "gain": -7.0, "pitch": 0.88}],
-		"resume": [{"stream": K_TIME_RESUME, "gain": -5.0, "pitch": 1.10}],
+		"knife_throw": [{"stream": K_KNIFE_WHOOSH, "gain": -11.0, "pitch": 1.08}],
+		"fighter_hit": [{"variants": [K_FIGHTER_HIT, K_FIGHTER_HIT_ALT],
+			"gain": -12.0, "pitch": 0.92}],
+		"knife_impact": [{"variants": [K_KNIFE_THUD, K_KNIFE_THUD_ALT],
+			"gain": -14.0, "pitch": 1.12}],
+		"platform_break": [{"stream": K_PLATFORM_BREAK, "gain": -13.0, "pitch": 0.90}],
+		"knife_clash": [{"variants": [K_KNIFE_CLASH, K_KNIFE_CLASH_ALT],
+			"gain": -11.0, "pitch": 1.05}],
+		"time_freeze": [{"stream": K_TIME_FREEZE, "gain": -7.0, "pitch": 0.88}],
+		"time_resume": [{"stream": K_TIME_RESUME, "gain": -5.0, "pitch": 1.10}],
 		"ui_move": [{"stream": K_UI_MOVE, "gain": -5.0, "pitch": 1.04}],
 		"ui_accept": [{"stream": K_UI_ACCEPT, "gain": -4.0, "pitch": 0.98}],
 	}
@@ -103,11 +173,29 @@ func play(which: String) -> void:
 	var gain: float = voice_volume if which in VOICE_CUES else sfx_volume
 	if gain <= 0.001:
 		return
-	_play_stream(_streams[which], which, 0.0, _pitch.get(which, 1.0), gain,
+	var primary: AudioStream = _streams[which]
+	var primary_variants: Array = _stream_variants.get(which, [])
+	if not primary_variants.is_empty():
+		primary = _choose_variant("%s:primary" % which, primary_variants)
+	_play_stream(primary, which, 0.0, _pitch.get(which, 1.0), gain,
 		_cutoff.get(which, 0.0))
+	var layer_index := 0
 	for layer: Dictionary in _layers.get(which, []):
-		_play_stream(layer["stream"], which, float(layer.get("gain", 0.0)),
-			float(layer.get("pitch", 1.0)), gain)
+		var stream: AudioStream = layer.get("stream")
+		var variants: Array = layer.get("variants", [])
+		if not variants.is_empty():
+			stream = _choose_variant("%s:layer:%d" % [which, layer_index], variants)
+		if stream != null:
+			_play_stream(stream, which, float(layer.get("gain", 0.0)),
+				float(layer.get("pitch", 1.0)), gain)
+		layer_index += 1
+
+
+func _choose_variant(key: String, variants: Array) -> AudioStream:
+	var cursor := int(_variant_cursor.get(key, 0))
+	var stream: AudioStream = variants[cursor % variants.size()]
+	_variant_cursor[key] = cursor + 1
+	return stream
 
 
 func _play_stream(stream: AudioStream, event_name: String, gain_delta: float,

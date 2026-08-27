@@ -40,6 +40,8 @@ var _derived: Label
 var _live: Label
 var _hint: Label
 var _defaults: Dictionary = {}
+var _sandbox_status: Label
+var _sandbox_buttons: Array[Button] = []
 
 
 func build(manager) -> void:
@@ -52,8 +54,30 @@ func build(manager) -> void:
 	bg.color = Color(0.07, 0.08, 0.12, 0.90)
 	add_child(bg)
 
+	# The lab strip stays above the arena rather than becoming a modal. Every
+	# action has the same click and hotkey path, with the live loadout as its
+	# signature readout.
+	var command_bg := ColorRect.new()
+	command_bg.position = Vector2(376.0, 12.0)
+	command_bg.size = Vector2(888.0, 104.0)
+	command_bg.color = Color(0.045, 0.035, 0.075, 0.92)
+	add_child(command_bg)
+	var command_rule := ColorRect.new()
+	command_rule.position = Vector2(376.0, 12.0)
+	command_rule.size = Vector2(888.0, 2.0)
+	command_rule.color = Color(0.91, 0.66, 0.22, 0.74)
+	add_child(command_rule)
+	_sandbox_status = _label(Vector2(392.0, 22.0), 850.0, 15, HOT)
+	_sandbox_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+	for i in 5:
+		var button := _command_button(Vector2(392.0 + float(i) * 170.0, 66.0),
+			Vector2(160.0, 34.0))
+		button.pressed.connect(_activate_command.bind(i))
+		_sandbox_buttons.append(button)
+
 	_title = _label(Vector2(30.0, 20.0), 320.0, 20, Color(0.92, 0.95, 1.0))
-	_title.text = "FREE PLAY — TUNING"
+	_title.text = "SANDBOX — TUNING"
 
 	for i in PARAMS.size():
 		_rows.append(_label(Vector2(30.0, 52.0 + float(i) * 24.0), 316.0, 16, DIM))
@@ -64,8 +88,8 @@ func build(manager) -> void:
 
 	_hint = _label(Vector2(16.0, 672.0), 1248.0, 14, Color(0.55, 0.60, 0.70))
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text = "A/D run · SPACE/W/↑ jump · MOUSE aim · hold LMB draw, release to fire     " \
-		+ "↑/↓ pick value · ←/→ change (SHIFT = ×5) · BACKSPACE reset all · R reset arena · ESC menu"
+	_hint.text = "F1 P1 · F2 ARENA · F3 CPU · F4 CPU CLASS · F5 CPU SKILL · R RESET     " \
+		+ "↑↓ TUNE · ←→ CHANGE (SHIFT ×5) · BACKSPACE DEFAULTS · ESC MENU"
 
 	for p in PARAMS:
 		_defaults[p["prop"]] = gm.get(p["prop"])
@@ -82,8 +106,61 @@ func _label(pos: Vector2, w: float, size: int, col: Color) -> Label:
 	return l
 
 
+func _command_button(pos: Vector2, dimensions: Vector2) -> Button:
+	var button := Button.new()
+	button.position = pos
+	button.size = dimensions
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", 11)
+	button.add_theme_color_override("font_color", Color(0.86, 0.89, 0.96))
+	button.add_theme_color_override("font_hover_color", HOT)
+	button.add_theme_color_override("font_pressed_color", Color(0.05, 0.04, 0.08))
+	button.add_theme_color_override("font_disabled_color", Color(0.38, 0.41, 0.48))
+	button.add_theme_stylebox_override("normal", _button_style(
+		Color(0.09, 0.065, 0.14, 0.96), Color(0.42, 0.26, 0.56, 0.70)))
+	button.add_theme_stylebox_override("hover", _button_style(
+		Color(0.16, 0.09, 0.23, 0.98), Color(0.91, 0.66, 0.22, 0.92)))
+	button.add_theme_stylebox_override("pressed", _button_style(
+		Color(0.91, 0.66, 0.22, 0.98), Color(1.0, 0.93, 0.60, 1.0)))
+	button.add_theme_stylebox_override("disabled", _button_style(
+		Color(0.055, 0.055, 0.075, 0.80), Color(0.18, 0.19, 0.24, 0.60)))
+	add_child(button)
+	return button
+
+
+func _button_style(fill: Color, edge: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.border_color = edge
+	style.set_border_width_all(1)
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	return style
+
+
+func _activate_command(index: int) -> void:
+	match index:
+		0: gm.sandbox_cycle_player_character()
+		1: gm.sandbox_cycle_level()
+		2: gm.sandbox_toggle_ai()
+		3: gm.sandbox_cycle_ai_character()
+		4: gm.sandbox_cycle_ai_difficulty()
+	refresh()
+
+
 func handle_key(code: int, shift: bool) -> bool:
 	match code:
+		KEY_F1:
+			gm.sandbox_cycle_player_character(-1 if shift else 1)
+		KEY_F2:
+			gm.sandbox_cycle_level(-1 if shift else 1)
+		KEY_F3:
+			gm.sandbox_toggle_ai()
+		KEY_F4:
+			gm.sandbox_cycle_ai_character(-1 if shift else 1)
+		KEY_F5:
+			gm.sandbox_cycle_ai_difficulty(-1 if shift else 1)
 		KEY_UP:
 			cursor = posmod(cursor - 1, PARAMS.size())
 		KEY_DOWN:
@@ -114,6 +191,24 @@ func _nudge(sign_: float, shift: bool) -> void:
 
 
 func refresh() -> void:
+	if gm == null:
+		return
+	var has_ai: bool = gm.sandbox_has_ai()
+	_sandbox_status.text = "SANDBOX // P1 %s  ·  ARENA %02d %s  ·  %s" % [
+		Roster.short_name(gm.player_weapons[0]), gm.level_index + 1, gm.level_name,
+		("CPU %s / %s" % [Roster.short_name(gm.player_weapons[1]),
+			gm.player_difficulty_name(1)]) if has_ai else "CPU OFF",
+	]
+	_sandbox_buttons[0].text = "F1  P1  %s" % Roster.short_name(gm.player_weapons[0])
+	_sandbox_buttons[1].text = "F2  ARENA  %d/%d" % [gm.level_index + 1, Levels.count()]
+	_sandbox_buttons[2].text = "F3  REMOVE CPU" if has_ai else "F3  ADD CPU"
+	_sandbox_buttons[3].text = "F4  CPU  %s" % (Roster.short_name(gm.player_weapons[1]) \
+		if has_ai else "CLASS")
+	_sandbox_buttons[4].text = "F5  SKILL  %s" % (gm.player_difficulty_name(1) \
+		if has_ai else "—")
+	_sandbox_buttons[3].disabled = not has_ai
+	_sandbox_buttons[4].disabled = not has_ai
+
 	for i in PARAMS.size():
 		var p: Dictionary = PARAMS[i]
 		var v: float = float(gm.get(p["prop"]))
@@ -129,6 +224,13 @@ func refresh() -> void:
 	_derived.text = "jump apex  %.0f px      hang %.2f s\nrun in one window  %.0f px\ntime to top speed  %.2f s\nflat full-draw reach  %.0f px of 1280\nforward speed kept per window  %.0f%%" % [
 		apex, hang, run, spin, _flat_reach(), _speed_kept_per_window() * 100.0,
 	]
+	if not gm.players.is_empty():
+		var pl = gm.players[0]
+		_live.text = "speed %4.0f,%4.0f   %s   projectiles %d" % [
+			pl.vel.x, pl.vel.y, "grounded" if pl.on_ground else "airborne",
+			gm.arrows.size() + gm.dashblades.size() + gm.chakrams.size() \
+				+ gm.shock_plasmas.size() + gm.shock_orbs.size(),
+		]
 
 
 ## How far a flat full-draw throw gets before it meets the floor, launched from
@@ -149,8 +251,3 @@ func _speed_kept_per_window() -> float:
 	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
 	var ticks: int = maxi(1, int(round(gm.execution_duration / dt)))
 	return pow(maxf(0.0, 1.0 - gm.arrow_drag * dt), float(ticks))
-
-	var pl = gm.players[0]
-	_live.text = "speed %4.0f,%4.0f   %s   knives %d" % [
-		pl.vel.x, pl.vel.y, "grounded" if pl.on_ground else "airborne", gm.arrows.size(),
-	]

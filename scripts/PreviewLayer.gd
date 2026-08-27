@@ -9,6 +9,11 @@ var high_contrast: bool = false
 var _arrow_prediction_tick: int = -1
 var _arrow_prediction_cache: Dictionary = {}
 
+const RETICLE_DUELIST := preload("res://assets/kenney/reticles/duelist.png")
+const RETICLE_ROOK := preload("res://assets/kenney/reticles/rook.png")
+const RETICLE_ECLIPSE := preload("res://assets/kenney/reticles/eclipse.png")
+const RETICLE_PULSE := preload("res://assets/kenney/reticles/pulse.png")
+
 
 func _draw() -> void:
 	if gm == null:
@@ -235,13 +240,15 @@ func _draw_sprite_ghost(at: Vector2, p: Player, skin: FighterSkin, alpha: float,
 ## have fired. Angle and power lock on release; only the origin can still move,
 ## and only by re-piloting.
 ## Shows the fan: which way it points and how hard it is drawn. The Duelist's
-## compact reticle follows the opening section of the real ballistic arc, but
-## stops well before a landing prediction so aiming does not become solved.
+## path samples the opening of the real ballistic flight, including drag,
+## gravity, terrain and ricochets. It deliberately stops early so the player
+## sees the bend without receiving a complete solution.
 ##
 ## Power is encoded in the aim line itself: it lengthens, thickens and brightens
 ## as the draw builds, with notches every 25%.
 const AIM_LEN_MIN := 34.0
 const AIM_LEN_MAX := 132.0
+const AIM_PREDICTION_FRACTION := 0.10
 
 
 func _draw_shot_preview(p: Player, origin: Vector2) -> void:
@@ -251,6 +258,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var live: bool = armed or charging
 	var shoulder: Vector2 = Player.shoulder_at(origin)
 	var power: float = clampf(p.plan.power, 0.0, 1.0)
+	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
 	if gm.uses_dashblade(p.index):
 		_draw_dash_preview(p, origin, col, armed, charging)
 		return
@@ -258,6 +266,9 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 		_draw_shock_preview(p, origin, col, armed, charging)
 		return
 	var chakram_preview: bool = gm.uses_chakram(p.index)
+	if chakram_preview and p.plan.attack_mode == 1 and not p.plan.super_shot:
+		_draw_absolution_preview(p, origin, col, armed, charging, shot_tick)
+		return
 	var chakram_super: bool = chakram_preview and (p.plan.super_shot or (not armed \
 		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index]))
 	var launches: Array[Vector2] = []
@@ -275,36 +286,18 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	if not chakram_preview:
 		var dagger_reticle := _draw_dagger_trajectory_reticle(
 			shoulder, launches, gm.knife_launch_velocity(p.aim_dir(), power),
-			length, power, body, col, live)
+			length, power, body, col, live, gm.world_tick + maxi(shot_tick, 0))
 		tip = dagger_reticle["tip"]
 		dir = dagger_reticle["tangent"]
 	else:
-		var shot_dirs: Array[Vector2] = []
-		for launch in launches:
-			shot_dirs.append(launch.normalized())
-		if shot_dirs.size() >= 2:
-			var left: Vector2 = shot_dirs[0]
-			var right: Vector2 = shot_dirs[shot_dirs.size() - 1]
-			draw_colored_polygon(PackedVector2Array([
-				shoulder, shoulder + left * length, shoulder + right * length,
-			]), Color(col.r, col.g, col.b, 0.045 if live else 0.025))
-		for shot_dir in shot_dirs:
-			var shot_tip: Vector2 = shoulder + shot_dir * length
-			draw_line(shoulder, shoulder + shot_dir * AIM_LEN_MAX,
-				Color(col.r, col.g, col.b, 0.12), 1.5)
-			draw_line(shoulder, shot_tip, body, 3.0 if live else 2.0)
-			_draw_chakram_head(shot_tip, shot_dir, body)
+		var chakram_reticle := _draw_chakram_trajectory_reticle(
+			shoulder, launches, gm.chakram_launch_velocities(p.aim_dir(), power)[0],
+			power, body, col, live)
+		tip = chakram_reticle["tip"]
+		dir = chakram_reticle["tangent"]
+	_draw_class_reticle(RETICLE_ECLIPSE if chakram_preview else RETICLE_DUELIST,
+		tip, col, 42.0, 0.48 if live else 0.28, dir.angle())
 
-		# The centre spine carries the power notches; the fan carries direction.
-		draw_line(shoulder, tip, Color(body.r, body.g, body.b, body.a * 0.45), 1.0)
-		var perp: Vector2 = dir.orthogonal()
-		for q in range(1, 5):
-			var at: Vector2 = shoulder + dir * (AIM_LEN_MAX * float(q) * 0.25)
-			var lit: bool = power >= float(q) * 0.25 - 0.001
-			draw_line(at - perp * 5.0, at + perp * 5.0,
-				Color(col.r, col.g, col.b, 0.85 if lit else 0.18), 2.0)
-
-	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
 	var shot_time: float = float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
 	_launch_marker(shoulder, col, 1.0 if live else 0.55,
 		"FIRE %.2fs" % shot_time if live else "")
@@ -327,22 +320,68 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	_draw_power_bar(origin, p, charging)
 
 
-## Curves the Duelist's compact fan reticle through the same per-tick drag and
-## gravity integration as a live dagger. Arc length still encodes charge, so a
-## weak throw droops inside a short rail while a full draw reaches farther and
-## reads flatter. Terrain is intentionally omitted: this is an aiming aid, not
-## a complete impact or ricochet solution.
+func _draw_absolution_preview(p: Player, origin: Vector2, col: Color,
+		armed: bool, charging: bool, shot_tick: int) -> void:
+	var coronas: Array = gm.recallable_chakrams(p.index)
+	var aureole := Player.shoulder_at(origin)
+	var live := armed or charging
+	_launch_marker(aureole, col, 1.0 if live else 0.55,
+		"RECALL %.2fs" % (float(maxi(shot_tick, 0)) \
+			/ float(Engine.physics_ticks_per_second)) if live else "")
+	if coronas.is_empty():
+		_shot_tag(p, aureole + Vector2(0.0, -36.0), Vector2.RIGHT,
+			"ABSOLUTION · NO CONSECRATION", Color(col.r, col.g, col.b, 0.58), 12)
+		return
+	var recall_color := col.lightened(0.42) if live else Color(col.r, col.g, col.b, 0.52)
+	for corona in coronas:
+		var start: Vector2 = corona.position
+		var delta: Vector2 = gm.wrap_delta(start, aureole)
+		var finish: Vector2 = start + delta
+		draw_line(start, finish, Color(col.r, col.g, col.b, 0.18), 7.0, true)
+		draw_line(start, finish, recall_color, 2.6 if live else 1.8, true)
+		var direction := delta.normalized() if not delta.is_zero_approx() else Vector2.RIGHT
+		for fraction in [0.28, 0.52, 0.76]:
+			var at: Vector2 = start.lerp(finish, fraction)
+			var side := direction.orthogonal()
+			draw_line(at - direction * 7.0 - side * 4.0, at,
+				recall_color, 2.0, true)
+			draw_line(at - direction * 7.0 + side * 4.0, at,
+				recall_color, 2.0, true)
+		_draw_chakram_head(start, direction, recall_color)
+	_shot_tag(p, aureole + Vector2(0.0, -44.0), Vector2.RIGHT,
+		("ARMED · " if armed else ("CALLING · " if charging else "")) \
+			+ "ABSOLUTION · ALL %d CORONAS" % coronas.size(),
+		recall_color, 14 if live else 12)
+
+
+## Draws only the opening of the Duelist's real predicted flight. The sample is
+## long enough to expose its bend, but capped at one tenth of the normal
+## trajectory window so aiming still requires judgment.
 func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2],
 		spine_launch: Vector2, length: float, power: float, body: Color,
-		col: Color, live: bool) -> Dictionary:
+		col: Color, live: bool, start_tick: int = -1) -> Dictionary:
+	# Runtime spawns the whole volley from one point, offset along its first
+	# knife. Mirroring that detail matters most for wide, low-power fans.
+	var launch_origin := shoulder
+	if not launches.is_empty() and not launches[0].is_zero_approx():
+		launch_origin += launches[0].normalized() * 22.0
+	if shoulder.distance_to(launch_origin) > 0.01:
+		draw_line(shoulder, launch_origin,
+			Color(body.r, body.g, body.b, body.a * 0.72), 2.0, true)
+
 	var full_paths: Array[PackedVector2Array] = []
 	var active_paths: Array[PackedVector2Array] = []
 	for launch in launches:
-		var full_path := _dagger_reticle_path(shoulder, launch, AIM_LEN_MAX)
+		var full_path := _dagger_trajectory_path(launch_origin, launch, start_tick)
 		full_paths.append(full_path)
 		active_paths.append(_polyline_prefix(full_path, length))
 
-	if active_paths.size() >= 2:
+	var fan_can_fill := active_paths.size() >= 2
+	for path in active_paths:
+		if _path_has_seam(path):
+			fan_can_fill = false
+			break
+	if fan_can_fill:
 		var fill := PackedVector2Array()
 		for point in active_paths[0]:
 			fill.append(point)
@@ -357,14 +396,16 @@ func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2]
 		var full_path: PackedVector2Array = full_paths[i]
 		var active_path: PackedVector2Array = active_paths[i]
 		if full_path.size() >= 2:
-			draw_polyline(full_path, Color(col.r, col.g, col.b, 0.12), 1.5, true)
+			_solid_runs(full_path, Color(col.r, col.g, col.b,
+				0.48 if live else 0.28), 2.0 if live else 1.5)
+			var dagger_tip := full_path[full_path.size() - 1]
+			var dagger_dir := _path_end_tangent(full_path, launches[i].normalized())
+			_draw_knife_head(dagger_tip, dagger_dir,
+				Color(body.r, body.g, body.b, body.a * 0.72))
 		if active_path.size() >= 2:
-			draw_polyline(active_path, body, 3.0 if live else 2.0, true)
-			var dagger_tip := active_path[active_path.size() - 1]
-			var dagger_dir := (dagger_tip - active_path[active_path.size() - 2]).normalized()
-			_draw_knife_head(dagger_tip, dagger_dir, body)
+			_solid_runs(active_path, body, 3.0 if live else 2.0)
 
-	var spine_path := _dagger_reticle_path(shoulder, spine_launch, AIM_LEN_MAX)
+	var spine_path := _dagger_trajectory_path(launch_origin, spine_launch, start_tick)
 	for q in range(1, 5):
 		var sample := _polyline_point_and_tangent(
 			spine_path, AIM_LEN_MAX * float(q) * 0.25)
@@ -375,9 +416,108 @@ func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2]
 			Color(col.r, col.g, col.b, 0.85 if lit else 0.18), 2.0)
 
 	var active_spine := _polyline_prefix(spine_path, length)
-	var tip: Vector2 = active_spine[active_spine.size() - 1]
-	var tangent: Vector2 = (tip - active_spine[active_spine.size() - 2]).normalized()
+	var tip := launch_origin
+	var tangent := spine_launch.normalized()
+	if not active_spine.is_empty():
+		tip = active_spine[active_spine.size() - 1]
+	if active_spine.size() >= 2:
+		tangent = _path_end_tangent(active_spine, tangent)
+	if tangent.is_zero_approx():
+		tangent = Vector2.RIGHT
 	return {"tip": tip, "tangent": tangent}
+
+
+## Opening known-world flight for a newly aimed dagger. PredictionSystem shares
+## the live Arrow integrator and applies the same moving terrain and ricochet
+## rules, but disclosure is deliberately capped at one tenth of the normal
+## trajectory window.
+func _dagger_trajectory_path(start: Vector2, launch: Vector2,
+		start_tick: int = -1) -> PackedVector2Array:
+	var preview_time: float = gm.trajectory_preview_time * AIM_PREDICTION_FRACTION
+	var flight: Dictionary = PredictionSystem.predict_arrow(
+		start, launch, gm, preview_time, start_tick)
+	return flight["path"]
+
+
+## Eclipse's outbound corona is ballistic too. Simulating the live primitive
+## keeps its opening drag, gravity, wrapping and terrain response honest while
+## the shared time cap prevents disclosure of its hold and return phases.
+func _draw_chakram_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2],
+		spine_launch: Vector2, power: float, body: Color, col: Color,
+		live: bool) -> Dictionary:
+	var paths: Array[PackedVector2Array] = []
+	for launch in launches:
+		var start := shoulder + launch.normalized() * 24.0
+		draw_line(shoulder, start, Color(body.r, body.g, body.b, body.a * 0.72), 2.0)
+		paths.append(_chakram_trajectory_path(start, launch))
+
+	for i in paths.size():
+		var path: PackedVector2Array = paths[i]
+		if path.size() < 2:
+			continue
+		_solid_runs(path, Color(col.r, col.g, col.b, 0.72 if live else 0.38),
+			3.0 if live else 2.0)
+		var heading := _path_end_tangent(path, launches[i].normalized())
+		_draw_chakram_head(path[path.size() - 1], heading, body)
+
+	var spine_start := shoulder + spine_launch.normalized() * 24.0
+	var spine_path := _chakram_trajectory_path(spine_start, spine_launch)
+	for q in range(1, 5):
+		var distance := AIM_LEN_MAX * float(q) * 0.25
+		if distance > _polyline_length(spine_path):
+			break
+		var sample := _polyline_point_and_tangent(spine_path, distance)
+		var at: Vector2 = sample[0]
+		var perp: Vector2 = Vector2(sample[1]).orthogonal()
+		var lit: bool = power >= float(q) * 0.25 - 0.001
+		draw_line(at - perp * 5.0, at + perp * 5.0,
+			Color(col.r, col.g, col.b, 0.85 if lit else 0.18), 2.0)
+
+	var tip := spine_start
+	var tangent := spine_launch.normalized()
+	if not spine_path.is_empty():
+		tip = spine_path[spine_path.size() - 1]
+	if spine_path.size() >= 2:
+		tangent = _path_end_tangent(spine_path, tangent)
+	return {"tip": tip, "tangent": tangent}
+
+
+func _chakram_trajectory_path(start: Vector2, launch: Vector2) -> PackedVector2Array:
+	var preview := Chakram.new()
+	preview.cfg = gm
+	preview.position = start
+	preview.prev_pos = start
+	preview.vel = launch
+	preview.freeplay_window_ticks = maxi(gm.exec_ticks(), _aim_preview_steps() + 1)
+	var path := PackedVector2Array([start])
+	for _tick in _aim_preview_steps():
+		var result: Dictionary = preview.sim_step(gm.tick_dt(), [])
+		path.append(preview.position)
+		if not bool(result["alive"]) or bool(result["stuck"]):
+			break
+	preview.free()
+	return path
+
+
+func _aim_preview_steps() -> int:
+	return maxi(1, int(round(gm.trajectory_preview_time * AIM_PREDICTION_FRACTION \
+		/ gm.tick_dt())))
+
+
+## Finds a useful final heading without mistaking an arena wrap for motion.
+func _path_end_tangent(path: PackedVector2Array, fallback: Vector2) -> Vector2:
+	for i in range(path.size() - 1, 0, -1):
+		var segment := path[i] - path[i - 1]
+		if not segment.is_zero_approx() and segment.length_squared() <= SEAM_JUMP_SQ:
+			return segment.normalized()
+	return fallback if not fallback.is_zero_approx() else Vector2.RIGHT
+
+
+func _path_has_seam(path: PackedVector2Array) -> bool:
+	for i in range(1, path.size()):
+		if path[i].distance_squared_to(path[i - 1]) > SEAM_JUMP_SQ:
+			return true
+	return false
 
 
 func _dagger_reticle_path(start: Vector2, launch: Vector2,
@@ -413,6 +553,9 @@ func _polyline_prefix(path: PackedVector2Array, target_length: float) -> PackedV
 	var travelled := 0.0
 	for i in range(1, path.size()):
 		var segment := path[i] - path[i - 1]
+		if segment.length_squared() > SEAM_JUMP_SQ:
+			out.append(path[i])
+			continue
 		var segment_length := segment.length()
 		if travelled + segment_length >= target_length and segment_length > 0.0:
 			out.append(path[i - 1] + segment \
@@ -423,12 +566,31 @@ func _polyline_prefix(path: PackedVector2Array, target_length: float) -> PackedV
 	return out
 
 
+func _path_tick_limit(path: PackedVector2Array, max_steps: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var last := mini(path.size() - 1, maxi(0, max_steps))
+	for i in range(last + 1):
+		out.append(path[i])
+	return out
+
+
+func _polyline_length(path: PackedVector2Array) -> float:
+	var total := 0.0
+	for i in range(1, path.size()):
+		var segment := path[i] - path[i - 1]
+		if segment.length_squared() <= SEAM_JUMP_SQ:
+			total += segment.length()
+	return total
+
+
 func _polyline_point_and_tangent(path: PackedVector2Array, target_length: float) -> Array:
 	if path.size() < 2:
 		return [path[0] if not path.is_empty() else Vector2.ZERO, Vector2.RIGHT]
 	var travelled := 0.0
 	for i in range(1, path.size()):
 		var segment := path[i] - path[i - 1]
+		if segment.length_squared() > SEAM_JUMP_SQ:
+			continue
 		var segment_length := segment.length()
 		if travelled + segment_length >= target_length and segment_length > 0.0:
 			return [path[i - 1] + segment \
@@ -445,28 +607,25 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 	var power := clampf(p.plan.power, 0.0, 1.0)
 	var live := armed or charging
 	var mode := p.plan.attack_mode
+	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
 	var weapon_col := Color(1.0, 0.28, 0.88) if mode == 1 else Color(0.28, 0.96, 1.0)
 	var body := weapon_col if live else Color(weapon_col.r, weapon_col.g, weapon_col.b, 0.55)
-	var length := lerpf(54.0, 145.0, power) if mode == 0 else lerpf(80.0, 220.0, power)
-	var tip := shoulder + dir * length
+	var tip := shoulder
 	if mode == 0:
-		# The lance falls, so the preview has to be its real arc rather than a
-		# direction rail. Aiming a ballistic shot off a straight line would be
-		# guesswork the planning contract is supposed to remove.
+		# The lance falls, but only its opening tenth is public—enough to read the
+		# ballistic bend without revealing its complete range or impact.
 		var launch: Vector2 = dir * gm.shock_plasma_speed_for_power(power)
 		var flight: Dictionary = PredictionSystem.predict_plasma(
 			shoulder + dir * 24.0, launch, gm,
-			gm.shock_plasma_range_for_power(power), gm.world_tick)
-		var arc: PackedVector2Array = flight["path"]
+			gm.shock_plasma_range_for_power(power),
+			gm.world_tick + maxi(shot_tick, 0))
+		var full_arc: PackedVector2Array = flight["path"]
+		var arc := _path_tick_limit(full_arc, _aim_preview_steps())
 		if arc.size() >= 2:
-			draw_polyline(arc, Color(body.r, body.g, body.b, 0.16), 5.0, true)
-			draw_polyline(arc, body, 3.0 if live else 2.0, true)
+			_solid_runs(arc, Color(body.r, body.g, body.b, 0.16), 5.0)
+			_solid_runs(arc, body, 3.0 if live else 2.0)
 			tip = arc[arc.size() - 1]
-		var heading: Vector2 = dir
-		if arc.size() >= 2:
-			var run: Vector2 = arc[arc.size() - 1] - arc[arc.size() - 2]
-			if not run.is_zero_approx():
-				heading = run.normalized()
+		var heading := _path_end_tangent(arc, dir)
 		var side := heading.orthogonal()
 		draw_colored_polygon(PackedVector2Array([
 			tip + heading * 12.0, tip + side * 7.0, tip - heading * 7.0,
@@ -474,17 +633,17 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 		]), Color(body.r, body.g, body.b, 0.92))
 		draw_line(tip - heading * 5.0 + side * 8.0, tip + heading * 7.0 - side * 8.0,
 			Color(0.96, 1.0, 1.0, body.a), 2.0)
-		# A blocked lance ends on cover; say so rather than letting the head sit
-		# ambiguously against a wall.
-		if bool(flight["blocked"]):
+		# An impact inside this short public sample is immediate enough to expose.
+		if bool(flight["blocked"]) and arc.size() == full_arc.size():
 			draw_arc(tip, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, body.a * 0.9), 2.0)
 	else:
-		# A short rising curve communicates "lob" without solving its final landing.
-		var curve := PackedVector2Array()
-		for step in 17:
-			var t := float(step) / 16.0
-			curve.append(shoulder + dir * length * t + Vector2(0.0, 42.0 * t * t))
-		draw_polyline(curve, Color(body.r, body.g, body.b, body.a * 0.75), 3.0, true)
+		# The orb used to draw an invented decorative curve. This is its real
+		# opening lob, including drag, gravity, terrain bounce and wrapping.
+		var orb_start := shoulder + dir * 24.0
+		var orb_speed := lerpf(gm.shock_orb_speed_min, gm.shock_orb_speed_max, power)
+		var curve := _shock_orb_trajectory_path(orb_start, dir * orb_speed)
+		_solid_runs(curve, Color(body.r, body.g, body.b, body.a * 0.75),
+			3.0 if live else 2.0)
 		tip = curve[curve.size() - 1]
 		draw_circle(tip, 11.0, Color(body.r, body.g, body.b, 0.18))
 		draw_arc(tip, 9.0, 0.0, TAU, 24, body, 3.0)
@@ -493,8 +652,9 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 			var a := TAU * float(spoke) / 4.0
 			draw_line(tip + Vector2.from_angle(a) * 11.0,
 				tip + Vector2.from_angle(a) * 16.0, body, 1.5)
+	_draw_class_reticle(RETICLE_PULSE, tip, weapon_col, 46.0,
+		0.44 if live else 0.25, dir.angle())
 
-	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
 	var shot_time := float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
 	_launch_marker(shoulder, base, 1.0 if live else 0.55,
 		"FIRE %.2fs" % shot_time if live else "")
@@ -507,6 +667,22 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 		tag = "CHARGING · " + tag
 	_shot_tag(p, tip, dir, tag, body.lightened(0.25), 14 if live else 12)
 	_draw_power_bar(origin, p, charging)
+
+
+func _shock_orb_trajectory_path(start: Vector2, launch: Vector2) -> PackedVector2Array:
+	var preview := ShockOrb.new()
+	preview.cfg = gm
+	preview.position = start
+	preview.prev_pos = start
+	preview.configure_lob(launch.normalized(), launch.length())
+	var path := PackedVector2Array([start])
+	for _tick in _aim_preview_steps():
+		var result: Dictionary = preview.sim_step(gm.tick_dt())
+		path.append(preview.position)
+		if not bool(result["alive"]) or bool(result["resting"]):
+			break
+	preview.free()
+	return path
 
 
 func _draw_dash_preview(p: Player, origin: Vector2, base: Color,
@@ -556,6 +732,8 @@ func _draw_dash_preview(p: Player, origin: Vector2, base: Color,
 		draw_line(end - dir * 12.0 + dir.orthogonal() * offset,
 			end - dir * 34.0 + dir.orthogonal() * offset,
 			Color(0.30, 0.92, 1.0, 0.35), 2.0)
+	_draw_class_reticle(RETICLE_ROOK, end, Color(0.76, 1.0, 1.0), 48.0,
+		0.42 if live else 0.24, dir.angle())
 
 	var shoulder := Player.shoulder_at(origin)
 	_launch_marker(shoulder, base, 1.0 if live else 0.55, "DASH RELEASE" if live else "")
@@ -587,6 +765,16 @@ func _draw_chakram_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 	draw_arc(tip, 7.0, 0.0, TAU, 20, col, 2.4, true)
 	draw_arc(tip, 3.5, 0.0, TAU, 16, Color(col.r, col.g, col.b, col.a * 0.65), 1.4, true)
 	draw_line(tip - side * 8.0, tip + side * 8.0, Color(col.r, col.g, col.b, col.a * 0.32), 1.0)
+
+
+func _draw_class_reticle(texture: Texture2D, at: Vector2, col: Color,
+		size: float, alpha: float, rotation: float = 0.0) -> void:
+	var contrast_boost := 1.2 if high_contrast else 1.0
+	var tint := Color(col.r, col.g, col.b, minf(1.0, alpha * contrast_boost))
+	draw_set_transform(at, rotation)
+	draw_texture_rect(texture,
+		Rect2(Vector2(-size, -size) * 0.5, Vector2(size, size)), false, tint)
+	draw_set_transform(Vector2.ZERO)
 
 
 func _launch_marker(at: Vector2, col: Color, alpha: float, caption: String) -> void:

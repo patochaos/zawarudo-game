@@ -21,18 +21,23 @@ func _run() -> void:
 	var default_gm = GAME_MANAGER.new()
 	root.add_child(default_gm)
 	await process_frame
-	_check(not default_gm.fighter_visuals_enabled,
-		"experimental fighter visuals must remain opt-in")
+	_check(default_gm.fighter_visuals_enabled,
+		"authored fighter visuals must be enabled in the normal runtime")
+	_check(default_gm.simplified_fighter_proto_enabled,
+		"the normal runtime must select the arena-scale sprite pipeline")
 	for p: Player in default_gm.players:
-		_check(p.draw_legacy_visual,
-			"default manager players must retain the stick renderer")
-		_check(p.get_node_or_null("FighterVisual") == null,
-			"default manager players must not attach experimental visuals")
+		var default_visual := p.get_node_or_null("FighterVisual") as FighterVisual
+		_check(not p.draw_legacy_visual and default_visual != null,
+			"normal Duelists must use their authored sprite visual")
+		_check(default_visual != null \
+				and default_visual.skin.skin_id == &"gilded_executor_animated_v1",
+			"normal Duelists must select the animated arena skin")
 	root.remove_child(default_gm)
 	default_gm.free()
 
 	var gm = GAME_MANAGER.new()
 	gm.fighter_visuals_enabled = true
+	gm.simplified_fighter_proto_enabled = false
 	root.add_child(gm)
 	await process_frame
 
@@ -55,6 +60,7 @@ func _run() -> void:
 	var player: Player = gm.players[0]
 	var visual: FighterVisual = player.get_node("FighterVisual")
 	_test_state_contract(gm, player, visual)
+	_test_freeplay_locomotion_clock(gm, player, visual)
 	_test_shot_state(gm, player, visual)
 	_test_planning_freeze_and_aim(gm, player, visual)
 	_test_cosmetics_are_digest_inert(gm, player, visual)
@@ -106,6 +112,25 @@ func _test_state_contract(gm, player: Player, visual: FighterVisual) -> void:
 	player.alive = false
 	visual.sync_from_player()
 	_check(visual.body_state == FIGHTER_VISUAL.DEFEAT, "dead body must select DEFEAT")
+
+
+func _test_freeplay_locomotion_clock(gm, player: Player, visual: FighterVisual) -> void:
+	gm.state = Phase.FREEPLAY
+	gm.world_tick = 23
+	player.alive = true
+	player.plan.confirmed = false
+	player.on_ground = true
+	player.vel = Vector2(500.0, 0.0)
+	visual._freeplay_elapsed = 0.0
+	visual.sync_from_player()
+	var first_frame := visual.body_frame
+	visual._process(0.2)
+	_check(visual.body_state == FIGHTER_VISUAL.RUN,
+		"fast FREEPLAY movement must keep the RUN state")
+	_check(visual.body_frame != first_frame,
+		"FREEPLAY RUN must advance from presentation time when world_tick is frozen")
+	_check(gm.world_tick == 23,
+		"the cosmetic FREEPLAY clock must never advance deterministic world_tick")
 
 
 func _test_shot_state(gm, player: Player, visual: FighterVisual) -> void:

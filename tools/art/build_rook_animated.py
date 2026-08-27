@@ -174,7 +174,10 @@ def main() -> None:
     scale_report: dict[str, float] = {}
     for spec in SHEETS:
         with Image.open(args.source / spec.source_name) as raw:
-            foreground = extract_foreground(raw)
+            alpha = raw.getchannel("A") if "A" in raw.getbands() else None
+            foreground = raw.convert("RGBA") \
+                if alpha is not None and alpha.getextrema()[0] < 255 \
+                else extract_foreground(raw)
         cells = sheet_cells(foreground, spec)
         scale = shared_scale(cells, spec.reference_body_height)
         scale_report[spec.source_name] = scale

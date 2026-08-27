@@ -15,6 +15,8 @@ const TEX_CIRCLE := preload("res://assets/kenney/vfx/temporal-circle.png")
 const TEX_MAGIC := preload("res://assets/kenney/vfx/temporal-magic.png")
 const TEX_SMOKE := preload("res://assets/kenney/vfx/smoke.png")
 const TEX_RING := preload("res://assets/kenney/vfx/ring-mask.png")
+const TEX_INK_SPLAT := preload("res://assets/kenney/vfx/ink-splat.png")
+const TEX_SONIC_RING := preload("res://assets/kenney/vfx/sonic-ring.png")
 const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
 
 var _fx: Array = []   # [{kind, pos, col, t, seed, scale}]
@@ -83,6 +85,8 @@ func _draw() -> void:
 					Color(f["col"].r, f["col"].g, f["col"].b, (1.0 - u) * 0.55), 2.0)
 			Kind.KILL:
 				var c: Color = f["col"]
+				_sprite(f, TEX_INK_SPLAT, 94.0 + 72.0 * u, (1.0 - u) * 0.16,
+					float(f["seed"]) * 0.31, Color(1.0, 0.30, 0.32))
 				_sprite(f, TEX_MAGIC, 82.0 + 100.0 * u, (1.0 - u) * 0.28,
 					-float(f["seed"]) * 0.19, Color(1.0, 0.42, 0.35))
 				_sprite(f, TEX_RING, 110.0 + 120.0 * u, (1.0 - u) * 0.15)
@@ -123,6 +127,8 @@ func _draw() -> void:
 				var c: Color = f["col"]
 				var hot: Color = c.lightened(0.55)
 				var scale: float = float(f.get("scale", 1.0))
+				_sprite(f, TEX_SONIC_RING, (88.0 + 146.0 * u) * scale,
+					(1.0 - u) * 0.20, float(f["seed"]) * 0.07, hot)
 				_sprite(f, TEX_MAGIC, (78.0 + 124.0 * u) * scale,
 					(1.0 - u) * 0.24, float(f["seed"]) * 0.23, hot)
 				_sprite(f, TEX_SMOKE, (62.0 + 130.0 * u) * scale,

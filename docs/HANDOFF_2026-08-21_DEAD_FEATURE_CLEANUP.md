@@ -297,9 +297,10 @@ review so earlier discussion still maps.
   reach. Item 22 folds into the fighter-visual workstream plus **27**. One piece
   of it shipped 2026-08-24: `FighterSkin.apply_player_identity()` gives every slot
   its own accent, so a fighter is now drawn the same way in any slot instead of
-  the Duelist being animated only for Player 1. **The Pulse and The Eclipse still
-  have no animated art at all** — `_fighter_skin_for()` returns `null` and they
-  fall back to the stick renderer.
+  the Duelist being animated only for Player 1. **Update 2026-08-26:** The Pulse
+  and Eclipse now have complete simplified arena and planning-ghost sets too:
+  `pulse-animated-v2` and `eclipse-animated-v1`. Every roster identity now has
+  an authored skin in every slot.
 
 ### UI/UX
 

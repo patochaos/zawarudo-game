@@ -26,7 +26,7 @@ func _run() -> void:
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
-		"PLAY", "HOW TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
+		"PLAY", "SANDBOX", "HOW TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
 	], "the main menu must retain its primary destinations")
 	_check(menu._rows[menu.ROWS - 1].visible == false,
 		"rows the current page does not fill must stay hidden")
@@ -56,6 +56,11 @@ func _run() -> void:
 	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
 	_check(opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
 		"Play must request the roster screen instead of opening a setup page")
+	var sandbox_opened := [0]
+	menu.sandbox_requested.connect(func(): sandbox_opened[0] += 1)
+	menu._row_buttons[menu.ROW_SANDBOX].pressed.emit()
+	_check(sandbox_opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
+		"Sandbox must request its direct launch without opening setup")
 	_check(menu.MenuPage.keys() == ["MAIN", "CONTROLS", "OPTIONS", "BINDINGS"],
 		"the title screen must no longer carry a setup page")
 

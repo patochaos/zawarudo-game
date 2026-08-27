@@ -61,12 +61,12 @@ const FIGHTERS := {
 	CHAKRAM: {
 		"name": "THE ECLIPSE",
 		"short": "ECLIPSE",
-		"kit": "CONSECRATE · THIRD-TURN RETURN",
+		"kit": "CONSECRATE · ABSOLUTION CALL",
 		"movement": "HIGH + DOUBLE JUMP · 105% WALK",
 		"abilities": [
 			["DECREE", "One corona follows the exact aim."],
 			["CONSECRATION", "Walls hold it; a midair cast waits."],
-			["ABSOLUTION", "It returns on its third turn."],
+			["ABSOLUTION", "Recall every corona; returns cannot break."],
 		],
 	},
 }

@@ -34,6 +34,7 @@ class DummyPlayer:
 func _init() -> void:
 	_test_turn_lifecycle_is_deterministic()
 	_test_forced_recall_returns_and_is_caught()
+	_test_return_skids_around_terrain_and_cannot_break()
 	_test_hard_terrain_bounces_once_then_sticks()
 	_test_breakable_terrain_sticks_without_bouncing()
 	_test_projectile_clash_contract()
@@ -72,8 +73,8 @@ func _test_turn_lifecycle_is_deterministic() -> void:
 			break
 	_check(a.position.distance_to(owner.position) < before_return,
 		"the third-turn recall must move toward the owner")
-	_check(not a.advance_to_turn(7),
-		"an uncaught chakram must expire before a fourth arena turn")
+	_check(a.advance_to_turn(7),
+		"a returning chakram must outlive its old turn schedule until caught")
 	a.free()
 	b.free()
 
@@ -92,6 +93,36 @@ func _test_forced_recall_returns_and_is_caught() -> void:
 			_check(not result["alive"], "a caught return must leave the live projectile array")
 			break
 	_check(caught, "forced recall must steer back to the owner and be catchable")
+	chakram.free()
+
+
+func _test_return_skids_around_terrain_and_cannot_break() -> void:
+	var cfg := DummyConfig.new()
+	# A tall wall fully blocks the initial direct route home. The return must pick
+	# one edge, skim past it, reacquire Eclipse and complete the catch.
+	cfg.platforms = [{
+		"rects": [Rect2(90.0, -65.0, 40.0, 130.0)],
+		"hp": -1,
+	}]
+	var owner := DummyPlayer.new(0, Vector2(190.0, 0.0))
+	var chakram = _chakram(cfg, Vector2(30.0, 0.0), Vector2.ZERO, 1)
+	chakram.age_ticks = 20
+	chakram.force_recall()
+	var clash: Dictionary = chakram.resolve_projectile_clash(
+		Vector2(-500.0, 0.0), 111, 99)
+	_check(clash["accepted"] and clash["alive"] and clash["destroy_other"] \
+			and chakram.integrity == chakram.max_integrity,
+		"a returning corona must be unbreakable without becoming intangible to projectiles")
+	var skidded := false
+	var caught := false
+	for _tick in 600:
+		var result: Dictionary = chakram.sim_step(1.0 / 60.0, [owner], 9)
+		skidded = skidded or bool(result["skidded"])
+		if result["caught"]:
+			caught = true
+			break
+	_check(skidded, "a blocked return must enter a visible terrain skid")
+	_check(caught, "a terrain skid must find a clear path and return to Eclipse")
 	chakram.free()
 
 
@@ -142,11 +173,16 @@ func _test_projectile_clash_contract() -> void:
 	var chakram = _chakram(cfg, Vector2.ZERO, Vector2(200.0, 0.0), 1)
 	chakram.network_id = 77
 	var first: Dictionary = chakram.resolve_projectile_clash(Vector2(-500.0, 0.0), 91)
-	_check(first["accepted"] and not first["alive"] \
-			and first["kind"] == CHAKRAM_SCRIPT.ClashKind.BROKEN,
-		"the first projectile impact must destroy the chakram")
+	_check(first["accepted"] and first["alive"] and first["destroy_other"] \
+			and first["kind"] == CHAKRAM_SCRIPT.ClashKind.DEFLECTED \
+			and chakram.integrity == 1,
+		"the first ordinary projectile must be spent and strip one corona integrity")
+	var second: Dictionary = chakram.resolve_projectile_clash(Vector2(-500.0, 0.0), 92)
+	_check(second["accepted"] and not second["alive"] and second["destroy_other"] \
+			and second["kind"] == CHAKRAM_SCRIPT.ClashKind.BROKEN,
+		"the second ordinary projectile must trade with and destroy the corona")
 	_check(first["other_velocity"] == Vector2(-500.0, 0.0),
-		"destroying a chakram must not consume or redirect the striking projectile")
+		"a corona exchange must preserve the reported incoming velocity deterministically")
 	_check(chakram.lockstep_digest_fragment().begins_with("77,"),
 		"lockstep digest must include the stable projectile identity")
 	chakram.free()

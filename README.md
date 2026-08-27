@@ -51,7 +51,7 @@ Godot 4.7. Double-click one of these:
 
 | File | What it does |
 |---|---|
-| **`Play.bat`** | Canonical local launcher. Runs the latest working tree through Godot without an export step. |
+| **`Play.bat`** | Canonical local launcher. Runs the latest working tree with the authored Duelist, Rook and Pulse arena sprites, without an export step. |
 | **`Play-Source.bat`** | Source-launch implementation used by `Play.bat`. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
 | **`Build.bat`** | Exports unpacked Windows + Web folders. It never creates ZIP archives. |
 | **`Build-Web.bat`** | Generates and validates the browser build in `build/web`. |
@@ -82,7 +82,8 @@ To play online:
 3. Both players use their own keyboard and mouse. Online, the controls on both
    computers are `A`/`D`, `W`, `S`, mouse aim, hold/release `LMB`, `Left Shift`
    to confirm, `R`/`RMB` to roll back, `F` to reset the path, and `T` for SUPER.
-   The Pulse reserves `RMB` for her orb, so use `R` to roll her shot back.
+   The Pulse and Eclipse reserve `RMB` for alternate attacks, so use `R` to
+   roll their shots back.
 
 Plans remain private until both players confirm. A disconnected client retries
 the room socket automatically; a detected state mismatch stops the match
@@ -202,20 +203,30 @@ in `user://playtest-telemetry.jsonl` and overwrites
 **COPY MATCH REPORT** action puts that compact report on the clipboard so a
 tester can paste it into a bug report. Options can disable the log entirely.
 
-## Free play — judging the feel
+## Sandbox / Free Play — judging the feel
 
 Turn structure makes movement hard to evaluate: you only ever see 0.75s of it at
-a time. **FREE PLAY** drops the freeze entirely — continuous real-time control of
-one player, no turns, no timer, no score, with Player 2 as an inert target to
-shoot at. Platform destruction still works; the dummy just gets back up.
+a time. **SANDBOX** on the title screen drops the freeze entirely and enters
+Arena 1 immediately as the Duelist: one player, no turns, no timer, no score,
+and no setup screens. The rules screen's **FREE PLAY** route reaches the same
+live tuning mode with its chosen lineup. Platform destruction still works and
+hit fighters immediately get back up.
 
 `A`/`D` run · `Space`/`W`/`↑` jump · mouse aim · hold `LMB` to draw, release to fire.
 
-The left panel edits the tuning **live**, and whatever you set carries into a
-real match afterwards:
+The top lab strip changes the running test without leaving the arena:
+
+`F1` P1 class · `F2` arena · `F3` add/remove CPU · `F4` CPU class · `F5` CPU
+skill · hold `Shift` with a cycle key to go backward · `R` reset the arena
+
+The optional CPU uses the normal blind-planning opponent and its real skill
+presets in rolling live windows, so class and AI changes can be tested in place.
+
+The left panel edits physics tuning **live**, and whatever you set carries into
+a real match afterwards:
 
 `↑`/`↓` pick a value · `←`/`→` change it (hold `Shift` for ×5) · `Backspace`
-reset all · `R` reset the arena · `F10` next level · `Esc` menu
+reset all · `Esc` menu
 
 It also shows what the numbers mean in play — jump apex and hang time, distance
 covered in one execution window, time to reach top speed, best knife range at a
@@ -375,9 +386,10 @@ Key properties:
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
 | The Pulse plasma / orb | `1` / `2` during planning | `L1` / `R1` |
+| Eclipse DECREE / ABSOLUTION | hold/release `LMB` / `RMB` | hold/release `R2` / `L2` |
 | Toggle SUPER | `T` | `Y` |
 | Confirm | `Left Shift` | `Start` |
-| Rollback shot | `R`, or `RMB` except as The Pulse | `B` or `Select` |
+| Rollback shot | `R`, or `RMB` except as Pulse/Eclipse | `B` or `Select` |
 | Reset path | `F` | `X` |
 
 Playtest: `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
@@ -435,14 +447,22 @@ in the balance matrix as a kit that beat every other kit. Giving it an arc put
 her back inside the game's own rule rather than nerfing a number.
 
 **The Eclipse**, the fourth selectable fighter, throws one **CORONA** at a
-deliberate 230–420 px/s. It follows the committed aim exactly. Its first impact
+deliberate 300–520 px/s. It follows the committed aim exactly. Its first impact
 with permanent HARD terrain ricochets at 82% speed; breakable cover or a second
 terrain impact pins it in place without stopping its spin. At the end of its
 launch window, a midair chakram also holds at its exact position. It remains a
 stationary threat through the following turn and begins returning on its third
-turn. Chakrams launched on different turns recall independently. Any opposing
-projectile impact destroys one immediately. Its SUPER retains the three-disc
-forward spread under the same hold-and-return lifecycle.
+turn. Holding and releasing **RMB** or **L2** instead performs **ABSOLUTION**:
+every active corona recalls at that point in Eclipse's route, consuming the
+turn's attack. Movement during execution bends the dangerous return formation.
+Once a return begins, the corona cannot be broken or expire. A blocked corona
+skids along platform edges until it finds a clear lane home.
+
+A normal corona has two visible integrity vows. A dagger spends itself to strip
+one; plasma spends itself to strip both; a guarded CUT TO END may also clear it
+by spending guard, but only before the return begins. The three SUPER coronas
+retain one integrity each during their outbound and holding states. Chakrams
+launched on different turns still track their own lifecycle independently.
 
 The separate **critter summoner** concept is reserved for a later character.
 Those summons would walk and climb platforms, acquire a fighter within a clear
@@ -517,21 +537,20 @@ names the wrap mode next to the level.
 |---|---|---|---|
 | 1 | **Crosshair Court** | walled | Static permanent cover: the clean baseline for reading knife collisions and delayed danger. |
 | 2 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
-| 3 | **Pendulum** | walled | Two wide lifts rise and fall in opposite phase either side of a permanent spine, with no second mechanic competing for attention. |
-| 4 | **Pulse Chamber** | ↔ | Triggerable orbs bend fighters and persistent knives, then advertise a safe cooldown. |
-| 5 | **Shattered Sanctum** | ↔ upper gate | Breakable stairs let players author the firing lanes of later turns. |
-| 6 | **Foundry** | ↔ | One long shutter slides the whole width of the mid-field, sealing one half at a time. |
-| 7 | **Collision Course** | walled | Converging ferries and a crossing pulse orb combine the earlier reads into one deterministic timing puzzle. |
+| 3 | **Pendulum** | ↕ | One central lift competes with the faster top/bottom portal route through a vertical-only shaft. |
+| 4 | **Pulse Chamber** | ↔ | Staggered islands and paired triggerable orbs turn the side seam into a slingshot loop. |
+| 5 | **Shattered Sanctum** | ↔ ↕ | Two vertical wrap chutes flank a destructible bridge whose collapse changes circulation. |
+| 6 | **Foundry** | ↔ | A full-height roaming guillotine creates routes above, below and around the side seam. |
+| 7 | **Collision Course** | ↔ ↕ | Sparse fixed islands, crossing ferries and a low pulse launcher feed a four-way void. |
 
-The layouts borrow TowerFall's readable side architecture. Each is authored in
+The layouts borrow TowerFall's readable edge architecture. Each is authored in
 nested 2P, 3P and 4P variants: the trio adds one tactical shelf and the full
 crowd adds another, preserving the arena's thesis while increasing safe landing
-choices as simultaneous threats increase. P1/P2 start in the lower corners and P3/P4
-in opposite upper corners, with permanent routes joining every height. Obstacles
-shape player routes while broad air chambers let persistent knives accumulate.
-Breakable shortcuts progressively expose new diagonal shots without deleting
-the vertical traversal skeleton. Tests verify separated four-corner spawns,
-reachable tiers, usable wrap portals and a minimum open-volume budget.
+choices as simultaneous threats increase. Opening spawns use permanent,
+stationary supports at meaningfully different elevations, but they are not
+forced into one four-corner template. Obstacles shape player routes while broad
+air chambers let persistent knives accumulate. Tests verify separated spawns,
+usable wrap portals, legal mover sweeps and a minimum open-volume budget.
 
 ### Moving geometry
 
@@ -572,8 +591,8 @@ then goes dark for two execution windows, showing its recharge as pips.
 
 Nothing is damaged — knives remain the only source of damage — but position,
 momentum and every firing line inside the ring change, and the knives blown
-outward stay in the world on ordinary throw gravity. Outward arrowheads and the
-`DAGGERS OUT` label make that consequence public during planning.
+outward stay in the world on ordinary throw gravity. Outward arrowheads around
+the blast ring make that consequence visible during planning without text.
 
 ### Wrapping
 
@@ -585,15 +604,15 @@ TowerFall-style: anything leaving a wrapping edge re-enters the opposite one,
 * Collision uses seam copies of any platform or body near an edge, so standing
   on the edge works from either side.
 
-Vertical wrapping uses a band starting at `y = 216` so nothing re-enters behind
-the HUD. A `wrap_y` level therefore needs a solid ceiling with a gap in the
-middle third, and its floor gap must sit inside that ceiling gap.
+Vertical wrapping happens at the actual screen edges (`y = 0` and `y = 720`).
+A `wrap_y` level therefore needs a visible top gate just below the compact HUD,
+with a gap in the middle third; its floor gap must sit inside that top gap.
 
 Flipping a level is one line: add `"wrap_x": true` to its dictionary. Side walls
-are omitted automatically. Open seams carry cyan `WRAP` chevrons only where
-collision is actually passable. Non-wrapping sides instead draw full-height
-striped `NO PASS // HARD WALL` bulkheads. A vertical portal is marked at both
-its ceiling and floor aperture; an unmarked open sky is not a portal, so knives
+are omitted automatically. Open seams carry cyan directional chevrons only
+where collision is actually passable. Non-wrapping sides instead draw
+full-height striped steel bulkheads. A vertical portal is marked at both its
+ceiling and floor aperture; an unmarked open sky is not a portal, so knives
 simply rise and return under gravity.
 
 ### Destructible cover
@@ -602,9 +621,9 @@ Terrain **never damages a player** — only knives do.
 
 Platforms carry hit points and chip away as knives strike them, so cover is
 temporary and the arena reshapes over a match. Remaining hits show as pips above
-each piece, and it cracks and reddens as it takes damage. HARD geometry is cold
-steel with rivets, a bright level accent and an explicit `HARD` label. BREAK
-geometry is orange, diagonally striped, labelled `BREAK`, and carries HP pips.
+each piece, and it cracks and reddens as it takes damage. Permanent geometry is
+cold steel with rivets and a bright level accent. Breakable geometry is orange,
+diagonally striped and carries HP pips. Neither relies on an in-world label.
 
 A knife at or above `knife_ricochet_min_speed` bounces from HARD geometry at
 any impact angle, retaining a tunable fraction of its speed for at most two

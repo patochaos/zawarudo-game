@@ -521,6 +521,8 @@ Before accepting a Pulse asset, answer yes to all of these:
 
 - Master sheet: `docs/concepts/shock-rework/pulse-master-sheet-v1.png`
 - Runtime portrait: `assets/art/portraits/pulse-portrait-v1.png`
+- Simplified animated arena source: `art_source/sprites/pulse-animated-v2/`
+- Runtime animation atlases: `assets/art/fighters/pulse-animated-v2/`
 - Approved personality/costume mockup:
   `docs/concepts/shock-rework/chime-punk-pixie-mockup-v2.png`
 - Rejected whimsical exploration, retained for history only:

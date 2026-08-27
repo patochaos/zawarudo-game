@@ -485,6 +485,14 @@ func refresh() -> void:
 			if gm.online_player == 0 else _HINT_ONLINE_RIVAL % 1
 		_hint_p2.text = ((_HINT_PAD % 2) if gm._pads[1] >= 0 else (_HINT_ONLINE_YOU % 2)) \
 			if gm.online_player == 1 else _HINT_ONLINE_RIVAL % 2
+		if gm.online_player >= 0 and gm.uses_chakram(gm.online_player):
+			var local_hint := "PAD P%d ECLIPSE · R2 DECREE · L2 RECALL ALL · START LOCK" \
+				if gm._pads[gm.online_player] >= 0 else \
+				"YOU P%d ECLIPSE · LMB DECREE · RMB RECALL ALL · SHIFT LOCK · R UNDO"
+			if gm.online_player == 0:
+				_hint_p1.text = local_hint % 1
+			else:
+				_hint_p2.text = local_hint % 2
 		# Being stranded outlasts any banner, so the way out stays on screen.
 		if gm.online_match_broken:
 			_hint_p2.text = _HINT_ONLINE_BROKEN
@@ -502,7 +510,10 @@ func refresh() -> void:
 			if gm.uses_dashblade(0):
 				_hint_p1.text = "P1 ROOK  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
 			elif gm.uses_chakram(0):
-				_hint_p1.text = "P1 ECLIPSE  A/D MOVE · SPACE JUMP · MOUSE AIM · LMB RELEASE · T SUPER · SHIFT LOCK"
+				_hint_p1.text = "P1 ECLIPSE  LMB DECREE · RMB RECALL ALL · RETURNS SKID HOME · T SUPER"
+				_level_label.text += "   ·   P1 %s · %d READY" % [
+					"ABSOLUTION" if gm.players[0].plan.attack_mode == 1 else "DECREE",
+					gm.recallable_chakram_count(0)]
 			elif gm.uses_shock(0):
 				_hint_p1.text = "P1 PULSE  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
 				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
@@ -518,7 +529,7 @@ func refresh() -> void:
 					if gm.uses_dashblade(1):
 						_hint_p2.text = "PAD P2 ROOK · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
 					elif gm.uses_chakram(1):
-						_hint_p2.text = "PAD P2 ECLIPSE · R-STICK AIM · R2 RELEASE · Y SUPER · START LOCK"
+						_hint_p2.text = "PAD P2 ECLIPSE · R2 DECREE · L2 RECALL ALL · RETURNS SKID HOME"
 					elif gm.uses_shock(1):
 						_hint_p2.text = "PAD P2 PULSE · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
 					else:
@@ -529,6 +540,10 @@ func refresh() -> void:
 					_level_label.text += "   ·   P2 %s · %d ORB%s LIVE" % ["PLASMA" \
 						if gm.players[1].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(1),
 						"" if gm.shock_orb_count(1) == 1 else "S"]
+				elif gm.uses_chakram(1):
+					_level_label.text += "   ·   P2 %s · %d READY" % [
+						"ABSOLUTION" if gm.players[1].plan.attack_mode == 1 else "DECREE",
+						gm.recallable_chakram_count(1)]
 
 	var active_players: int = gm.players.size()
 	var duel_hud: bool = not gm.tutorial_mode and not gm.team_mode and active_players == 2

@@ -90,7 +90,7 @@ const PAGES := [
 		"visual_title": "REVISE BEFORE THE CLOCK RELEASES",
 		"visual_caption": "Undo the attack, reset the route, or lock the plan exactly as it stands.",
 		"rows": [
-			["UNDO ATTACK", "R / RMB  ·  gamepad B  ·  UNDO"],
+			["UNDO ATTACK", "R / RMB*  ·  gamepad B  ·  UNDO   (*Pulse/Eclipse use R)"],
 			["RESET ROUTE", "F  ·  gamepad X  ·  RESET"],
 			["LOCK PLAN", "Left Shift  ·  Start  ·  LOCK"],
 		],

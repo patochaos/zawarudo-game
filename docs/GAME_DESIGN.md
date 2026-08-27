@@ -277,14 +277,19 @@ formar parte de la selección de personajes.
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
 - **The Eclipse / Chakram:** cuarto personaje seleccionable. Lanza una corona
-  viviente a 230–420 px/s y sigue exactamente la dirección elegida. Su primer
+  viviente a 300–520 px/s y sigue exactamente la dirección elegida. Su primer
   impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
   cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
   lanzamiento que termine en el aire se detiene en ese punto.
   Durante el turno siguiente permanece inmóvil y en el tercero regresa; cada
-  chakram conserva su propio turno de lanzamiento. Cualquier impacto de otro
-  proyectil lo destruye. La SUPER mantiene tres trayectorias frontales bajo el
-  mismo ciclo de espera y regreso.
+  chakram conserva su propio turno de lanzamiento. ABSOLUTION permite gastar el
+  ataque del turno para llamar antes a todas las coronas activas desde el punto
+  elegido de la ruta. Una corona que ya regresa no puede romperse ni caducar; si
+  una plataforma bloquea la ruta directa, se desliza por su borde hasta encontrar
+  un camino libre de vuelta. Una corona normal tiene dos votos de integridad:
+  cada daga se consume al quitar uno, mientras que el plasma se consume y quita
+  ambos. Un CUT TO END con guardia también puede quitar ambos gastando guardia.
+  Las tres coronas de la SUPER conservan un solo voto cada una.
 
 El concepto de **invocador de criaturas** queda reservado para un personaje
 posterior y separado. Sus criaturas caminarían y treparían plataformas,
@@ -304,9 +309,10 @@ Que una plataforma se rompa durante la ejecución puede invalidar la ruta que el
 fantasma había previsto. Esta discrepancia es intencional: representa la
 interferencia legítima del rival sobre un mundo compartido.
 
-La lectura de material es binaria y explícita. HARD usa acero frío, remaches y
-etiqueta propia; devuelve cuchillos con fuerza suficiente. BREAK usa naranja,
-franjas diagonales, etiqueta y pips de vida; absorbe el mismo impacto y pierde HP.
+La lectura de material es binaria y visual. HARD usa acero frío, remaches y un
+riel luminoso; devuelve cuchillos con fuerza suficiente. BREAK usa naranja,
+franjas diagonales y pips de vida; absorbe el mismo impacto y pierde HP. Ninguna
+superficie depende de una etiqueta escrita dentro de la arena.
 
 ---
 
@@ -403,8 +409,8 @@ premio fortuito.
   destruirla abra posibilidades.
 - Diferenciación visual inmediata entre estructura permanente y cobertura
   temporal.
-- Bordes laterales cerrados dibujados como muros continuos `NO PASS`; seams
-  transitables marcados con chevrons `WRAP` sólo en sus aperturas reales.
+- Bordes laterales cerrados dibujados como muros continuos con franjas; seams
+  transitables marcados sólo con chevrons direccionales en sus aperturas reales.
 - Espacios para el Núcleo que expongan al jugador a decisiones reales.
 
 ### Tesis actuales
@@ -413,11 +419,11 @@ premio fortuito.
 |---|---|
 | Crosshair Court | ¿Dónde chocarán los cuchillos en un espacio estático que no esconde ninguna regla adicional? |
 | Endless Descent | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
-| Pendulum | ¿Dónde estará el piso móvil cuando llegue el cuchillo, no sólo cuando confirmo el plan? |
-| Pulse Chamber | ¿Activo ahora un peligro visible para desviar el futuro y acepto después su intervalo de recarga? |
-| Shattered Sanctum | ¿Qué cobertura destruyo ahora para abrir la amenaza de un turno posterior? |
-| Foundry | ¿Uso la mitad abierta del tiro directo o preparo un arco para cuando el shutter cambie de lado? |
-| Collision Course | ¿En qué cruce futuro coincidirán cobertura móvil, pulso y cuchillos persistentes? |
+| Pendulum | ¿Espero el ascensor central o llego antes usando el bucle exclusivo entre techo y suelo? |
+| Pulse Chamber | ¿Qué orbe uso como tirachinas para lanzar cuerpos y cuchillos por la ruta lateral asimétrica? |
+| Shattered Sanctum | ¿Qué tramo del puente destruyo para abrir uno de los dos circuitos verticales? |
+| Foundry | ¿Paso sobre, bajo o alrededor del muro móvil antes de que cambie de lado? |
+| Collision Course | ¿Qué ferry o pulso uso para atravesar un vacío conectado por sus cuatro bordes? |
 
 ### Portales y continuidad espacial
 

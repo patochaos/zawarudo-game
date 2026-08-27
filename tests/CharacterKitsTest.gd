@@ -248,6 +248,7 @@ func _run() -> void:
 
 	_test_plasma_planner_respects_its_range(game)
 	_test_orb_field_is_bounded(game)
+	_test_eclipse_absolution_and_ai(game)
 
 	game.free()
 	if _failures == 0:
@@ -255,6 +256,110 @@ func _run() -> void:
 	else:
 		push_error("Character kits: %d test(s) failed" % _failures)
 	quit(_failures)
+
+
+func _test_eclipse_absolution_and_ai(game) -> void:
+	var original_weapons: Array[int] = game.player_weapons.duplicate()
+	var original_platforms: Array = game.platforms.duplicate(true)
+	var original_turn: int = game.turn
+	game._clear_character_projectiles()
+	game.player_weapons[0] = game.Weapon.CHAKRAM
+	game.player_weapons[1] = game.Weapon.KNIVES
+	game.platforms = []
+	game.solid_rects.clear()
+	game.wrap_x = false
+	game.wrap_y = false
+	game.turn = 6
+	game.players[0].position = Vector2(200.0, 300.0)
+	game.players[1].position = Vector2(350.0, 300.0)
+	game.players[0].plan.attack_mode = 0
+	game.players[0].plan.power = 1.0
+	game.players[0].plan.set_aim_from_vector(Vector2.RIGHT,
+		game.aim_min_angle, game.aim_max_angle)
+	game._spawn_player_attack(game.players[0])
+	var oldest = game.chakrams[0]
+	oldest.position = Vector2(500.0, 300.0)
+	oldest.prev_pos = oldest.position
+	oldest.launch_turn = 4
+	oldest.hold_position()
+	game._spawn_chakram(game.players[0])
+	var newer = game.chakrams[1]
+	newer.position = Vector2(620.0, 300.0)
+	newer.prev_pos = newer.position
+	newer.launch_turn = 5
+	newer.hold_position()
+
+	game.players[0].plan.attack_mode = 1
+	game._spawn_player_attack(game.players[0])
+	_check(game.chakrams.size() == 2 and oldest.is_returning() and newer.is_returning(),
+		"ABSOLUTION must spend one cast to recall every active corona")
+	_check(game.chakram_speed_min == 300.0 and game.chakram_speed_max == 520.0 \
+			and newer.integrity == 2 and Chakram.COLLISION_RADIUS == 12.0,
+		"Eclipse must use the extended reach, two integrity, and readable hit radius")
+
+	# Reset both coronas into a pincer beyond the foe. The production planner's
+	# real multi-return simulation should recognize the combined crossing.
+	oldest.return_started = false
+	oldest.position = Vector2(500.0, 300.0)
+	oldest.prev_pos = oldest.position
+	oldest.hold_position()
+	newer.return_started = false
+	newer.position = Vector2(560.0, 300.0)
+	newer.prev_pos = newer.position
+	newer.hold_position()
+	var eclipse_ai := Ai.new()
+	eclipse_ai.begin(game, 0, 1)
+	var owner_path: PackedVector2Array = eclipse_ai._walk(game.players[0], 0, false, 0)
+	var absolution: Dictionary = eclipse_ai._score_chakram_absolution(
+		0, {"path": owner_path})
+	_check(absolution["attack_mode"] == 1 and float(absolution["score"]) > 0.0,
+		"Eclipse AI must value a multi-corona return whose real paths cross the foe")
+
+	# Rival AI must also include a held corona in its safety search instead of
+	# walking through a visible persistent hazard as though only daggers exist.
+	oldest.position = game.players[1].position
+	oldest.prev_pos = oldest.position
+	newer.queue_free()
+	game.chakrams = [oldest]
+	var rival_ai := Ai.new()
+	rival_ai.begin(game, 1, 0)
+	var threatened_path: PackedVector2Array = rival_ai._walk(game.players[1], 0, false, 0)
+	_check(rival_ai._threat_paths().size() >= 1 \
+			and rival_ai._danger(threatened_path, rival_ai._threat_paths()) > 0.0,
+		"AI safety must treat an opposing held corona as a live threat")
+	oldest.position = Vector2(700.0, 300.0)
+	oldest.prev_pos = oldest.position
+	oldest.return_started = false
+	oldest.launch_turn = game.turn
+	oldest.hold_position()
+	oldest.set_integrity(2)
+	for impact in 2:
+		var dagger := Arrow.new()
+		dagger.cfg = game
+		dagger.shooter = 1
+		dagger.network_id = 900 + impact
+		dagger.position = oldest.position
+		dagger.prev_pos = dagger.position
+		dagger.vel = Vector2.ZERO
+		game._arrow_layer.add_child(dagger)
+		game.arrows.append(dagger)
+		game._step_chakrams(game.tick_dt())
+		_check(not game.arrows.has(dagger),
+			"every dagger that strips corona integrity must be consumed")
+	_check(game.chakrams.is_empty(),
+		"two ordinary projectile exchanges must clear one normal corona")
+	game.super_meter[0] = 1.0
+	game.players[0].plan.attack_mode = 0
+	game._spawn_character_super(game.players[0])
+	_check(game.chakrams.size() == 3 \
+			and game.chakrams.all(func(chakram): return chakram.integrity == 1),
+		"THREEFOLD EDICT must keep three answerable one-integrity coronas")
+
+	game._clear_character_projectiles()
+	game.platforms = original_platforms
+	game._rebuild_solids()
+	game.turn = original_turn
+	game.player_weapons = original_weapons
 
 
 ## The orb field used to be unbounded in both directions: nothing capped how many

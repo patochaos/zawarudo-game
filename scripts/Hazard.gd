@@ -110,9 +110,6 @@ func _draw() -> void:
 			draw_line(base - wing, tip, Color(0.62, 0.95, 1.0, 0.42), 1.5)
 			draw_line(base + wing, tip, Color(0.62, 0.95, 1.0, 0.42), 1.5)
 		draw_circle(Vector2.ZERO, CHARGE_RING + 3.0 * pulse, Color(0.45, 0.85, 1.0, 0.14))
-		draw_string(ThemeDB.fallback_font, Vector2(-42.0, -blast_radius - 9.0),
-			"DAGGERS OUT", HORIZONTAL_ALIGNMENT_CENTER, 84.0, 9,
-			Color(0.72, 0.98, 1.0, 0.82))
 
 	draw_circle(Vector2.ZERO, RADIUS + 2.5, Color(0.03, 0.03, 0.06, 0.92))
 	draw_circle(Vector2.ZERO, RADIUS, body.darkened(0.45))
