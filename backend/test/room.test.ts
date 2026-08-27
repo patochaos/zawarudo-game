@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   createRoom,
   digest,
@@ -11,6 +11,13 @@ import {
   startMatch,
   TestSocket,
 } from "./harness";
+
+// Client WebSocket closes are delivered asynchronously by the Workers test pool. Give the final
+// close handshake the same drain window used between assertions so Vitest does not retain the
+// last pair as an open handle after every test has already passed.
+afterAll(async () => {
+  await settle();
+});
 
 describe("Room durable object", () => {
   it("reserves a room once and assigns the guest slot", async () => {
