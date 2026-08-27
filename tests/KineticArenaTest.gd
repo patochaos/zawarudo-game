@@ -244,6 +244,10 @@ func _fresh_game(level: int):
 	gm.vs_ai = false
 	root.add_child(gm)
 	await process_frame
+	# This is a deterministic simulation suite, not an audio integration test.
+	# Muting before restart avoids leaving backend-specific playback handles alive
+	# when the short-lived manager is freed (Linux reports those as resource leaks).
+	gm._sfx.muted = true
 	gm._load_level(level)
 	gm.restart()
 	return gm
