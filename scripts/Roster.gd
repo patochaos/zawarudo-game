@@ -14,8 +14,9 @@ const DASHBLADE := 2
 const CHAKRAM := 3
 const SHOCK := 4
 
-## Presentation order.
-const ORDER := [DUELIST, DASHBLADE, SHOCK, CHAKRAM]
+## Active playable roster. Benched kits retain their IDs, assets and implementation.
+## Restore their IDs here when they are ready to return to play.
+const ORDER := [DUELIST]
 
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
 const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")

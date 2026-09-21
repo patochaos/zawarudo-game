@@ -303,7 +303,7 @@ class RosterArt:
 
 
 var kinds: Array[int] = [SlotKind.PLAYER, SlotKind.CPU, SlotKind.OPEN, SlotKind.OPEN]
-var weapons: Array[int] = [DUELIST, DASHBLADE, SHOCK, CHAKRAM]
+var weapons: Array[int] = [DUELIST, DUELIST, DUELIST, DUELIST]
 var difficulties: Array[int] = [1, 1, 1, 1]
 var devices: Array[int] = [KEYBOARD_DEVICE, NO_DEVICE, NO_DEVICE, NO_DEVICE]
 var ready_slots: Array[bool] = [false, false, false, false]

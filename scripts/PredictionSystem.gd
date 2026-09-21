@@ -11,33 +11,6 @@ class_name PredictionSystem
 ## do?", not "what will happen".
 
 
-## Continues a player state forward with NO input, for `steps` ticks. This is
-## the uncontrolled tail of the execution window: whatever happens after the
-## stamina runs out. Returns { "path": PackedVector2Array, "end": Vector2 }.
-## `start_tick` is the absolute world tick the tail begins at, so a coasting body
-## meets moving geometry where it will actually be. -1 freezes the world.
-## `drop_ticks` carries an in-progress drop-through into the tail, so a ghost
-## that steps off a ledge on its last piloted tick keeps falling through it
-## instead of landing back on top a frame later.
-static func coast(pos: Vector2, vel: Vector2, on_ground: bool, steps: int, cfg,
-		start_tick: int = -1, drop_ticks: int = 0, drop_from_y: float = 0.0) -> Dictionary:
-	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
-	var path := PackedVector2Array()
-	for i in steps:
-		# no input at all, jump key included — this is the uncontrolled tail
-		var drop_result := Player.apply_drop(pos.y, vel, on_ground, drop_ticks, drop_from_y, false)
-		vel = drop_result[0]
-		on_ground = drop_result[1]
-		drop_ticks = drop_result[2]
-		var st := Player.step_state(pos, vel, on_ground, 0, false, dt, cfg,
-			-1 if start_tick < 0 else start_tick + i, drop_ticks, drop_from_y)
-		pos = st[0]
-		vel = st[1]
-		on_ground = st[2]
-		path.append(pos)
-	return {"path": path, "end": pos}
-
-
 ## Predicts The Pulse's lance, which is ballistic and also expires at a
 ## charge-dependent distance. Stops on terrain, on that distance, or at the world
 ## edge. Returns { "path": PackedVector2Array, "blocked": bool }.
@@ -81,13 +54,13 @@ static func predict_plasma(start_pos: Vector2, start_vel: Vector2, cfg,
 ## `clashed` selects the heavier debris gravity, so the previewed path of an
 ## already-deflected knife matches the one it will actually fall along.
 static func predict_arrow(start_pos: Vector2, start_vel: Vector2, cfg, duration: float,
-		start_tick: int = -1, clashed: bool = false) -> Dictionary:
+		start_tick: int = -1, clashed: bool = false, initial_ricochets: int = 0) -> Dictionary:
 	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
 	var steps: int = int(round(duration / dt))
 	var pos: Vector2 = start_pos
 	var vel: Vector2 = start_vel
 	var path := PackedVector2Array()
-	var ricochets := 0
+	var ricochets := initial_ricochets
 	path.append(pos)
 
 	for i in steps:
@@ -109,13 +82,13 @@ static func predict_arrow(start_pos: Vector2, start_vel: Vector2, cfg, duration:
 		if not first_hit.is_empty():
 			var normal: Vector2 = first_hit[1]
 			var impact_at: Vector2 = pos.lerp(raw, first_hit[0])
-			path.append(impact_at)
 			if Arrow.can_ricochet_velocity(vel, normal, first_platform, cfg, ricochets):
 				vel = vel.bounce(normal) * cfg.knife_ricochet_retention
 				ricochets += 1
 				pos = impact_at + normal * 2.0
 				path.append(pos)
 				continue
+			path.append(impact_at)
 			return {"path": path, "blocked": true}
 		pos = next
 		path.append(pos)

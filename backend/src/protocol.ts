@@ -1,6 +1,6 @@
-// The wire contract version. The Worker requires an exact match on create and join so a stale
-// browser tab is told to reload instead of joining a match it cannot simulate.
-export const PROTOCOL_VERSION = 2;
+// The current wire contract version. Legacy protocol 2 can create two-player rooms, but
+// every participant must match their room protocol to preserve deterministic simulation.
+export const PROTOCOL_VERSION = 3;
 
 // The client records at most `movement_tick_budget()` ticks of movement, which is
 // ceil(movement_budget * physics_ticks_per_second) = ceil(0.50 * 60) = 30, and it hard-stops the
@@ -15,7 +15,7 @@ export const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 export const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 export const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 
-export type PlayerSlot = 0 | 1;
+export type PlayerSlot = 0 | 1 | 2 | 3;
 
 export interface PlayerPlanPayload {
   dirs: number[];
@@ -141,14 +141,14 @@ export function parseClientMessage(text: string): ClientMessage | null {
   }
   if (value.type === "match_over") {
     if (!isIntegerInRange(value.turn, 1, 1_000_000)
-        || !isIntegerInRange(value.winner, 0, 1)
+        || !isIntegerInRange(value.winner, 0, 3)
         || typeof value.digest !== "string" || !DIGEST_PATTERN.test(value.digest)) {
       return null;
     }
     return {
       type: "match_over",
       turn: value.turn,
-      winner: value.winner === 0 ? 0 : 1,
+      winner: value.winner as PlayerSlot,
       digest: value.digest,
     };
   }
@@ -165,8 +165,8 @@ export function parseClientMessage(text: string): ClientMessage | null {
 }
 
 export function parseConnectionAttachment(value: unknown): ConnectionAttachment | null {
-  if (!isRecord(value) || (value.slot !== 0 && value.slot !== 1)) {
+  if (!isRecord(value) || !isIntegerInRange(value.slot, 0, 3)) {
     return null;
   }
-  return { slot: value.slot };
+  return { slot: value.slot as PlayerSlot };
 }

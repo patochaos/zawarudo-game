@@ -405,6 +405,15 @@ func _walk(who: Player, dir: int, jump: bool, ticks: int,
 func _threat_paths() -> Array:
 	var out: Array = []
 	for a in _gm.arrows:
+		if a is InterceptProjectile:
+			for forecast in ClassLab.forecast(a, _gm.exec_ticks()):
+				if forecast.lethal:
+					var future := PackedVector2Array()
+					for tick in forecast.offset:
+						future.append(Vector2(-100000, -100000))
+					future.append_array(forecast.path)
+					out.append(future)
+			continue
 		var pos: Vector2 = a.position
 		var vel: Vector2 = a.vel
 		var pts := PackedVector2Array()
@@ -612,6 +621,8 @@ func _dist_along(ox: float, side: int) -> float:
 ## checked against all of them without one hypothetical hit consuming it.
 func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int,
 		candidate: Dictionary = {}) -> Dictionary:
+	if _gm.class_lab and _gm.player_weapons[_idx] != Roster.DUELIST:
+		return _fire_lab(origin, side, elev, power, fire_tick)
 	if _gm.uses_dashblade(_idx):
 		return _fire_dashblade(origin, power, fire_tick, candidate)
 	if _gm.uses_shock(_idx):
@@ -1023,3 +1034,24 @@ func _line_blocked(origin: Vector2, target: Vector2, radius: float, fire_tick: i
 		if not impact.is_empty() and float(impact[0]) > 0.01 and float(impact[0]) < 0.99:
 			return true
 	return false
+
+
+func _fire_lab(origin: Vector2, side: int, elev: float, power: float, fire_tick: int) -> Dictionary:
+	var angle := deg_to_rad(elev if side > 0 else 180.0 - elev)
+	var direction := Vector2(cos(angle), -sin(angle))
+	var projectile = ClassLab.make_projectile(_gm, _gm.player_weapons[_idx], origin + Vector2(0, -6) + direction * 22, direction, power)
+	var paths: Array = ClassLab.forecast(projectile, FLIGHT_CAP)
+	projectile.free()
+	var covered := [false, false, false]
+	var closest := 1e9
+	for forecast in paths:
+		if not forecast.lethal:
+			continue
+		var path: PackedVector2Array = forecast.path
+		for tick in range(1, path.size()):
+			for h in _futures.size():
+				var future: PackedVector2Array = _futures[h]
+				var at: Vector2 = future[clampi(fire_tick + forecast.offset + tick - 1, 0, future.size() - 1)]
+				covered[h] = covered[h] or _hits_body(path[tick - 1], path[tick], at)
+				closest = minf(closest, path[tick].distance_to(at))
+	return {"score": float(covered.count(true)) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2, "velocity_parry_risk": 0.0}

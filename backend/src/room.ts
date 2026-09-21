@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  PROTOCOL_VERSION,
   parseClientMessage,
   parseConnectionAttachment,
   parsePlan,
@@ -32,6 +33,8 @@ type RoomRow = {
   turn: number;
   host_token: string;
   guest_token: string | null;
+  capacity: number;
+  protocol: number;
 } & Record<string, SqlStorageValue>;
 
 type StoredPlanRow = {
@@ -50,8 +53,10 @@ type StoredMatchReportRow = StoredResultRow & {
 
 export interface JoinResult {
   ok: boolean;
-  reason?: "missing" | "full" | "rate_limited";
+  reason?: "missing" | "full" | "rate_limited" | "protocol_mismatch";
   player?: PlayerSlot;
+  capacity?: number;
+  protocol?: number;
 }
 
 interface RateWindow {
@@ -67,6 +72,8 @@ export interface RoomInfo {
   turn?: number;
   hasGuest?: boolean;
   weapons?: number[];
+  capacity?: number;
+  protocol?: number;
 }
 
 function freshSeed(): number {
@@ -146,11 +153,32 @@ export class Room extends DurableObject<Env> {
       INSERT OR IGNORE INTO _sql_schema_migrations (id, applied_at)
       VALUES (1, unixepoch());
     `);
+    const migrated = this.ctx.storage.sql.exec<{ id: number }>(
+      "SELECT id FROM _sql_schema_migrations WHERE id = 2",
+    ).toArray().length > 0;
+    if (!migrated) {
+      this.ctx.storage.sql.exec(`
+        ALTER TABLE room ADD COLUMN capacity INTEGER NOT NULL DEFAULT 2;
+        CREATE TABLE participants (slot INTEGER PRIMARY KEY, token TEXT NOT NULL UNIQUE);
+        INSERT INTO participants SELECT 0, host_token FROM room;
+        INSERT INTO participants SELECT 1, guest_token FROM room WHERE guest_token IS NOT NULL;
+        INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (2, unixepoch());
+      `);
+    }
+    const protocolMigrated = this.ctx.storage.sql.exec<{ id: number }>(
+      "SELECT id FROM _sql_schema_migrations WHERE id = 3",
+    ).toArray().length > 0;
+    if (!protocolMigrated) {
+      this.ctx.storage.sql.exec(`
+        ALTER TABLE room ADD COLUMN protocol INTEGER NOT NULL DEFAULT 2;
+        INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (3, unixepoch());
+      `);
+    }
   }
 
   private room(): RoomRow | null {
     return this.ctx.storage.sql.exec<RoomRow>(
-      "SELECT code, phase, level, seed, turn, host_token, guest_token FROM room WHERE singleton = 1",
+      "SELECT code, phase, level, seed, turn, host_token, guest_token, capacity, protocol FROM room WHERE singleton = 1",
     ).toArray()[0] ?? null;
   }
 
@@ -160,7 +188,12 @@ export class Room extends DurableObject<Env> {
     level: number,
     seed: number,
     hostWeapon: number,
+    capacity: 2 | 4 = 2,
+    protocol: number = PROTOCOL_VERSION,
   ): Promise<boolean> {
+    if ((protocol !== 2 && protocol !== PROTOCOL_VERSION) || (protocol === 2 && capacity !== 2)) {
+      return false;
+    }
     if (this.room() !== null) {
       return false;
     }
@@ -178,11 +211,13 @@ export class Room extends DurableObject<Env> {
       "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (0, ?)",
       hostWeapon,
     );
+    this.ctx.storage.sql.exec("UPDATE room SET capacity = ?, protocol = ? WHERE singleton = 1", capacity, protocol);
+    this.ctx.storage.sql.exec("INSERT INTO participants (slot, token) VALUES (0, ?)", hostToken);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return true;
   }
 
-  async join(guestToken: string, guestWeapon: number): Promise<JoinResult> {
+  async join(guestToken: string, guestWeapon: number, protocol: number = PROTOCOL_VERSION): Promise<JoinResult> {
     if (!this.allowJoinAttempt()) {
       return { ok: false, reason: "rate_limited" };
     }
@@ -190,19 +225,25 @@ export class Room extends DurableObject<Env> {
     if (room === null) {
       return { ok: false, reason: "missing" };
     }
-    if (room.guest_token !== null) {
+    if (protocol !== room.protocol) {
+      return { ok: false, reason: "protocol_mismatch", protocol: room.protocol };
+    }
+    const count = this.ctx.storage.sql.exec<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM participants",
+    ).toArray()[0]?.count ?? 0;
+    if (room.phase !== "waiting" || count >= room.capacity) {
       return { ok: false, reason: "full" };
     }
+    const slot = count as PlayerSlot;
+    this.ctx.storage.sql.exec("INSERT INTO participants (slot, token) VALUES (?, ?)", slot, guestToken);
+    if (slot === 1) {
+      this.ctx.storage.sql.exec("UPDATE room SET guest_token = ? WHERE singleton = 1", guestToken);
+    }
     this.ctx.storage.sql.exec(
-      "UPDATE room SET guest_token = ? WHERE singleton = 1",
-      guestToken,
-    );
-    this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (1, ?)",
-      guestWeapon,
+      "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (?, ?)", slot, guestWeapon,
     );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
-    return { ok: true, player: 1 };
+    return { ok: true, player: slot, capacity: room.capacity };
   }
 
   private allowJoinAttempt(): boolean {
@@ -231,7 +272,9 @@ export class Room extends DurableObject<Env> {
       seed: room.seed,
       turn: room.turn,
       hasGuest: room.guest_token !== null,
+      protocol: room.protocol,
       weapons: this.weapons(),
+      capacity: room.capacity,
     };
   }
 
@@ -245,8 +288,10 @@ export class Room extends DurableObject<Env> {
       return Response.json({ error: "Room not found" }, { status: 404 });
     }
     const token = new URL(request.url).searchParams.get("token") ?? "";
-    const slot = token === room.host_token ? 0 : token === room.guest_token ? 1 : -1;
-    if (slot !== 0 && slot !== 1) {
+    const slot = this.ctx.storage.sql.exec<{ slot: PlayerSlot }>(
+      "SELECT slot FROM participants WHERE token = ?", token,
+    ).toArray()[0]?.slot;
+    if (slot === undefined) {
       return Response.json({ error: "Invalid room token" }, { status: 401 });
     }
 
@@ -262,10 +307,11 @@ export class Room extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [`player:${slot}`]);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
 
-    this.send(server, { type: "connected", room: room.code, player: slot });
+    this.send(server, { type: "connected", room: room.code, player: slot, capacity: room.capacity });
     this.broadcast({ type: "peer_status", player: slot, connected: true });
     this.sendRoomState(server);
     this.maybeStartMatch();
+    await this.maybeStartRematch();
     this.maybeBroadcastStoredPlans();
 
     return new Response(null, { status: 101, webSocket: client });
@@ -342,7 +388,7 @@ export class Room extends DurableObject<Env> {
   override webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): void {
     this.messageRates.delete(ws);
     const attachment = parseConnectionAttachment(ws.deserializeAttachment());
-    if (attachment !== null) {
+    if (attachment !== null && !this.isConnected(attachment.slot)) {
       this.broadcast({
         type: "peer_status",
         player: attachment.slot,
@@ -375,6 +421,7 @@ export class Room extends DurableObject<Env> {
       DELETE FROM turn_results;
       DELETE FROM match_reports;
       DELETE FROM rematch_ready;
+      DELETE FROM participants;
       DELETE FROM fighters;
       DELETE FROM room;
     `);
@@ -410,7 +457,7 @@ export class Room extends DurableObject<Env> {
       "SELECT slot, plan_json FROM plans WHERE turn = ? ORDER BY slot",
       room.turn,
     ).toArray();
-    if (rows.length !== 2) {
+    if (rows.length !== room.capacity) {
       return;
     }
 
@@ -428,7 +475,7 @@ export class Room extends DurableObject<Env> {
       }
       plans[row.slot] = plan;
     }
-    if (plans[0] === undefined || plans[1] === undefined) {
+    if (this.slots(room).some((player) => plans[player] === undefined)) {
       return;
     }
     if (room.phase === "planning") {
@@ -450,6 +497,7 @@ export class Room extends DurableObject<Env> {
       this.sendError(ws, "wrong_phase", "The room is not accepting this turn result");
       return;
     }
+    if (this.rejectMixedResults(turn, "match_reports")) return;
     this.ctx.storage.sql.exec(
       "INSERT OR REPLACE INTO turn_results (turn, slot, digest) VALUES (?, ?, ?)",
       turn,
@@ -460,11 +508,11 @@ export class Room extends DurableObject<Env> {
       "SELECT slot, digest FROM turn_results WHERE turn = ? ORDER BY slot",
       turn,
     ).toArray();
-    if (rows.length !== 2) {
+    if (rows.length !== room.capacity) {
       this.send(ws, { type: "turn_complete_ack", turn });
       return;
     }
-    if (rows[0]?.digest !== rows[1]?.digest) {
+    if (rows.some((row) => row.digest !== rows[0]?.digest)) {
       this.ctx.storage.sql.exec("UPDATE room SET phase = 'desync' WHERE singleton = 1");
       this.broadcast({ type: "desync", turn });
       return;
@@ -493,6 +541,11 @@ export class Room extends DurableObject<Env> {
       this.sendError(ws, "wrong_phase", "The room is not accepting a match result");
       return;
     }
+    if (this.rejectMixedResults(turn, "turn_results")) return;
+    if (winner >= room.capacity) {
+      this.sendError(ws, "invalid_winner", "Winner is not in this room");
+      return;
+    }
     this.ctx.storage.sql.exec(
       `INSERT OR REPLACE INTO match_reports (turn, slot, winner, digest)
        VALUES (?, ?, ?, ?)`,
@@ -505,11 +558,11 @@ export class Room extends DurableObject<Env> {
       "SELECT slot, winner, digest FROM match_reports WHERE turn = ? ORDER BY slot",
       turn,
     ).toArray();
-    if (rows.length !== 2) {
+    if (rows.length !== room.capacity) {
       this.send(ws, { type: "match_over_ack", turn });
       return;
     }
-    if (rows[0]?.winner !== rows[1]?.winner || rows[0]?.digest !== rows[1]?.digest) {
+    if (rows.some((row) => row.winner !== rows[0]?.winner || row.digest !== rows[0]?.digest)) {
       this.ctx.storage.sql.exec("UPDATE room SET phase = 'desync' WHERE singleton = 1");
       this.broadcast({ type: "desync", turn });
       return;
@@ -518,10 +571,26 @@ export class Room extends DurableObject<Env> {
     this.broadcast({ type: "match_over", turn, winner });
   }
 
+  // A client seeing game over while another sees a continuing turn is also a desync.
+  // Without this check each report barrier waits forever for the other report type.
+  private rejectMixedResults(turn: number, table: "match_reports" | "turn_results"): boolean {
+    const rows = this.ctx.storage.sql.exec<{ slot: number }>(
+      `SELECT slot FROM ${table} WHERE turn = ? LIMIT 1`, turn,
+    ).toArray();
+    if (rows.length === 0) return false;
+    this.ctx.storage.sql.exec("UPDATE room SET phase = 'desync' WHERE singleton = 1");
+    this.broadcast({ type: "desync", turn });
+    return true;
+  }
+
   private receiveForfeit(ws: WebSocket, slot: PlayerSlot): void {
     const room = this.room();
     if (room === null || (room.phase !== "planning" && room.phase !== "executing")) {
       this.sendError(ws, "wrong_phase", "A forfeit can only be claimed during a live match");
+      return;
+    }
+    if (room.capacity > 2) {
+      this.sendError(ws, "forfeit_unavailable", "Wait for disconnected players to reconnect or leave the match");
       return;
     }
     // The only anti-abuse gate: the win is granted against a peer that is gone right now, never
@@ -569,10 +638,19 @@ export class Room extends DurableObject<Env> {
       ready: ready.map((row) => row.slot),
       level: selectedLevel,
     });
-    if (ready.length !== 2) {
+    await this.maybeStartRematch();
+  }
+
+  private async maybeStartRematch(): Promise<void> {
+    const room = this.room();
+    if (room === null || room.phase !== "game_over") return;
+    const ready = this.ctx.storage.sql.exec<{ slot: PlayerSlot }>(
+      "SELECT slot FROM rematch_ready ORDER BY slot",
+    ).toArray();
+    if (ready.length !== room.capacity || !this.slots(room).every((player) => this.isConnected(player))) {
       return;
     }
-
+    const selectedLevel = room.level;
     const seed = freshSeed();
     this.ctx.storage.sql.exec(
       "UPDATE room SET phase = 'planning', seed = ?, turn = 1 WHERE singleton = 1",
@@ -586,16 +664,16 @@ export class Room extends DurableObject<Env> {
     `);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     this.broadcast({
-      type: "match_start", level: selectedLevel, seed, turn: 1, weapons: this.weapons(),
+      type: "match_start", level: selectedLevel, seed, turn: 1, weapons: this.weapons(), capacity: room.capacity,
     });
   }
 
   private maybeStartMatch(): void {
     const room = this.room();
-    if (room === null || room.phase !== "waiting" || room.guest_token === null) {
+    if (room === null || room.phase !== "waiting") {
       return;
     }
-    if (!this.isConnected(0) || !this.isConnected(1)) {
+    if (!this.slots(room).every((player) => this.isConnected(player))) {
       return;
     }
     this.ctx.storage.sql.exec("UPDATE room SET phase = 'planning' WHERE singleton = 1");
@@ -605,6 +683,7 @@ export class Room extends DurableObject<Env> {
       seed: room.seed,
       turn: room.turn,
       weapons: this.weapons(),
+      capacity: room.capacity,
     });
   }
 
@@ -620,8 +699,9 @@ export class Room extends DurableObject<Env> {
       level: room.level,
       seed: room.seed,
       turn: room.turn,
-      connected: [this.isConnected(0), this.isConnected(1)],
+      connected: this.slots(room).map((player) => this.isConnected(player)),
       weapons: this.weapons(),
+      capacity: room.capacity,
     });
   }
 
@@ -629,13 +709,17 @@ export class Room extends DurableObject<Env> {
     const rows = this.ctx.storage.sql.exec<{ slot: number; weapon: number }>(
       "SELECT slot, weapon FROM fighters ORDER BY slot",
     ).toArray();
-    const weapons = [0, 0];
+    const weapons: number[] = Array(this.room()?.capacity ?? 2).fill(0);
     for (const row of rows) {
-      if (row.slot === 0 || row.slot === 1) {
+      if (row.slot >= 0 && row.slot < weapons.length) {
         weapons[row.slot] = Number(row.weapon);
       }
     }
     return weapons;
+  }
+
+  private slots(room: RoomRow): PlayerSlot[] {
+    return Array.from({ length: room.capacity }, (_, slot) => slot as PlayerSlot);
   }
 
   private isConnected(slot: PlayerSlot): boolean {

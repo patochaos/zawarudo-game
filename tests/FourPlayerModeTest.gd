@@ -32,13 +32,9 @@ func _run() -> void:
 		"the deterministic state digest must serialize every live player field")
 	_check(game.players.size() == 4, "four-player mode must spawn four fighters")
 	_check(game.hits_to_win == 5, "new matches must default to five hits")
-	_check(is_equal_approx(game._planning_duration_for_turn(1), 5.0) \
-		and is_equal_approx(game._planning_duration_for_turn(3), 5.0) \
-		and is_equal_approx(game._planning_duration_for_turn(4), 4.5) \
-		and is_equal_approx(game._planning_duration_for_turn(5), 4.0) \
-		and is_equal_approx(game._planning_duration_for_turn(6), 3.5) \
-		and is_equal_approx(game._planning_duration_for_turn(20), 3.5),
-		"planning time must shrink after round three and stop at the AI-safe floor")
+	_check(is_equal_approx(game._planning_duration_for_turn(1), 8.0) \
+		and is_equal_approx(game._planning_duration_for_turn(20), 8.0),
+		"planning time must remain fixed as the board accumulates threats")
 	_check(not game._ui._fighter_seals[0].visible and not game._ui._fighter_seals[1].visible,
 		"the portrait fighter seals must remain exclusive to 1v1")
 	_check(game._ui._pips[3][0].visible,

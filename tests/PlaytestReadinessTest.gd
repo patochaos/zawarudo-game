@@ -40,7 +40,7 @@ func _test_tutorial_launch() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_tutorial()
+	game._open_reference_briefing()
 	await process_frame
 	_check(game.tutorial_mode and game.state == Phase.TUTORIAL,
 		"How To Play must launch as a distinct, paused mode")
@@ -79,6 +79,17 @@ func _test_tutorial_launch() -> void:
 	secret_key.keycode = KEY_F7
 	secret_key.pressed = true
 	game._unhandled_key_input(secret_key)
+	_check(not game._secret_triple_match, "normal play must ignore the secret volley cheat")
+	var original_duration: float = game.planning_duration
+	secret_key.keycode = KEY_F1
+	game._unhandled_key_input(secret_key)
+	_check(game.planning_duration == original_duration, "normal play must preserve match timing")
+	secret_key.keycode = KEY_F8
+	game._unhandled_key_input(secret_key)
+	_check(game.super_meter[0] == 0.0, "normal play must not grant free SUPER")
+	game.developer_shortcuts_enabled = true
+	secret_key.keycode = KEY_F7
+	game._unhandled_key_input(secret_key)
 	_check(game._secret_triple_match,
 		"secret F7 must enable the three-knife rule for the current match")
 	game._begin_planning(false)
@@ -116,10 +127,10 @@ func _test_tutorial_launch() -> void:
 	game._online_lobby._cycle_level(1)
 	game._online_lobby._cycle_fighter(1)
 	_check(game._online_lobby.level == posmod(initial_online_level + 1, Levels.count()) \
-		and game._online_lobby.weapon == game._online_lobby.FIGHTER_ROSTER[1],
+		and game._online_lobby.weapon == game._online_lobby.FIGHTER_ROSTER[0],
 		"the online lobby must expose every arena and roster fighter before room creation")
 	_check("HOST ARENA" in game._online_lobby._level_label.text \
-		and "ROOK" in game._online_lobby._fighter_label.text,
+		and "DUELIST" in game._online_lobby._fighter_label.text,
 		"the online lobby must explain which room settings the player is choosing")
 	game._online_lobby._sanitize_code("abci12z9")
 	_check(game._online_lobby._code_input.text == "ABC2Z9",
@@ -130,17 +141,17 @@ func _test_tutorial_launch() -> void:
 		"an incomplete room code must fail locally with an actionable message")
 	game.online_player = 0
 	game.online_room = "TEST24"
-	game._start_online_match(6, 1234, 1, [game.Weapon.SHOCK, game.Weapon.DASHBLADE])
+	game._start_online_match(6, 1234, 1, [game.Weapon.KNIVES, game.Weapon.KNIVES])
 	_check(game.online_mode and game.level_index == 6 \
-		and game.player_weapons[0] == game.Weapon.SHOCK \
-		and game.player_weapons[1] == game.Weapon.DASHBLADE,
+		and game.player_weapons[0] == game.Weapon.KNIVES \
+		and game.player_weapons[1] == game.Weapon.KNIVES,
 		"a server match start must install both selected fighters on the selected arena")
 	var orb_key := InputEventKey.new()
 	orb_key.keycode = KEY_2
 	orb_key.pressed = true
 	game._unhandled_key_input(orb_key)
-	_check(game.players[0].plan.attack_mode == 1,
-		"online character-specific keys must control the locally assigned fighter")
+	_check(game.players[0].plan.attack_mode == 0,
+		"benched character shortcuts must not change Duelist attack mode")
 	game.queue_free()
 
 

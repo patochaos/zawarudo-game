@@ -22,13 +22,22 @@ func _draw() -> void:
 	# the knife fan, so you can still see where you are pointing and how hard.
 	if gm.state == Phase.FREEPLAY:
 		var me: Player = gm.players[0]
+		if gm.real_time_mode:
+			if me.alive and gm.real_time_aim_guide:
+				var origin := me.shoulder()
+				var direction := me.aim_dir()
+				draw_line(origin + direction * 23.0, origin + direction * 45.0,
+					Color(me.color, 0.38), 1.5, true)
+				if gm.charging[0]:
+					_draw_power_bar(me.position, me, true)
+			return
 		if me.alive:
 			_draw_shot_preview(me, me.position)
 		return
 
 	if gm.state == Phase.EXECUTING or gm.state == Phase.REPLAY \
 			or gm.state == Phase.GAME_OVER or gm.state == Phase.MENU \
-			or gm.state == Phase.ROSTER or gm.state == Phase.MATCH_SETUP:
+			or gm.state == Phase.ROSTER or gm.state == Phase.MATCH_SETUP or gm.state == Phase.TUTORIAL:
 		return
 
 	# Where the moving world will be when this window closes is public and
@@ -45,7 +54,11 @@ func _draw() -> void:
 	# wait. Drawn in world space, over the fighter, so it survives a camera that
 	# has pushed in past the HUD.
 	for p in gm.players:
-		if p.alive and p.plan.confirmed:
+		if p.alive and p.plan.confirmed and gm.player_roles[p.index] != "DUMMY":
+			# The keyboard player's readiness already has a compact HUD status.
+			if gm.state == Phase.PLANNING and not gm.close_camera_mode \
+					and not gm._touch_controls.enabled and p.index == gm._keyboard_player():
+				continue
 			_draw_ready_badge(p)
 
 
@@ -88,8 +101,9 @@ func _draw_player_preview(p: Player) -> void:
 	if not same_marker:
 		_draw_ghost_figure(here, p, 0.45, gm.pilot_tick(i))
 
-	_draw_stamina(p, here)
-	_draw_shot_preview(p, here)
+	if gm.player_roles[i] != "DUMMY":
+		_draw_stamina(p, here)
+		_draw_shot_preview(p, here)
 
 
 func _draw_ready_badge(p: Player) -> void:
@@ -198,7 +212,7 @@ func _ghost_sprite_pose(p: Player, skin: FighterSkin, tick: int) -> Dictionary:
 			else FighterVisual.RUN
 	var count := skin.frame_count(state)
 	if count > 0:
-		frame = posmod(tick / skin.ticks_for_state(state), count)
+		frame = skin.motion_frame(state, tick, velocity)
 	return {"state": state, "frame": frame}
 
 
@@ -252,6 +266,9 @@ const AIM_PREDICTION_FRACTION := 0.10
 
 
 func _draw_shot_preview(p: Player, origin: Vector2) -> void:
+	if gm.class_lab and gm.player_weapons[p.index] != Roster.DUELIST:
+		_draw_lab_preview(p, origin)
+		return
 	var col: Color = _player_preview_color(p)
 	var armed: bool = p.plan.has_shot()
 	var charging: bool = gm.charging[p.index]
@@ -299,8 +316,9 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 		tip, col, 42.0, 0.48 if live else 0.28, dir.angle())
 
 	var shot_time: float = float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
+	var simple_labels: bool = gm.demo_match or (gm._practice != null and gm._practice.active)
 	_launch_marker(shoulder, col, 1.0 if live else 0.55,
-		"FIRE %.2fs" % shot_time if live else "")
+		("THROW HERE" if simple_labels else "FIRE %.2fs" % shot_time) if live else "")
 
 	var aimed: Vector2 = p.aim_dir().normalized()
 	var actual_elevation: float = rad_to_deg(atan2(-aimed.y, absf(aimed.x)))
@@ -315,6 +333,8 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 			tag = ("SUPER ARMED · " if gm.super_armed[p.index] else "SUPER STANDBY · ") + tag
 		else:
 			tag = "DRAWING · " + tag
+	if simple_labels:
+		tag = "THROW PLACED" if armed else ("CHARGING %d%%" % int(power * 100) if charging else "AIM")
 	_shot_tag(p, tip, dir, tag, col.lightened(0.4) if live else Color(col.r, col.g, col.b, 0.65),
 		14 if live else 12)
 	_draw_power_bar(origin, p, charging)
@@ -876,6 +896,10 @@ func _arrow_between(from: Vector2, to: Vector2, col: Color) -> void:
 func _draw_existing_arrows() -> void:
 	_validate_arrow_prediction_cache()
 	for a in gm.arrows:
+		if a is InterceptProjectile:
+			for forecast in ClassLab.forecast(a, gm.exec_ticks() * 2):
+				_draw_trajectory(forecast.path, a.color, forecast.lethal, true, maxi(1, gm.exec_ticks() - forecast.offset))
+			continue
 		var pred: Dictionary = _prediction_for_arrow(a)
 		var immediate: bool = _is_immediate_threat(pred["path"])
 		if immediate:
@@ -894,8 +918,8 @@ func _draw_existing_arrows() -> void:
 		_draw_trajectory(pred["path"], a.color, true, true, gm.exec_ticks())
 
 
-## Existing knives and the world are frozen throughout planning, so their full
-## 4.5-second predictions are identical on every redraw. Cache them until the
+## Existing knives and the world are frozen throughout planning, so their next two windows of
+## conditional predictions are identical on every redraw. Cache them until the
 ## world tick or live knife set changes; threat checks still use the live ghosts.
 func _validate_arrow_prediction_cache() -> void:
 	var valid: bool = _arrow_prediction_tick == gm.world_tick \
@@ -911,10 +935,13 @@ func _validate_arrow_prediction_cache() -> void:
 
 
 func _prediction_for_arrow(a: Arrow) -> Dictionary:
+	if a is InterceptProjectile:
+		return {"path": a.prediction(gm.exec_ticks() * 2), "blocked": false}
 	var id := a.get_instance_id()
 	if not _arrow_prediction_cache.has(id):
 		_arrow_prediction_cache[id] = PredictionSystem.predict_arrow(a.position, a.vel, gm,
-			gm.trajectory_preview_time, gm.world_tick, a.clashed)
+			minf(gm.execution_duration * 2.0, float(maxi(0, gm.arrow_max_ticks - a.age_ticks)) * gm.tick_dt()),
+			gm.world_tick, a.clashed, a.ricochet_count)
 	return _arrow_prediction_cache[id]
 
 
@@ -974,7 +1001,7 @@ func _draw_trajectory(path: PackedVector2Array, col: Color, live: bool, end_mark
 		var far := PackedVector2Array()
 		for i in range(split, path.size()):
 			far.append(path[i])
-		_dotted_runs(far, Color(col.r, col.g, col.b, 0.55 * gain), 2.0, 7.0, 7.0)
+		_dotted_runs(far, Color(col.r, col.g, col.b, 0.24 * gain), 1.5, 5.0, 9.0)
 
 	var phase := 1
 	var idx: int = maxi(first_boundary, 1)
@@ -982,7 +1009,9 @@ func _draw_trajectory(path: PackedVector2Array, col: Color, live: bool, end_mark
 		var alpha: float = (0.95 if phase == 1 else 0.6) * gain
 		draw_circle(path[idx], 5.0, Color(col.r, col.g, col.b, alpha * 0.35))
 		draw_arc(path[idx], 5.0, 0.0, TAU, 12, Color(col.r, col.g, col.b, alpha), 1.5)
-		_label(path[idx] + Vector2(7.0, -9.0), "+%d" % phase, Color(col.r, col.g, col.b, alpha), 11)
+		# Boundary rings remain on every path; only the aiming preview needs text.
+		if not end_marker:
+			_label(path[idx] + Vector2(7.0, -9.0), "NEXT" if phase == 1 else "+%d" % phase, Color(col.r, col.g, col.b, alpha), 11)
 		phase += 1
 		idx += per_phase
 
@@ -1050,17 +1079,6 @@ func _dotted_polyline(pts: PackedVector2Array, col: Color, width: float, dash: f
 				drawing = not drawing
 
 
-func _dotted_rect(r: Rect2, col: Color, width: float) -> void:
-	var p := PackedVector2Array([
-		r.position,
-		Vector2(r.end.x, r.position.y),
-		r.end,
-		Vector2(r.position.x, r.end.y),
-		r.position,
-	])
-	_dotted_polyline(p, col, width, 6.0, 5.0)
-
-
 func _label(at: Vector2, text: String, col: Color, size: int) -> void:
 	if high_contrast:
 		draw_string(ThemeDB.fallback_font, at + Vector2(2.0, 2.0), text,
@@ -1072,3 +1090,21 @@ func _player_preview_color(p: Player) -> Color:
 	if not high_contrast:
 		return p.color
 	return Color(1.0, 0.86, 0.28) if (p.index & 1) == 0 else Color(0.30, 0.90, 1.0)
+
+
+func _draw_lab_preview(p: Player, origin: Vector2) -> void:
+	var col: Color = _player_preview_color(p)
+	var projectile = ClassLab.make_projectile(gm, gm.player_weapons[p.index], Player.shoulder_at(origin) + p.aim_dir() * 22, p.aim_dir(), p.plan.power)
+	var paths: Array = ClassLab.forecast(projectile, 110)
+	for path in paths:
+		_draw_trajectory(path["path"], col, path.lethal, false, maxi(1, gm.exec_ticks() - path.offset))
+	var tag: String = ClassLab.COPY[ClassLab.ORDER.find(gm.player_weapons[p.index])]
+	if gm.player_weapons[p.index] == Roster.SHOCK:
+		tag = "SPLIT AFTER %.2fs" % (projectile.delay_ticks * gm.tick_dt())
+	elif gm.player_weapons[p.index] == Roster.CHAKRAM:
+		for old in gm.arrows:
+			if old is InterceptProjectile and old.shooter == p.index:
+				tag = "CORONA BUSY / WAIT FOR RETURN"
+	_shot_tag(p, Player.shoulder_at(origin) + p.aim_dir() * 65, p.aim_dir(), tag, col, 12)
+	_draw_power_bar(origin, p, gm.charging[p.index])
+	projectile.free()

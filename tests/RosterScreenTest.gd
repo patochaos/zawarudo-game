@@ -1,6 +1,6 @@
 extends SceneTree
 
-## The two pre-match screens are the only way into a local match, so this suite
+## The developer Custom Match flow uses two pre-match screens, so this suite
 ## covers the whole path: filling slots with players and CPUs, cycling fighters
 ## inside a slot, the rules screen behind it, and the kits arriving in play
 ## exactly as they were picked.
@@ -21,10 +21,11 @@ func _run() -> void:
 
 	var roster = game._roster
 	var setup = game._setup
-	game._menu._activate(game._menu.ROW_PLAY)
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_CUSTOM)
 	_check(game.state == Phase.ROSTER and roster.visible and not game._menu.visible \
 			and not setup.visible,
-		"Play must open the lineup screen and nothing else")
+		"Custom Match must open the lineup screen and nothing else")
 	_check(roster.cursor_slot == 0 and roster.row == roster.ROW_FIGHTER,
 		"the screen must open on Player 1's fighter")
 	_check(roster.kinds == [roster.SlotKind.PLAYER, roster.SlotKind.CPU,
@@ -36,12 +37,12 @@ func _run() -> void:
 	# A fighter is cycled inside its own slot, so the cast can outgrow the
 	# screen without the screen changing shape.
 	roster.handle_key(KEY_D)
-	_check(roster.weapons[0] == roster.DASHBLADE,
-		"left and right must step the focused slot's own fighter")
+	_check(roster.weapons[0] == roster.DUELIST,
+		"left and right must keep the only available fighter selected")
 	roster.handle_key(KEY_A)
 	roster.handle_key(KEY_A)
-	_check(roster.weapons[0] == roster.CHAKRAM,
-		"the carousel must wrap around the roster rather than stop at its end")
+	_check(roster.weapons[0] == roster.DUELIST,
+		"cycling backward must keep Duelist selected")
 
 	# The control tile under a slot is where a seat becomes a player, a CPU of a
 	# chosen skill, or nothing at all.
@@ -81,8 +82,8 @@ func _run() -> void:
 	_check(roster.kinds[1] == roster.SlotKind.CPU and roster.difficulties[1] == 2,
 		"stepping back must restore the CPU and its skill, not a different one")
 
-	_pick(roster, 0, roster.DASHBLADE)
-	_pick(roster, 1, roster.SHOCK)
+	_pick(roster, 0, roster.DUELIST)
+	_pick(roster, 1, roster.DUELIST)
 	roster.cursor_slot = 0
 	roster.row = roster.ROW_FIGHTER
 	roster.handle_key(KEY_ENTER)
@@ -109,7 +110,7 @@ func _run() -> void:
 	# Stepping back is a step, not a reset.
 	setup.handle_key(KEY_ESCAPE)
 	_check(game.state == Phase.ROSTER and roster.visible \
-			and roster.ready_slots[0] and roster.weapons[0] == roster.DASHBLADE,
+			and roster.ready_slots[0] and roster.weapons[0] == roster.DUELIST,
 		"backing out of the rules must return the lineup exactly as it was left")
 	roster.handle_key(KEY_S)
 	roster.handle_key(KEY_S)
@@ -124,7 +125,7 @@ func _run() -> void:
 	await _idle()
 	_check(game.state == Phase.PLANNING and not setup.visible,
 		"Start must enter the arena directly from the rules screen")
-	_check(game.uses_dashblade(0) and game.uses_shock(1) and game.is_ai(1),
+	_check(game.player_weapons[0] == Roster.DUELIST and game.player_weapons[1] == Roster.DUELIST and game.is_ai(1),
 		"the picked kits and slot ownership must reach gameplay unchanged")
 	_check(game.level_index == 2 and game.hits_to_win == 7,
 		"the chosen arena and match length must become the match rules")
@@ -132,17 +133,17 @@ func _run() -> void:
 		"each CPU's skill preset must reach its own live search")
 
 	game._ui.refresh()
-	_check(game._ui._fighter_seals[0].fighter_name == "ROOK" \
-			and game._ui._fighter_seals[1].fighter_name == "PULSE",
+	_check(game._ui._fighter_seals[0].fighter_name == "DUELIST" \
+			and game._ui._fighter_seals[1].fighter_name == "DUELIST",
 		"the duel HUD must identify both selected character kits")
-	_check(game._ui._fighter_seals[0].portrait == game._ui.ROOK_PORTRAIT \
-			and game._ui._fighter_seals[1].portrait == game._ui.PULSE_PORTRAIT,
+	_check(game._ui._fighter_seals[0].portrait == Roster.DUELIST_PORTRAIT \
+			and game._ui._fighter_seals[1].portrait == Roster.DUELIST_PORTRAIT,
 		"each new fighter must use its own HUD portrait")
 
 	game.players[0].plan.power = 0.5
 	game._spawn_player_attack(game.players[0])
-	_check(game.dashblades.size() == 1 and game.dashblades[0].owner_index == 0,
-		"a Dashblade normal attack must start a physical dash action")
+	_check(game.arrows.size() == 2,
+		"a Duelist normal attack must launch two daggers")
 
 	await _test_human_duel(game)
 	await _test_four_fighters(game)
@@ -174,8 +175,8 @@ func _test_human_duel(game) -> void:
 	roster.debug_join_device(7)
 	_check(roster.devices[1] == 7 and roster.filled_slots() == 2,
 		"a joining pad must take the seat that was waiting for it")
-	_pick(roster, 0, roster.DASHBLADE)
-	_pick(roster, 1, roster.SHOCK)
+	_pick(roster, 0, roster.DUELIST)
+	_pick(roster, 1, roster.DUELIST)
 	roster._set_ready(0, true)
 	roster._set_ready(1, true)
 	_check(roster._can_advance(), "two ready humans must be enough to move on")
@@ -185,14 +186,13 @@ func _test_human_duel(game) -> void:
 	_check(game.state == Phase.PLANNING and not game.vs_ai and not game.is_ai(1),
 		"two claimed slots must start a local duel with no CPU in it")
 
-	game._set_shock_attack_mode(1, 1)
 	game._ui.refresh()
-	_check(game.players[1].plan.attack_mode == 1 and "P2 ORB" in game._ui._level_label.text,
-		"Player 2's Shock mode must propagate into the HUD")
+	_check(game._ui._fighter_seals[1].fighter_name == "DUELIST",
+		"Player 2 must be identified as Duelist")
 	game.players[1].plan.power = 0.5
 	game._spawn_player_attack(game.players[1])
-	_check(game.shock_orbs.size() == 1 and game.shock_orbs[0].shooter == 1,
-		"Shock secondary fire must launch its persistent orb")
+	_check(game.arrows.size() == 2 and game.shock_orbs.is_empty(),
+		"Player 2 must launch daggers instead of a benched attack")
 	roster._debug_pads.clear()
 
 
@@ -205,57 +205,22 @@ func _test_four_fighters(game) -> void:
 	_check(roster.filled_slots() == 4,
 		"filling the last two columns must be all a four-fighter match needs")
 	_pick(roster, 0, roster.DUELIST)
-	_pick(roster, 1, roster.DASHBLADE)
-	_pick(roster, 2, roster.SHOCK)
-	_pick(roster, 3, roster.CHAKRAM)
+	_pick(roster, 1, roster.DUELIST)
+	_pick(roster, 2, roster.DUELIST)
+	_pick(roster, 3, roster.DUELIST)
 	roster._set_ready(0, true)
 	roster._confirm()
 	setup._start_match()
 	await _idle()
 	_check(game.players.size() == 4 and game.vs_ai,
 		"four filled slots must start a four-fighter match")
-	_check(game.uses_dashblade(1) and game.uses_shock(2) and game.uses_chakram(3) \
+	_check(game.player_weapons == [0, 0, 0, 0] \
 			and game.is_ai(1) and game.is_ai(2) and game.is_ai(3),
-		"AI roster slots must retain all four selected prototype kits")
-
-	# The Chakram is the kit whose behaviour spans turns, so it is worth pinning
-	# that the slot that picked it is the slot that throws it.
-	game.players[3].plan.set_aim_from_vector(Vector2.RIGHT,
-		game.aim_min_angle, game.aim_max_angle)
+		"all four slots must use Duelist while preserving CPU ownership")
 	game.players[3].plan.power = 0.5
-	var preview_launches: Array[Vector2] = game.chakram_launch_velocities(
-		game.players[3].aim_dir(), game.players[3].plan.power)
 	game._spawn_player_attack(game.players[3])
-	_check(game.chakrams.size() == 1 and game.chakrams[0].shooter == 3,
-		"the fourth roster fighter must launch one returning chakram")
-	_check(game.chakrams[0].vel.normalized().is_equal_approx(Vector2.RIGHT),
-		"the chakram must follow the player's exact aim direction")
-	_check(is_equal_approx(game.chakrams[0].vel.length(), lerpf(
-		game.chakram_speed_min, game.chakram_speed_max, 0.5)) \
-			and is_equal_approx(game.chakram_speed_min, 300.0) \
-			and is_equal_approx(game.chakram_speed_max, 520.0),
-		"the throw must use the extended Chakram launch-speed range")
-	_check(preview_launches.size() == 1 \
-			and preview_launches[0].is_equal_approx(game.chakrams[0].vel),
-		"the planning preview must use the exact live Chakram launch")
-	var first_generation: Array = game.chakrams.duplicate()
-	game.turn += 1
-	game._advance_chakrams_for_turn()
-	_check(first_generation.all(func(chakram): return chakram.is_holding()),
-		"a launch-turn chakram must hold throughout the following turn")
-	game._spawn_player_attack(game.players[3])
-	var second_generation: Array = game.chakrams.slice(1)
-	game.turn += 1
-	game._advance_chakrams_for_turn()
-	_check(first_generation.all(func(chakram): return chakram.is_returning()) \
-			and second_generation.all(func(chakram): return chakram.is_holding()),
-		"an older chakram must return while the next turn's throw remains held")
-	game.turn += 1
-	game._advance_chakrams_for_turn()
-	_check(second_generation.all(func(chakram): return chakram.is_returning()) \
-			and first_generation.all(func(chakram): return chakram.is_returning()) \
-			and game.chakrams.size() == 2,
-		"each chakram must remain live after recall until Eclipse catches it")
+	_check(game.arrows.size() == 2 and game.chakrams.is_empty(),
+		"the fourth slot must throw Duelist daggers")
 
 
 func _test_duplicates_and_teams(game) -> void:
@@ -265,8 +230,8 @@ func _test_duplicates_and_teams(game) -> void:
 	_fill(roster, 2, roster.SlotKind.CPU, 1)
 	_fill(roster, 3, roster.SlotKind.CPU, 1)
 	for slot in 4:
-		_pick(roster, slot, roster.CHAKRAM)
-	_check(roster.weapons == [roster.CHAKRAM, roster.CHAKRAM, roster.CHAKRAM, roster.CHAKRAM],
+		_pick(roster, slot, roster.DUELIST)
+	_check(roster.weapons == [roster.DUELIST, roster.DUELIST, roster.DUELIST, roster.DUELIST],
 		"two slots must be able to claim the same fighter")
 	roster._set_ready(0, true)
 	roster._confirm()
@@ -280,7 +245,7 @@ func _test_duplicates_and_teams(game) -> void:
 	await _idle()
 	_check(game.team_mode and game.player_teams == [0, 1, 0, 1],
 		"team identities must reach gameplay unchanged")
-	_check(game.uses_chakram(0) and game.uses_chakram(1),
+	_check(game.player_weapons[0] == Roster.DUELIST and game.player_weapons[1] == Roster.DUELIST,
 		"duplicate picks must arm both fighters with the same kit")
 
 
@@ -288,7 +253,7 @@ func _test_free_play(game) -> void:
 	var roster = game._roster
 	var setup = game._setup
 	_reopen(game)
-	_pick(roster, 0, roster.SHOCK)
+	_pick(roster, 0, roster.DUELIST)
 	_pick(roster, 1, roster.DUELIST)
 	roster._set_ready(0, true)
 	roster._confirm()
@@ -304,7 +269,7 @@ func _test_free_play(game) -> void:
 		"Free Play must retire match length instead of pretending to score")
 	setup._start_match()
 	await _idle()
-	_check(game.state == Phase.FREEPLAY and game.uses_shock(0) and not game.uses_shock(1),
+	_check(game.state == Phase.FREEPLAY and game.player_weapons[0] == Roster.DUELIST and game.player_weapons[1] == Roster.DUELIST,
 		"Free Play must start with the selected player and dummy characters")
 
 
@@ -321,7 +286,7 @@ func _test_pad_claiming(game) -> void:
 
 	roster.handle_joy_button(7, JOY_BUTTON_DPAD_RIGHT)
 	roster.handle_joy_button(7, JOY_BUTTON_DPAD_RIGHT)
-	_check(roster.weapons[2] == roster.SHOCK and roster.weapons[0] == roster.DUELIST,
+	_check(roster.weapons[2] == roster.DUELIST and roster.weapons[0] == roster.DUELIST,
 		"each pad must move its own cursor without touching Player 1's")
 	roster.handle_joy_button(7, JOY_BUTTON_A)
 	_check(roster.ready_slots[2], "A must commit the pad's own slot")
@@ -348,7 +313,8 @@ func _reopen(game) -> void:
 	var roster = game._roster
 	game._open_menu()
 	game._transition.visible = false
-	game._menu._activate(game._menu.ROW_PLAY)
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_CUSTOM)
 	roster._debug_pads.clear()
 	for slot in roster.MAX_SLOTS:
 		if slot == 0:

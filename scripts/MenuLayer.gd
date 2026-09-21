@@ -7,7 +7,14 @@ extends CanvasLayer
 ## arena on MatchSetupLayer — is decided elsewhere. This screen only chooses which
 ## destination to open.
 
+signal duel_requested
+signal feedback_requested
+signal quit_requested
 signal roster_requested
+signal fate_trial_requested
+signal close_camera_requested
+signal class_lab_requested
+signal real_time_requested
 signal sandbox_requested
 signal binding_changed(action: String, codes: Array)
 signal bindings_reset
@@ -18,12 +25,21 @@ signal ui_navigated
 signal ui_accepted
 
 const ROW_PLAY := 0
-const ROW_SANDBOX := 1
-const ROW_TUTORIAL := 2
-const ROW_ONLINE := 3
-const ROW_CONTROLS := 4
-const ROW_OPTIONS := 5
+const ROW_TUTORIAL := 1
+const ROW_ONLINE := 2
+const ROW_CONTROLS := 3
+const ROW_OPTIONS := 4
+const ROW_EXPERIMENTS := 5
 const ROW_QUIT := 6
+const ROW_CUSTOM := 7
+var developer_mode: bool = "--dev-tools" in OS.get_cmdline_user_args()
+## Rows on the separate experiments page.
+const ROW_REAL_TIME := 0
+const ROW_FATE_TRIAL := 1
+const ROW_CLOSE_CAMERA := 2
+const ROW_SANDBOX := 3
+const ROW_CLASS_LAB := 4
+const ROW_EXPERIMENTS_BACK := 5
 
 ## Enough physical rows for the longest page, which is the binding list.
 const ROWS := 11
@@ -42,7 +58,7 @@ const DISPLAY_NAMES := [
 	"MAXIMIZED", "FULLSCREEN",
 ]
 
-enum MenuPage { MAIN, CONTROLS, OPTIONS, BINDINGS }
+enum MenuPage { MAIN, CONTROLS, OPTIONS, BINDINGS, EXPERIMENTS }
 
 ## Player 1's rebindable actions, in the order they are listed. Aim and firing
 ## live on the mouse and are not part of this list.
@@ -169,14 +185,14 @@ class ControlsSheet:
 
 		_add_text(Vector2(18.0, 10.0), Vector2(360.0, 24.0), 16,
 			"PLAYER 1", GOLD)
-		_add_text(Vector2(104.0, 13.0), Vector2(270.0, 20.0), 11,
+		_add_text(Vector2(140.0, 13.0), Vector2(238.0, 20.0), 11,
 			"KEYBOARD + MOUSE", Color(0.65, 0.69, 0.78))
 		p1_body = _add_text(Vector2(18.0, 40.0), Vector2(360.0, 88.0), 10, "",
 			Color(0.84, 0.87, 0.94))
 
 		_add_text(Vector2(438.0, 10.0), Vector2(360.0, 24.0), 16,
 			"PLAYER 2", GOLD)
-		_add_text(Vector2(524.0, 13.0), Vector2(270.0, 20.0), 11,
+		_add_text(Vector2(560.0, 13.0), Vector2(238.0, 20.0), 11,
 			"CONNECTED GAMEPAD", Color(0.65, 0.69, 0.78))
 		p2_body = _add_text(Vector2(438.0, 40.0), Vector2(360.0, 88.0), 10, "",
 			Color(0.84, 0.87, 0.94))
@@ -198,8 +214,8 @@ class ControlsSheet:
 
 		shortcut_body = _add_text(Vector2(18.0, 251.0), Vector2(778.0, 64.0), 11,
 			"ROSTER    //  P1 owns the keyboard · a pad presses A to take an open slot · any slot can be a CPU\n" \
-			+ "PLAYTEST  //  F8 fill P1 SUPER  ·  SHIFT + F8 fill P2 SUPER  ·  F7 activate 3-dagger volleys\n" \
-			+ "GLOBAL    //  F9 restart  ·  F10 next arena  ·  M mute  ·  H control bar  ·  ESC menu",
+			+ "TIMELINE  //  Solid: recorded move · Dashes: momentum + gravity · Diamond: throw\n" \
+			+ "GLOBAL    //  M mute  ·  H control bar  ·  ESC menu",
 			Color(0.72, 0.76, 0.84))
 
 		var rebind := Button.new()
@@ -535,6 +551,8 @@ func _refresh() -> void:
 			_blurb.text = "OPTIONS · DISPLAY, SOUND AND ACCESSIBILITY"
 		MenuPage.BINDINGS:
 			_blurb.text = "CONTROLS · PLAYER 1 KEYS"
+		MenuPage.EXPERIMENTS:
+			_blurb.text = "EXPERIMENTS · UNFINISHED MODES AND DEVELOPMENT TOOLS"
 		_:
 			_blurb.text = "STOP TIME · WRITE THE MOVE · RELEASE THE CONSEQUENCE"
 	# The panel names whatever the cursor is on; only Options is an options list.
@@ -553,8 +571,10 @@ func _refresh() -> void:
 	_hint.text = "ENTER / ESC return" if controls_open else ( \
 		"W / S select      ENTER rebind      ESC back" if _page == MenuPage.BINDINGS \
 		else ("W / S select      A / D adjust      ENTER adjust      ESC back" \
-		if _page != MenuPage.MAIN \
-		else "CLICK / TAP or W / S select      ENTER activate      ESC quit"))
+		if _page == MenuPage.OPTIONS \
+		else ("CLICK / TAP or W / S select      ENTER activate      ESC back"
+		if _page == MenuPage.EXPERIMENTS
+		else "CLICK / TAP or W / S select      ENTER activate")))
 	var pitch := 43.0 if names.size() <= 8 else 36.0
 	var plate_h := pitch - 6.0
 	var font_size := 18 if names.size() <= 8 else 15
@@ -577,7 +597,7 @@ func _refresh() -> void:
 		_row_buttons[slot].size = Vector2(540.0, plate_h)
 		var is_selected := slot == _cursor
 		# ASCII markers remain crisp in the Web export's reduced fallback font.
-		_rows[slot].text = ("◆  " + names[slot]) if is_selected else ("    " + names[slot])
+		_rows[slot].text = (">  " + names[slot]) if is_selected else ("    " + names[slot])
 		_rows[slot].add_theme_color_override("font_color", HOT if is_selected else DIM)
 		_row_bgs[slot].color = Color(0.35, 0.10, 0.52, 0.84) if is_selected \
 			else Color(0.045, 0.028, 0.070, 0.74)
@@ -607,11 +627,20 @@ func _activate(row: int) -> void:
 		else:
 			_change_option(row, 1)
 		return
+	if _page == MenuPage.EXPERIMENTS:
+		match row:
+			ROW_REAL_TIME: real_time_requested.emit()
+			ROW_FATE_TRIAL: fate_trial_requested.emit()
+			ROW_CLOSE_CAMERA: close_camera_requested.emit()
+			ROW_SANDBOX: sandbox_requested.emit()
+			ROW_CLASS_LAB: class_lab_requested.emit()
+			ROW_EXPERIMENTS_BACK:
+				_show_main_menu()
+				_select(ROW_EXPERIMENTS)
+		return
 	match row:
 		ROW_PLAY:
-			roster_requested.emit()
-		ROW_SANDBOX:
-			sandbox_requested.emit()
+			duel_requested.emit()
 		ROW_TUTORIAL:
 			tutorial_requested.emit()
 		ROW_ONLINE:
@@ -624,8 +653,17 @@ func _activate(row: int) -> void:
 			_page = MenuPage.OPTIONS
 			_cursor = 0
 			_refresh()
+		ROW_CUSTOM:
+			if developer_mode: roster_requested.emit()
+		ROW_EXPERIMENTS:
+			if not developer_mode:
+				feedback_requested.emit()
+				return
+			_page = MenuPage.EXPERIMENTS
+			_cursor = 0
+			_refresh()
 		ROW_QUIT:
-			get_tree().quit()
+			quit_requested.emit()
 
 
 func _page_names() -> Array[String]:
@@ -651,15 +689,19 @@ func _page_names() -> Array[String]:
 		return rows
 	if _page == MenuPage.CONTROLS:
 		return ["‹  BACK"]
-	return [
-		"PLAY",
-		"SANDBOX",
-		"HOW TO PLAY",
+	if _page == MenuPage.EXPERIMENTS:
+		return ["REAL TIME", "FATE TRIAL", "CLOSE CAMERA", "SANDBOX", "CLASS LAB", "‹  BACK"]
+	var main_rows: Array[String] = [
+		"START DUEL",
+		"LEARN TO PLAY",
 		"ONLINE",
 		"CONTROLS",
 		"OPTIONS",
-		"QUIT",
+		"EXPERIMENTS" if developer_mode else "SEND FEEDBACK",
+		"RELOAD DEMO" if OS.has_feature("web") else "QUIT",
 	]
+	if developer_mode: main_rows.append("CUSTOM MATCH")
+	return main_rows
 
 
 func _page_row_count() -> int:
@@ -670,13 +712,23 @@ func _page_description() -> String:
 	match _page:
 		MenuPage.MAIN:
 			return [
-				"Build the whole local match on one screen: mode, roster, arena and rules.",
+				"Endless Descent. Wrap left/right or through the top/bottom shafts. Novice CPU, first to 3 hits. Eight seconds to plan.",
+				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
+				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",
+				"Keyboard, mouse and gamepad controls. Rebind Player 1 keys here.",
+				"Adjust display, sound, flashes and preview contrast. Match reports are stored locally for feedback.",
+				"Unfinished modes and tuning tools." if developer_mode else "Tell us what you tried, what surprised you, and whether you want another match. Email feedback with an optional match report.",
+				"Reload this browser demo." if OS.has_feature("web") else "Close ZAWARUDO.",
+				"Configure local players, arenas and experimental match formats.",
+			][_cursor]
+		MenuPage.EXPERIMENTS:
+			return [
+				"Continuous Duelist vs CPU. No time stops or landing lines; immediate respawns. H toggles the aim guide.",
+				"Trial 01: read a revealed enemy plan and survive three execution windows as the Duelist.",
+				"The compact Knife Court prototype: closer planning, brisk turns, and full-arena execution.",
 				"Enter Arena 1 as the Duelist, then change fighters, arenas and a live CPU in place.",
-				"Read the six-screen combat briefing. No inputs or live challenges required.",
-				"Create or join a private room for a hidden-plan duel.",
-				"See P1 keyboard + mouse, P2 gamepad, SUPER activation and playtest shortcuts.",
-				"Tune sound, impact feedback, flashes, preview contrast and playtest logs.",
-				"Close ZAWARUDO and return time to the ordinary world.",
+				"Try redesigned Rook, Pulse and Eclipse against CPU. Switch fighters and compare planning with real time.",
+				"Return to the main menu.",
 			][_cursor]
 		MenuPage.BINDINGS:
 			if _cursor == BINDING_RESET_ROW:
@@ -785,10 +837,13 @@ func handle_key(code: int) -> bool:
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			_activate(_cursor)
 		KEY_ESCAPE:
-			if _page == MenuPage.OPTIONS:
+			if _page == MenuPage.EXPERIMENTS:
+				_show_main_menu()
+				_select(ROW_EXPERIMENTS)
+			elif _page == MenuPage.OPTIONS:
 				_show_main_menu()
 			else:
-				get_tree().quit()
+				_select(ROW_PLAY)
 		_:
 			return false
 	return true

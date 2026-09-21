@@ -44,12 +44,3 @@ static func offset(motion: Dictionary, abs_tick: int) -> Vector2:
 static func travel_ends(motion: Dictionary) -> Array:
 	var axis: Vector2 = motion.get("axis", Vector2.DOWN)
 	return [Vector2.ZERO, axis * float(motion.get("travel", 0.0))]
-
-
-## Fraction of the sweep covered at `abs_tick`, for HUD-free readouts like the
-## rail marker. Same wave as offset(), expressed as 0..1.
-static func phase_at(motion: Dictionary, abs_tick: int) -> float:
-	var travel: float = float(motion.get("travel", 0.0))
-	if is_zero_approx(travel):
-		return 0.0
-	return offset(motion, abs_tick).length() / travel

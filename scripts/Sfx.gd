@@ -322,22 +322,6 @@ func _break() -> AudioStreamWAV:
 	return _wav(s)
 
 
-## Blast: a hard transient over a low, rapidly falling pressure wave.
-func _explosion() -> AudioStreamWAV:
-	var n := int(RATE * 0.42)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var smooth := 0.0
-	for i in n:
-		var u: float = float(i) / float(n)
-		var t: float = float(i) / float(RATE)
-		smooth = lerpf(smooth, _rng.randf_range(-1.0, 1.0), 0.18)
-		var body := sin(TAU * lerpf(105.0, 38.0, u) * t) * pow(1.0 - u, 1.45)
-		var crack := smooth * pow(1.0 - u, 5.0)
-		s[i] = clampf(body * 0.78 + crack * 0.88, -1.0, 1.0) * 0.88
-	return _wav(s)
-
-
 ## Metallic knife-on-knife ring with a short noisy transient.
 func _clash() -> AudioStreamWAV:
 	var n := int(RATE * 0.18)

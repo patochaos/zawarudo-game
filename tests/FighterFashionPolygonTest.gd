@@ -4,23 +4,8 @@ extends SceneTree
 ## full aim sweep, so a costume polygon that folds across itself is caught here
 ## instead of in a playtest.
 ##
-## THIS SUITE HAS NO ASSERTIONS BY DESIGN. Godot's triangulator refuses a
-## non-simple polygon by logging
-##
-##     ERROR: Invalid polygon data, triangulation failed.
-##
-## and drawing nothing. There is no GDScript-visible signal for that — the frame
-## simply comes out missing a piece of costume. CI's rule that a suite fails when
-## Godot logs `ERROR:` even at exit 0 is what turns this run into a test, which
-## is exactly the mechanism that caught the truncated lockstep digest. So this
-## file's whole job is to make every fashion polygon actually get drawn.
-##
-## The same fault has now hit three kits: `_draw_velocity_fashion` built its coat
-## from world-space offsets on a torso the dash can rotate, `_draw_pulse_fashion`
-## had a six-point hem that folded in mirrored and movement poses, and
-## `_draw_eclipse_fashion` anchored a crescent on two shoulder joints that swap
-## order with facing. Each was found separately, by hand, after shipping. Adding
-## a kit means adding it to KITS below; that is the entire maintenance cost.
+## Requires a real renderer. Both test runners fail on logged ERROR: messages,
+## including triangulation failures which do not change Godot's exit code.
 
 const MAIN_SCENE := preload("res://scenes/Main.tscn")
 
@@ -42,6 +27,10 @@ func _init() -> void:
 
 
 func _run() -> void:
+	if DisplayServer.get_name() == "headless":
+		push_error("Fighter fashion requires a real renderer; omit --headless")
+		quit(1)
+		return
 	var game = MAIN_SCENE.instantiate()
 	root.add_child(game)
 	await process_frame
@@ -49,8 +38,12 @@ func _run() -> void:
 	# The legacy `_draw()` is what carries the costume polygons, so make sure the
 	# sprite renderer is not standing in for it.
 	game.fighter_visuals_enabled = false
+	game.set_process(false)
+	game.set_physics_process(false)
+	game._menu.hide()
 
 	var subject: Player = game.players[0]
+	subject.set_process(false)
 	subject.draw_legacy_visual = true
 
 	var drawn := 0
@@ -102,5 +95,5 @@ func _draw_at(subject: Player, anim_times: Array) -> int:
 	for t: float in anim_times:
 		subject._anim_time = t
 		subject.queue_redraw()
-		await process_frame
+		await RenderingServer.frame_post_draw
 	return anim_times.size()

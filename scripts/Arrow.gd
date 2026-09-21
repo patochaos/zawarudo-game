@@ -300,44 +300,6 @@ static func segment_rect_impact(a: Vector2, b: Vector2, r: Rect2) -> Array:
 	return [t0, enter_normal]
 
 
-## Closest distance between two swept segments, and where on each it happens.
-## Returns [distance, point_on_a, point_on_b]. Used for knife-vs-knife, which
-## must not tunnel: a head-on pair closes ~24px in a single tick.
-static func seg_seg_closest(a0: Vector2, a1: Vector2, b0: Vector2, b1: Vector2) -> Array:
-	var da := a1 - a0
-	var db := b1 - b0
-	var r := a0 - b0
-	var aa := da.dot(da)
-	var bb := db.dot(db)
-	var f := db.dot(r)
-	var s := 0.0
-	var t := 0.0
-
-	if aa <= 0.000001 and bb <= 0.000001:
-		return [r.length(), a0, b0]
-	if aa <= 0.000001:
-		t = clampf(f / bb, 0.0, 1.0)
-	else:
-		var c := da.dot(r)
-		if bb <= 0.000001:
-			s = clampf(-c / aa, 0.0, 1.0)
-		else:
-			var e := da.dot(db)
-			var den := aa * bb - e * e
-			s = clampf((e * f - c * bb) / den, 0.0, 1.0) if den > 0.000001 else 0.0
-			t = (e * s + f) / bb
-			if t < 0.0:
-				t = 0.0
-				s = clampf(-c / aa, 0.0, 1.0)
-			elif t > 1.0:
-				t = 1.0
-				s = clampf((e - c) / aa, 0.0, 1.0)
-
-	var pa: Vector2 = a0 + da * s
-	var pb: Vector2 = b0 + db * t
-	return [(pa - pb).length(), pa, pb]
-
-
 ## Closest approach of two points moving over the SAME tick. Unlike a generic
 ## segment/segment test, this cannot report a false clash when two knives cross
 ## the same piece of space at different moments. Returns [distance, point_a,

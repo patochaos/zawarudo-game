@@ -13,7 +13,7 @@ func _capture() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game._on_menu_tutorial()
+	game._open_reference_briefing()
 	await VisualCapture.await_transition(self, game)
 
 	var error := OK

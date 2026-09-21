@@ -5,6 +5,8 @@ class_name PlaytestTelemetry
 ## match can be copied from the result screen. No network request is made here.
 
 var enabled: bool = true
+var active: bool = false
+var _pending_rematch: Dictionary = {}
 var session_id: String = ""
 var latest_report: Dictionary = {}
 var _match: Dictionary = {}
@@ -20,6 +22,7 @@ func _ready() -> void:
 
 
 func begin_match(mode: String, arena: String, input_name: String) -> void:
+	active = enabled
 	if not enabled:
 		_match.clear()
 		_events.clear()
@@ -40,10 +43,13 @@ func begin_match(mode: String, arena: String, input_name: String) -> void:
 	}
 	_events.clear()
 	record("match_started", 1)
+	if not _pending_rematch.is_empty():
+		record("rematch_started", 1, _pending_rematch)
+		_pending_rematch.clear()
 
 
 func record(name: String, turn: int, data: Dictionary = {}) -> void:
-	if not enabled or _match.is_empty():
+	if not enabled or not active or _match.is_empty():
 		return
 	_events.append({
 		"event": name,
@@ -51,15 +57,15 @@ func record(name: String, turn: int, data: Dictionary = {}) -> void:
 		"ms": Time.get_ticks_msec() - _match_started_ms,
 		"data": data.duplicate(true),
 	})
+	_snapshot(turn, "in_progress")
+	_write_latest()
 
 
 func finish_match(winner: int, score: Array[int], turn: int, world_digest: String = "") -> void:
-	if not enabled or _match.is_empty():
+	if not enabled or not active or _match.is_empty():
 		return
 	record("match_finished", turn, {"winner": winner + 1})
-	latest_report = _match.duplicate(true)
-	latest_report["duration_ms"] = Time.get_ticks_msec() - _match_started_ms
-	latest_report["turns"] = turn
+	_snapshot(turn, "completed")
 	latest_report["winner"] = winner + 1 if winner >= 0 else 0
 	latest_report["score"] = score.duplicate()
 	latest_report["events"] = _events.duplicate(true)
@@ -67,6 +73,7 @@ func finish_match(winner: int, score: Array[int], turn: int, world_digest: Strin
 		latest_report["final_digest"] = world_digest
 	_write_latest()
 	_append_session_log()
+	active = false
 
 
 func copy_latest_to_clipboard() -> bool:
@@ -74,10 +81,6 @@ func copy_latest_to_clipboard() -> bool:
 		return false
 	DisplayServer.clipboard_set(JSON.stringify(latest_report, "  "))
 	return true
-
-
-func latest_path() -> String:
-	return ProjectSettings.globalize_path("user://latest-match-report.json")
 
 
 func _write_latest() -> void:
@@ -97,3 +100,28 @@ func _append_session_log() -> void:
 		return
 	file.seek_end()
 	file.store_line(JSON.stringify(latest_report))
+
+
+func _snapshot(turn: int, outcome: String) -> void:
+	latest_report = _match.duplicate(true)
+	latest_report["duration_ms"] = Time.get_ticks_msec() - _match_started_ms
+	latest_report["turns"] = turn
+	latest_report["outcome"] = outcome
+	latest_report["events"] = _events.duplicate(true)
+
+
+func abandon_match(turn: int, score: Array[int], reason: String) -> void:
+	if not enabled or not active: return
+	record("match_abandoned", turn, {"reason": reason})
+	_snapshot(turn, "abandoned")
+	latest_report["score"] = score.duplicate()
+	_write_latest()
+	_append_session_log()
+	active = false
+
+
+func note_rematch(turn: int) -> void:
+	if not enabled or latest_report.is_empty(): return
+	latest_report["rematch_selected"] = true
+	_write_latest()
+	_pending_rematch = {"previous_session": latest_report["session"], "previous_match": latest_report["match"]}

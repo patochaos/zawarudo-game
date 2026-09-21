@@ -65,10 +65,6 @@ func _run() -> void:
 	plan.set_aim_side(1)
 	_check(plan.aim_side() == 1 and is_equal_approx(plan.elevation(), 32.0),
 		"walking right must face right without changing elevation")
-	_check(not GAME_MANAGER.should_accept_mouse_aim(true, true),
-		"an emulated mouse move from the joystick must never replace touch aim")
-	_check(GAME_MANAGER.should_accept_mouse_aim(false, true),
-		"desktop mouse aiming must remain available when touch controls are off")
 
 	var aim_start := Vector2(850.0, 350.0)
 	var aim_end := Vector2(1040.0, 280.0)
@@ -129,12 +125,40 @@ func _run() -> void:
 	controls.queue_free()
 	manager.queue_free()
 	await process_frame
+	await _test_mouse_touch_arbitration()
 
 	if _failures == 0:
 		print("Touch controls: all tests passed")
 	else:
 		push_error("Touch controls: %d test(s) failed" % _failures)
 	quit(_failures)
+
+
+func _test_mouse_touch_arbitration() -> void:
+	var game = GAME_MANAGER.new()
+	root.add_child(game)
+	await process_frame
+	game.set_process(false)
+	game.set_physics_process(false)
+	game._sfx.muted = true
+	game._pads[0] = -1
+	game._touch_controls.configure(game, true)
+	game._touch_controls.aim_active = false
+	game.players[0].plan.aim_angle = 32.0
+	game.aim_source[0] = game.AimSrc.TOUCH
+	game._poll_aim(0, 0.016, true)
+	_check(game.aim_source[0] == game.AimSrc.TOUCH
+		and is_equal_approx(game.players[0].plan.aim_angle, 32.0),
+		"emulated mouse movement must preserve the released touch aim")
+	game._touch_controls.configure(game, false)
+	game._poll_aim(0, 0.016, false)
+	_check(game.aim_source[0] == game.AimSrc.TOUCH,
+		"an idle desktop mouse must not take over aim")
+	game._poll_aim(0, 0.016, true)
+	_check(game.aim_source[0] == game.AimSrc.MOUSE,
+		"desktop mouse movement must take over when touch controls are off")
+	game.free()
+	await process_frame
 
 
 func _check(condition: bool, message: String) -> void:

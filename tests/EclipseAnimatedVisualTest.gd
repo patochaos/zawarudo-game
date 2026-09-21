@@ -14,6 +14,9 @@ func _capture() -> void:
 	await process_frame
 	game._sfx.muted = true
 	game.start_quick_match(false, 0, 2, [game.Weapon.CHAKRAM, game.Weapon.KNIVES])
+	# Retained prototype visual fixture, unavailable in play.
+	game.player_weapons[0] = game.Weapon.CHAKRAM
+	game.restart()
 	game._transition.visible = false
 	game._ui.visible = false
 	game._preview.visible = false

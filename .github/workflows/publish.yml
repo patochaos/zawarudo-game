@@ -28,7 +28,9 @@ jobs:
           include-templates: false
       - name: Import project resources
         run: godot --headless --path . --import
-      - name: Run deterministic game tests
+      - name: Install software rendering support
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri
+      - name: Run game tests
         shell: bash
         run: |
           shopt -s nullglob
@@ -52,7 +54,11 @@ jobs:
             set +e
             # A GDScript runtime error kills the suite coroutine before quit(),
             # which leaves Godot running forever; cap each suite instead.
-            output=$(timeout 300 godot --headless --path . --script "$test" 2>&1)
+            if [ "$test" = "tests/FighterFashionPolygonTest.gd" ]; then
+              output=$(timeout 300 xvfb-run -a godot --rendering-method gl_compatibility --audio-driver Dummy --disable-vsync --path . --script "$test" 2>&1)
+            else
+              output=$(timeout 300 godot --headless --path . --script "$test" 2>&1)
+            fi
             code=$?
             set -e
             printf '%s\n' "$output"

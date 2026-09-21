@@ -1,5 +1,7 @@
 # ZAWARUDO — Tactical Knife Duel
 
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate Novice CPU match in Endless Descent, first to three hits, with four-way screen wrapping. Every playable turn retains its eight-second limit. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+
 > Diseño de juego: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — visión,
 > pilares, contratos de experiencia y marco para futuras decisiones.
 
@@ -51,9 +53,24 @@ Godot 4.7. Double-click one of these:
 
 | File | What it does |
 |---|---|
-| **`Play.bat`** | Canonical local launcher. Runs the latest working tree with the authored Duelist, Rook and Pulse arena sprites, without an export step. |
+| **`Play.bat`** | Canonical local launcher. Runs the latest working tree with the authored Duelist arena sprite, without an export step. |
 | **`Play-Source.bat`** | Source-launch implementation used by `Play.bat`. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
 | **`Build.bat`** | Exports unpacked Windows + Web folders. It never creates ZIP archives. |
+
+### Featured 1v1 arenas
+
+Launch `Play.bat -- --dev-tools`, choose **Custom Match**, keep two fighters, then select an arena in
+match setup. These two are marked **FEATURED 1v1**:
+
+- **Endless Descent (2 of 7):** top/bottom wrapping through the central shaft,
+  with left/right passages upstairs. Lower side walls close the ground shortcut.
+  Permanent stairs keep the upper route available after cover breaks.
+- **Pulse Chamber (4 of 7):** equal approaches to two knife-triggered pulse orbs.
+  Taking the inner platforms puts fighters near the blast zones; the ground
+  offers a safer approach. Shoot an orb to push fighters and redirect knives.
+  Its visible ring shows the range, and a dark orb is recharging.
+
+These use screen-edge wrapping within the fixed arena, rather than camera scrolling.
 | **`Build-Web.bat`** | Generates and validates the browser build in `build/web`. |
 | **`Deploy-Web.bat`** | Generates the browser build and publishes it to Vercel production. |
 
@@ -69,25 +86,31 @@ Play the current production build at **https://zawarudo-pi.vercel.app**.
 
 The Godot WebAssembly client is hosted on Vercel. Private rooms run through the
 Cloudflare Worker in `backend/`, with one hibernating Durable Object per room.
-The Worker coordinates the lobby and exchanges locked plans; both browsers then
+The Worker coordinates the lobby and exchanges locked plans; all clients then
 simulate the exact same deterministic turn and compare a state hash before the
 next one begins.
 
 To play online:
 
-1. Each player chooses their fighter in the Online lobby. Player 1 also chooses
-   the arena, selects **CREATE PRIVATE ROOM**, then sends the
-   six-character code to Player 2.
-2. Player 2 chooses **ONLINE**, enters that code, and presses **JOIN**.
-3. Both players use their own keyboard and mouse. Online, the controls on both
+1. The host chooses **ONLINE**, selects **4 PLAYERS** (the default) or **2 PLAYERS**,
+   chooses the arena, and selects **CREATE PRIVATE ROOM**. Share the six-character
+   code with the other players.
+2. Each other player chooses **ONLINE**, enters the code, and presses **JOIN**.
+   The lobby displays connected seats and starts only when every seat is connected.
+3. Each player uses their own keyboard and mouse. Online, the controls on all
    computers are `A`/`D`, `W`, `S`, mouse aim, hold/release `LMB`, `Left Shift`
    to confirm, `R`/`RMB` to roll back, `F` to reset the path, and `T` for SUPER.
-   The Pulse and Eclipse reserve `RMB` for alternate attacks, so use `R` to
-   roll their shots back.
 
-Plans remain private until both players confirm. A disconnected client retries
+Plans remain private until every player confirms. A disconnected client retries
 the room socket automatically; a detected state mismatch stops the match
-instead of allowing the two screens to silently diverge.
+instead of allowing screens to silently diverge. Four-player matches wait for
+disconnected players to reconnect; they do not award a disconnect victory.
+If someone closes the game entirely, create a new room together.
+
+Four-player support requires the protocol 3 room server and matching clients.
+The room server was updated on September 19, 2026; use the updated source on
+every PC. The hosted website client has not been updated for four-player play.
+See [four-player verification and rollout](docs/FOUR_PLAYER_ONLINE.md).
 
 Vercel is the client host because the current Godot WebAssembly file is larger
 than Cloudflare Pages' per-file limit, while it fits within Vercel Hobby's
@@ -116,13 +139,16 @@ npx wrangler deploy
 
 ## Menu
 
-The title screen keeps six primary choices: **PLAY**, **HOW TO PLAY**, **ONLINE**,
-**CONTROLS**, **OPTIONS**, and **QUIT**. Every row is clickable; keyboard
+The public title screen has seven choices: **START DUEL**, **LEARN TO PLAY**,
+**ONLINE**, **CONTROLS**, **OPTIONS**, **SEND FEEDBACK**, and **QUIT** (Reload Demo
+in a browser). Developer mode replaces Feedback with Experiments and adds
+Custom Match. Escape returns from submenus; on the title it focuses Start Duel.
+Every row is clickable; keyboard
 navigation remains available (`W`/`S` select, `Enter` activate). The redesigned
 command-dossier layout keeps navigation on the left and explains the selected
 fate in a persistent field-note panel on the right.
 **CONTROLS** opens a full reference sheet for the local device split, SUPER
-activation, and playtest shortcuts. Its Player 1 column reads the live bindings,
+activation, and match controls. Its Player 1 column reads the live bindings,
 and **REBIND KEYS** opens the list: pick an action, press Enter, then press the
 key you want. A key drives exactly one action, so taking it from another leaves
 that one unbound until you set it too; Escape cancels a capture and is never
@@ -145,17 +171,17 @@ added later still arrives with its default.
 There is no music bed in the build, so sound splits along the axis that actually
 matters: the loud voice cues against everything else.
 
-**PLAY** opens two screens: the lineup, then the rules. Nothing else configures
-a local match.
+**START DUEL** launches the fixed playtest immediately. **CUSTOM MATCH**, available
+in developer mode, opens the lineup and rules screens described below.
 
 **The lineup screen** is four slots side by side. Player 1 holds the keyboard and
 mouse, Player 2 starts as a CPU, and slots three and four start open. Nobody
 picks a head count: the match is however many slots are filled, from two to four.
 
-Each slot carries its own fighter carousel — **The Duelist**, **The Rook**
-(Dashblade), **The Pulse** (Shock), and **The Eclipse** (Chakram) — stepped with
-`←`/`→`, so the cast can grow without the screen changing shape. Two slots may
-take the same fighter. Under each one, the **control tile** walks the seat
+Every occupied slot plays **The Duelist**, including CPUs and training dummies.
+The Rook, The Pulse and The Eclipse are benched while development focuses on
+predicting movement and placing projectiles across an opponent’s route. Their
+code and assets are retained. Under each slot, the **control tile** walks the seat
 through PLAYER, the three CPU skills, and OPEN; two fighters is the floor, so the
 open option is skipped rather than offered and refused.
 
@@ -185,11 +211,11 @@ The three modes are:
 * **FREE PLAY** — see below. Scoring is retired and unclaimed slots become
   training dummies.
 
-**HOW TO PLAY** is a six-screen illustrated combat briefing. It explains the
-plan/lock/execute loop, movement stamina, jumping and waiting, attack placement,
-undo/reset/lock, and the win condition. The simulation is fully paused while it
-is open, so every page can be read and navigated without completing a live input
-challenge. Keyboard, gamepad, and touch equivalents appear beside every action.
+**LEARN TO PLAY** teaches movement, interception and persistent threats through
+three playable exercises. Instructions appear before the timed attempt; every
+playable turn has eight seconds. Failed attempts can be retried. Completing the
+lessons starts the fixed Novice duel. The old illustrated briefing is retained
+as a developer reference, not the public onboarding route.
 **ONLINE** creates or joins a private six-character room; plans remain hidden
 until both players lock. **OPTIONS** has its own page for sound level, hit
 freeze, reduced flashes, high-contrast planning previews, and the
@@ -199,14 +225,39 @@ it does not alter collision, aim, timing, or fighter identity.
 
 The playtest log makes no network request. It stores one JSON object per match
 in `user://playtest-telemetry.jsonl` and overwrites
-`user://latest-match-report.json` with the latest result. The result screen's
-**COPY MATCH REPORT** action puts that compact report on the clipboard so a
-tester can paste it into a bug report. Options can disable the log entirely.
+`user://latest-match-report.json` after events, including unfinished matches.
+**SEND FEEDBACK** on the menu and results opens an editable email draft workflow
+for patochaos@gmail.com. The player can copy the report with their notes and
+choose whether to send it. Options can disable logging entirely.
+
+## Single player prototype — Fate Trial 01
+
+Choose **EXPERIMENTS → FATE TRIAL** to enter **The Crossfire** as the
+Duelist. A hostile Duelist commits first and its complete movement and knife
+trajectory remain visible during planning. One earlier knife is already entering
+from behind; survive three execution windows to clear the trial. A hit ends the
+attempt, while hitting the hostile echo only disrupts it for that window.
+
+The prototype uses the ordinary deterministic match, persistent-projectile and
+replay systems. `Enter` retries the authored opening after either result.
+
+## Real Time — continuous Duelist experiment
+
+Choose **EXPERIMENTS → REAL TIME** for an endless Duelist-versus-CPU
+session in Crosshair Court. Movement and hold/release dagger throws happen
+immediately. Hits respawn fighters immediately; there are no planning windows,
+lock-ins, scores or round breaks. The CPU uses the existing live sandbox AI.
+
+Full trajectory and landing hints are hidden. A faint short aim stroke and a
+charge bar while drawing are the only aids; `H` toggles both off/on.
+`A`/`D` moves, `Space` jumps, mouse aims, hold/release `LMB` throws, `R` resets,
+`M` mutes and `Esc` returns to the menu. The normal Sandbox keeps its full
+previews and tuning panel. This mode is an offline feel test, not online play.
 
 ## Sandbox / Free Play — judging the feel
 
 Turn structure makes movement hard to evaluate: you only ever see 0.75s of it at
-a time. **SANDBOX** on the title screen drops the freeze entirely and enters
+a time. **EXPERIMENTS → SANDBOX** drops the freeze entirely and enters
 Arena 1 immediately as the Duelist: one player, no turns, no timer, no score,
 and no setup screens. The rules screen's **FREE PLAY** route reaches the same
 live tuning mode with its chosen lineup. Platform destruction still works and
@@ -216,7 +267,7 @@ hit fighters immediately get back up.
 
 The top lab strip changes the running test without leaving the arena:
 
-`F1` P1 class · `F2` arena · `F3` add/remove CPU · `F4` CPU class · `F5` CPU
+`F1` P1 class (Duelist only) · `F2` arena · `F3` add/remove CPU · `F4` CPU class (Duelist only) · `F5` CPU
 skill · hold `Shift` with a cycle key to go backward · `R` reset the arena
 
 The optional CPU uses the normal blind-planning opponent and its real skill
@@ -251,7 +302,7 @@ during its think delay — a full sweep costs ~35ms, which would otherwise be a
 visible hitch at the top of every planning phase. Measured over 5000 frames of
 live play: **worst frame 7.9ms, zero frames over budget.**
 
-Against The Rook, the AI remains blind to the committed plan but tests a small
+In the retained, benched Rook prototype, the AI remains blind to the committed plan but tests a small
 envelope of possible early/middle/late dash releases. Routes which escape that
 body line score higher. A close projectile fired directly into the possible
 front guard is treated as parry fuel, so the bot may reposition without firing
@@ -279,16 +330,43 @@ those values per CPU slot; `ai_slice_usec` remains the shared frame budget.
 ## The loop
 
 ```
-PLANNING (5s, frozen; shrinks after turn 3)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
+PLANNING (8s, frozen; fixed each turn)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
 ```
 
 * Execution begins when both players confirm (after a 0.25s commit beat that
   absorbs late input) **or** when the timer hits zero.
-* Turns 1–3 retain the full 5-second planning window. Turns 4 and 5 fall to
-  4.5s and 4.0s; turn 6 onward uses the 3.5-second floor. AI searches are sliced
-  across frames and lock their best evaluated candidate if that clock expires.
+* Standard matches retain an eight-second planning window throughout the match.
+  Confirming early still starts execution immediately after the commit beat.
+  The optional shrink tuning remains available with a default decrement of zero;
+  Fate Trial and Close Camera retain their own authored clocks.
 * Nothing is cleared at a phase boundary. Knives are only removed when they hit
   terrain, hit a player, or leave the world.
+
+### Plan editing and review
+
+The compact timeline shows recorded movement in player color, a white throw
+marker, and the dashed momentum/gravity continuation to the next freeze.
+The thin budget mark separates available recording time from compulsory coast.
+Only locally controlled fighters appear; online plans remain private.
+
+- `Backspace` / gamepad `L1`: rewind the last six movement ticks (0.10s at 60 Hz).
+  Earlier input and any throw still within that input survive; later input and
+  throws are removed. The removed movement budget is refunded.
+- Hold `Alt` / gamepad `R1` while aiming: adjust a placed shot without recharging.
+- `,` / `.`: move a placed throw one simulation tick earlier/later. It stays
+  inside the recorded route, and SUPER retains room for its full volley.
+- These edits require an unlocked plan. Online submissions cannot be edited.
+- `V` during desktop offline planning: review the last execution at 35% speed.
+  `Space` plays/pauses; `,` / `.` steps; `V` / `Esc` returns. Planning and AI
+  pause while this read-only view is open. Online and touch review are unavailable.
+
+Existing knife previews emphasize the next freeze (`NEXT`) and show only one
+fainter later window. These are conditional projections, not guaranteed hits:
+new shots and interactions can redirect them. Ricochet samples represent one
+simulation tick each and use the knife's existing ricochet budget and lifetime.
+
+See [Duelist polish and playtest matrix](docs/DUELIST_POLISH.md) for the current
+changes, benchmark arenas and experiments that still require player evidence.
 
 ## Match structure
 
@@ -331,7 +409,7 @@ touch it on the same physics tick, both earn the reward. A hit during the warnin
 turn cancels the incoming Core; once materialized, it persists for its full
 lifetime unless collected.
 
-Score pips sit under the timer. `F10` cycles levels and resets the score.
+Score pips sit under the timer. With developer tools enabled, `F10` cycles levels and resets the score.
 
 ## Movement: pilot the ghost on a stamina budget
 
@@ -385,24 +463,32 @@ Key properties:
 | Aim | **Mouse** — free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
-| The Pulse plasma / orb | `1` / `2` during planning | `L1` / `R1` |
-| Eclipse DECREE / ABSOLUTION | hold/release `LMB` / `RMB` | hold/release `R2` / `L2` |
 | Toggle SUPER | `T` | `Y` |
 | Confirm | `Left Shift` | `Start` |
-| Rollback shot | `R`, or `RMB` except as Pulse/Eclipse | `B` or `Select` |
+| Rollback shot | `R` or `RMB` | `B` or `Select` |
 | Reset path | `F` | `X` |
 
-Playtest: `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
+Developer tools only (`Play.bat -- --dev-tools`): `F8` fills P1 SUPER · `Shift+F8` fills P2 SUPER · `F7` enables
 three-knife throws for the current local match.
 
-Global: `F9` restart · `F10` next level · `M` mute · `H` hide the control bar ·
+Global: `M` mute · `H` hide the control bar ·
 `Esc` back to the menu · `Enter`/`R` skip the replay. On the result screen:
 `R` watch replay · `C` copy the match report · `←`/`→` choose the rematch level
 · `Enter` rematch.
 
 In Vs AI the Player 2 column is inert — the AI ignores it.
 
-### Character prototype roster
+### Benched character prototypes (unavailable in play)
+
+As of September 4, 2026, **The Duelist is the only active fighter** in local,
+online, free play and sandbox. The following kits are retained for future
+iteration; these descriptions are reference material, not available choices.
+`Roster.ORDER` controls availability; match entry points enforce it. Online
+rooms containing unavailable kits are rejected to avoid mismatched simulations.
+The old `--rook-proto` launch option also falls back to Duelist.
+Character-specific prototype tests, balance simulations and visual captures
+use explicit fixture assignments to exercise retained mechanics outside the
+active roster. These do not make the benched kits available in play.
 
 **The Rook** deletes one frame from every four steps: her horizontal
 locomotion is 75% of the shared baseline, while the denied distance accumulates
@@ -446,7 +532,7 @@ that asked no prediction of its owner in a game built on prediction, and it read
 in the balance matrix as a kit that beat every other kit. Giving it an arc put
 her back inside the game's own rule rather than nerfing a number.
 
-**The Eclipse**, the fourth selectable fighter, throws one **CORONA** at a
+**The Eclipse**, a benched prototype, throws one **CORONA** at a
 deliberate 300–520 px/s. It follows the committed aim exactly. Its first impact
 with permanent HARD terrain ricochets at 82% speed; breakable cover or a second
 terrain impact pins it in place without stopping its spin. At the end of its
@@ -470,8 +556,8 @@ reach radius, telegraph briefly, then pounce. Keeping that territorial,
 delayed-pressure kit separate preserves The Eclipse's returning-weapon identity
 and gives the summons room for their own counterplay and limits.
 
-In Online both computers use the **Player 1 — keyboard + mouse** column. The
-server-assigned P1/P2 side changes the fighter and HUD label, not the local
+In Online all computers use the **Player 1 — keyboard + mouse** column. The
+server-assigned P1/P2/P3/P4 slot changes the fighter and HUD label, not the local
 bindings.
 
 ### Touch controls (mobile MVP)
@@ -530,7 +616,7 @@ it is a deliberate human verb, and the search has no way to value it yet.
 
 ## Levels
 
-Seven arenas, cycled with `F10`. Layouts live in `scripts/Levels.gd`, and the HUD
+Seven arenas, selected in match setup. Layouts live in `scripts/Levels.gd`, and the HUD
 names the wrap mode next to the level.
 
 | # | Name | Wrap | Character |
@@ -692,9 +778,9 @@ hits_to_win              5
 respawn_invuln_turns     1
 banner_duration          2.4
 
-planning_duration        5.0
+planning_duration        8.0
 planning_shrink_after_rounds  3
-planning_shrink_per_round     0.5
+planning_shrink_per_round     0.0
 minimum_planning_duration    3.5
 execution_duration       0.75
 commit_delay             0.25
@@ -764,6 +850,8 @@ the remaining 0.25s of the execution window.
 
 Hotkeys change them live, mid-match; current values show along the bottom:
 
+With developer tools enabled:
+
 * Planning: `F1` = 5s, `F2` = 8s, `F3` = 10s
 * Execution: `F5` = 0.40s, `F6` = 0.75s
 
@@ -783,7 +871,7 @@ the thing this prototype exists to test.
 | `scripts/PlayerPlan.gd` | The recording: per-tick direction and jump, the tick the shot is pinned to, aim angle, power, and whether the committed shot is a super. Owns the aim vector / elevation math. |
 | `scripts/Player.gd` | Player state, rendering, and `sim_step(dt, tick, from_tick)` which replays one tick of the recording. Motion lives in a static, side-effect-free `step_state()` that resolves against the geometry as it will stand at the end of the tick. |
 | `scripts/Arrow.gd` | Knife integration, terrain/player hits, synchronised swept clash math, deflection and tumbling. The legacy class name remains internal. |
-| `scripts/PredictionSystem.gd` | Knife trajectories and the uncontrolled `coast()` tail. Uses the *same* static step functions as the real simulation. |
+| `scripts/PredictionSystem.gd` | Knife and plasma trajectories. Uses the *same* static step functions as the real simulation; player ghost paths are rebuilt in `GameManager.gd`. |
 | `scripts/PreviewLayer.gd` | Ghost path, stamina, charge-aware dagger arc reticle, existing-knife trajectories, phase markers, and optional high-contrast planning treatment. |
 | `scripts/TemporalCore.gd` | Visual telegraph and active-world rendering for the full-SUPER movement objective. |
 | `scripts/UI.gd` | Compact central match HUD, phase progress, portrait seals, banners, and the desktop result action panel. |
@@ -810,3 +898,13 @@ the thing this prototype exists to test.
 Prediction only ever uses the current world state, existing projectile
 velocities, and the asking player's own plan. The opponent's plan is never
 simulated.
+
+## Developer tools
+
+Normal local matches ignore the F1–F10 timing, SUPER, secret-volley, restart
+and arena-switch shortcuts. To opt into those tools, run `Play.bat -- --dev-tools`.
+Sandbox retains its live tuning controls inside Experiments. Tests stay in
+`tests/` for development and are excluded from both export presets.
+The fixed public duel restores the authored tuning before starting. Older
+mode and arena documentation below the main-menu section describes developer
+routes unless identified as part of [the current demo](docs/CORE_PLAYTEST.md).

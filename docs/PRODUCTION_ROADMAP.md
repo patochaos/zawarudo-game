@@ -1,5 +1,21 @@
 # ZAWARUDO — Production roadmap
 
+**Current public demo:** [Core playtest](CORE_PLAYTEST.md) defines the focused
+0.3.0 entry flow, timed lessons, readability, feedback and observation gates.
+The experiment and art-production notes below remain development context.
+
+**Experimental Class Lab:** the menu now offers redesigned Rook (lance), Pulse (delayed split), and Eclipse (fixed return) against CPU in planning or real time. Normal roster stays Duelist-only. See [Class Lab](CLASS_LAB.md).
+
+**Current roster scope — September 4, 2026:** Duelist only. Rook, Pulse and
+Eclipse are benched, with code and assets preserved. Their production work
+below is deferred while we focus on prediction and projectile placement.
+
+## Current Duelist polish
+
+The implemented planning, projectile-readability and execution-review pass is
+tracked in [DUELIST_POLISH.md](DUELIST_POLISH.md). Use that document for current
+polish status and the benchmark playtest matrix before expanding the kit.
+
 ## North star
 
 Build a readable, original and theatrical 2D duel in Godot. Character poses,

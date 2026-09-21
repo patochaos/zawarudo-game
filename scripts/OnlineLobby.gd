@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name OnlineLobby
 
-signal create_requested(level: int, weapon: int)
+signal create_requested(level: int, weapon: int, capacity: int)
 signal join_requested(code: String, weapon: int)
 signal cancel_requested
 signal ui_navigated
@@ -22,7 +22,7 @@ const TILE_GAP := 12.0
 ## tile has to crop to the head or it reads as a dark smudge.
 const TILE_FACE := Rect2(0.22, 0.05, 0.56, 0.56)
 const TILE_Y := 256.0
-const TILE_ORIGIN_X := 397.0
+const TILE_ORIGIN_X := 640.0 - TILE_W / 2.0
 
 
 class FighterGrid:
@@ -115,6 +115,9 @@ class LobbyChrome:
 
 var level: int = 0
 var weapon: int = 0
+var capacity: int = 4
+var _capacity_button: Button
+var _occupancy: Label
 var _code_input: LineEdit
 var _room_label: Label
 var _room_caption: Label
@@ -148,16 +151,21 @@ func _ready() -> void:
 	var eyebrow := _label(Vector2(300.0, 105.0), 680.0, 12, VIOLET)
 	eyebrow.text = "LOCKSTEP // HIDDEN PLANS // PRIVATE ROOM"
 	var heading := _label(Vector2(300.0, 132.0), 680.0, 42, GOLD)
-	heading.text = "ONLINE DUEL"
+	heading.text = "ONLINE BATTLE"
 	var intro := _label(Vector2(330.0, 184.0), 620.0, 15, TEXT)
-	intro.text = "Each duelist uses their own screen. Plans are revealed only after both players lock fate."
+	intro.text = "Private plans. Every living player must lock fate."
 
-	_create = _button(Vector2(360.0, 398.0), Vector2(560.0, 54.0),
+	_create = _button(Vector2(360.0, 398.0), Vector2(360.0, 54.0),
 		"01   CREATE PRIVATE ROOM", true)
-	_create.pressed.connect(func(): create_requested.emit(level, weapon))
+	_create.pressed.connect(func(): create_requested.emit(level, weapon, capacity))
+	_capacity_button = _button(Vector2(734.0, 398.0), Vector2(186.0, 54.0), "4 PLAYERS  ›")
+	_capacity_button.tooltip_text = "Choose a 2-player duel or 4-player free-for-all. The match starts when the room is full."
+	_capacity_button.pressed.connect(func():
+		capacity = 2 if capacity == 4 else 4
+		_refresh_choices())
 
 	_join_divider = _label(Vector2(300.0, 468.0), 680.0, 13, DIM)
-	_join_divider.text = "OR JOIN AN EXISTING DUEL"
+	_join_divider.text = "OR JOIN AN EXISTING ROOM"
 
 	_code_input = LineEdit.new()
 	_code_input.position = Vector2(360.0, 500.0)
@@ -189,7 +197,7 @@ func _ready() -> void:
 	_join.pressed.connect(_request_join)
 
 	_room_caption = _label(Vector2(330.0, 235.0), 620.0, 13, DIM)
-	_room_caption.text = "ROOM CODE // SHARE WITH YOUR OPPONENT"
+	_room_caption.text = "ROOM CODE // SHARE WITH YOUR PLAYERS"
 	_room_caption.visible = false
 	_room_label = _label(Vector2(390.0, 276.0), 500.0, 42, VIOLET)
 	_room_label.visible = false
@@ -197,7 +205,9 @@ func _ready() -> void:
 	_copy.visible = false
 	_copy.pressed.connect(func():
 		DisplayServer.clipboard_set(_room_label.text)
-		set_status("CODE COPIED — SEND IT TO PLAYER 2", false))
+		set_status("CODE COPIED // SHARE WITH YOUR PLAYERS", false))
+	_occupancy = _label(Vector2(330.0, 512.0), 620.0, 15, TEXT)
+	_occupancy.visible = false
 
 	_fighter_label = _label(Vector2(300.0, 228.0), 680.0, 13, VIOLET)
 	_fighter_grid = FighterGrid.new()
@@ -243,6 +253,7 @@ func open(selected_level: int, selected_weapon: int = 0) -> void:
 	_room_caption.visible = false
 	_room_label.visible = false
 	_copy.visible = false
+	_occupancy.visible = false
 	_set_choices_visible(true)
 	_refresh_choices()
 	set_status("READY TO CREATE OR JOIN", false)
@@ -264,8 +275,24 @@ func show_room(code: String, player: int) -> void:
 	_set_choices_visible(false)
 	_room_label.text = code
 	_chrome.set_room_active(true)
-	set_status("YOU ARE PLAYER %d — %s" % [player + 1,
-		"SEND THIS CODE TO PLAYER 2" if player == 0 else "CONNECTING TO HOST"], false)
+	_occupancy.visible = true
+	_occupancy.text = "CONNECTING TO ROOM"
+	set_status("YOU ARE PLAYER %d // %s" % [player + 1,
+		"SHARE THIS CODE WITH YOUR PLAYERS" if player == 0 else "CONNECTING TO ROOM"], false)
+
+
+func update_room(connected: Array, room_capacity: int, selected_level: int) -> void:
+	capacity = room_capacity
+	level = selected_level
+	_refresh_choices()
+	var slots := PackedStringArray()
+	var count := 0
+	for i in capacity:
+		var present := i < connected.size() and bool(connected[i])
+		if present:
+			count += 1
+		slots.append("P%d %s" % [i + 1, "READY" if present else "WAITING"])
+	_occupancy.text = "%d/%d CONNECTED\n%s" % [count, capacity, "  ·  ".join(slots)]
 
 
 func set_status(text: String, is_error: bool) -> void:
@@ -309,6 +336,7 @@ func _cycle_level(direction: int) -> void:
 
 
 func _refresh_choices() -> void:
+	_capacity_button.text = "%d PLAYERS  ›" % capacity
 	_fighter_label.text = "YOUR FIGHTER // %s  ·  %s" % [
 		Roster.full_name(weapon), str(Roster.entry(weapon)["kit"])]
 	_fighter_grid.apply(weapon)
@@ -319,6 +347,7 @@ func _refresh_choices() -> void:
 ## Once the room exists the fighter is fixed on the server, so the grid comes
 ## down and the label alone records what this machine chose.
 func _set_choices_visible(can_edit: bool) -> void:
+	_capacity_button.visible = can_edit
 	for tile in _fighter_buttons:
 		tile.visible = can_edit
 	for caption in _fighter_captions:

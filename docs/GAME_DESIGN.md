@@ -1,5 +1,12 @@
 # ZAWARUDO — Documento de diseño de juego
 
+**Demo de prueba del bucle principal, 0.3.0:** [alcance actual](CORE_PLAYTEST.md).
+La entrada pública ofrece un duelo directo y tres lecciones jugables. Cada turno
+jugable conserva ocho segundos. Los experimentos y la configuración local libre
+requieren `--dev-tools`; sus notas posteriores describen rutas de desarrollo.
+
+**Experimento CLASS LAB:** permite probar Rook (lanza), Pulse (disparo con división retardada) y Eclipse (ida y vuelta por una línea fija), con planificación o en tiempo real. El plantel principal sigue limitado al Duelist. Reglas y controles en [CLASS_LAB.md](CLASS_LAB.md).
+
 > Documento vivo · Versión 0.1 · 10 de agosto de 2026
 
 Este documento define la intención de diseño de **ZAWARUDO**. Su función no es
@@ -136,6 +143,31 @@ viables. La geometría debe generar decisiones, no ruido visual.
 
 ---
 
+## Estado de pulido — 4 de septiembre de 2026
+
+La partida estándar ofrece 8 segundos fijos para planificar y conserva la
+resolución de 0,75 segundos. Confirmar antes sigue adelantando la ejecución.
+La interfaz distingue movimiento grabado, lanzamiento y continuación por inercia.
+Se puede rebobinar una parte de la ruta o ajustar un lanzamiento sin repetir
+la carga, siempre antes de confirmar. La revisión del último turno pausa la
+planificación offline de escritorio y no modifica el estado de la partida.
+
+Las trayectorias de cuchillos existentes enfatizan la próxima congelación y una
+ventana posterior atenuada; siguen siendo condicionales a futuras interacciones.
+Los efectos dan prioridad a los impactos sobre choques incidentales. La geometría
+de los niveles y el kit de dos dagas siguen siendo la referencia de balance.
+
+El alcance implementado y las pruebas pendientes están en
+[DUELIST_POLISH.md](DUELIST_POLISH.md).
+
+### Experimento REAL TIME
+
+El menú incluye una sesión continua de Duelist contra IA en Crosshair Court.
+No hay planificación, confirmación ni pausas entre impactos: el personaje
+reaparece de inmediato. Se ocultan las trayectorias y puntos de caída; H activa
+o desactiva una guía corta de dirección y el indicador de carga. Es una prueba
+offline del movimiento y los lanzamientos, separada del bucle táctico principal.
+
 ## 4. Bucle principal
 
 ### 4.1 Leer el estado
@@ -259,7 +291,14 @@ dagas existente, para evaluar el ataque normal sin sumar otro sistema nuevo.
 El Granadero se conserva como ruta de prueba heredada contra IA, pero deja de
 formar parte de la selección de personajes.
 
-### Prototipos de personaje
+### Prototipos de personaje en reserva
+
+Desde el 4 de septiembre de 2026, **The Duelist es el único personaje jugable**.
+El objetivo actual es anticipar el movimiento rival y colocar proyectiles en
+su ruta. Rook, Pulse y Eclipse quedan fuera de la selección local, online,
+práctica y sandbox. Se conservan su código, recursos y especificaciones para
+una futura revisión. Las descripciones siguientes documentan los prototipos
+en reserva; no representan opciones disponibles.
 
 - **The Rook / Lost Frames:** se mueve al 90% porque pierde parte de los
   fotogramas de su propia locomoción. La distancia horizontal realmente
@@ -276,7 +315,7 @@ formar parte de la selección de personajes.
   sobre plataformas. Un proyectil común o el fin de vida del orbe provoca una
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
-- **The Eclipse / Chakram:** cuarto personaje seleccionable. Lanza una corona
+- **The Eclipse / Chakram:** prototipo en reserva. Lanza una corona
   viviente a 300–520 px/s y sigue exactamente la dirección elegida. Su primer
   impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
   cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
@@ -418,9 +457,9 @@ premio fortuito.
 | Arena | Pregunta táctica principal |
 |---|---|
 | Crosshair Court | ¿Dónde chocarán los cuchillos en un espacio estático que no esconde ninguna regla adicional? |
-| Endless Descent | ¿Qué carril vertical uso alrededor del pilar cuando combatientes y cuchillos pueden regresar por ambos ejes? |
+| Endless Descent | ¿Uso el bucle vertical del pozo o subo hasta los pasos laterales? Los muros inferiores cierran el atajo horizontal del suelo. |
 | Pendulum | ¿Espero el ascensor central o llego antes usando el bucle exclusivo entre techo y suelo? |
-| Pulse Chamber | ¿Qué orbe uso como tirachinas para lanzar cuerpos y cuchillos por la ruta lateral asimétrica? |
+| Pulse Chamber | ¿Disparo al orbe para empujar al rival y redirigir cuchillos, o avanzo por el suelo fuera de su alcance? Ambos lados tienen accesos equivalentes. |
 | Shattered Sanctum | ¿Qué tramo del puente destruyo para abrir uno de los dos circuitos verticales? |
 | Foundry | ¿Paso sobre, bajo o alrededor del muro móvil antes de que cambie de lado? |
 | Collision Course | ¿Qué ferry o pulso uso para atravesar un vacío conectado por sus cuatro bordes? |

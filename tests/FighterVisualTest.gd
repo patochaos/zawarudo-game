@@ -30,7 +30,7 @@ func _run() -> void:
 		_check(not p.draw_legacy_visual and default_visual != null,
 			"normal Duelists must use their authored sprite visual")
 		_check(default_visual != null \
-				and default_visual.skin.skin_id == &"gilded_executor_animated_v1",
+				and default_visual.skin.skin_id == &"duelist_polished_v2",
 			"normal Duelists must select the animated arena skin")
 	root.remove_child(default_gm)
 	default_gm.free()

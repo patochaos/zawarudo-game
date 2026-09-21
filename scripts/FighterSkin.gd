@@ -13,6 +13,7 @@ class_name FighterSkin
 @export var sprite_cell_size := Vector2i(256, 256)
 @export var sprite_draw_rect := Rect2(-64.0, -97.0, 128.0, 128.0)
 @export var sprite_tint := Color.WHITE
+@export var sprite_texture_filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_PARENT_NODE
 @export var ghost_texture: Texture2D
 @export var ghost_atlases: Dictionary = {}
 @export var portrait: Texture2D
@@ -25,7 +26,12 @@ class_name FighterSkin
 @export var silhouette: Dictionary = {}
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
 @export var state_ticks_per_frame: Dictionary = {}
+## Authored wind-up frames precede the simulation launch. Other skins start at 0.
+@export var shot_release_frame: int = 0
 @export var procedural_aim_arm_enabled: bool = true
+## Positive values select authored launch/apex and descent/brace poses by speed.
+## Zero keeps the existing looping animation for other skins.
+@export var air_pose_speed_threshold: float = 0.0
 
 
 const EXECUTOR_ATLAS_PATHS := {
@@ -46,27 +52,18 @@ const EXECUTOR_COUNTS := {
 	&"LOCK": 2,
 }
 
-const SIMPLIFIED_EXECUTOR_PATHS := {
-	&"IDLE": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/idle.png",
-	&"RUN": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/run.png",
-	&"RISE": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/rise.png",
-	&"FALL": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/rise.png",
-	&"SHOT": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/lock.png",
-	&"LOCK": "res://assets/art/fighters/gilded-executor-simplified-proof-v1/lock.png",
-}
-
 const ANIMATED_EXECUTOR_PATHS := {
-	&"IDLE": "res://assets/art/fighters/gilded-executor-animated-v1/idle.png",
-	&"WALK": "res://assets/art/fighters/gilded-executor-animated-v1/walk.png",
-	&"RUN": "res://assets/art/fighters/gilded-executor-animated-v1/run.png",
-	&"RISE": "res://assets/art/fighters/gilded-executor-animated-v1/rise.png",
-	&"FALL": "res://assets/art/fighters/gilded-executor-animated-v1/fall.png",
-	&"SHOT": "res://assets/art/fighters/gilded-executor-animated-v1/shoot.png",
-	&"LOCK": "res://assets/art/fighters/gilded-executor-animated-v1/lock.png",
-	&"DEFEAT": "res://assets/art/fighters/gilded-executor-animated-v1/defeat.png",
+	&"IDLE": "res://assets/art/fighters/duelist-polished-v2/idle.png",
+	&"WALK": "res://assets/art/fighters/duelist-polished-v2/walk.png",
+	&"RUN": "res://assets/art/fighters/duelist-polished-v2/run.png",
+	&"RISE": "res://assets/art/fighters/duelist-polished-v2/rise.png",
+	&"FALL": "res://assets/art/fighters/duelist-polished-v2/fall.png",
+	&"SHOT": "res://assets/art/fighters/duelist-polished-v2/shoot.png",
+	&"LOCK": "res://assets/art/fighters/duelist-polished-v2/lock.png",
+	&"DEFEAT": "res://assets/art/fighters/duelist-polished-v2/defeat.png",
 }
 
-const ANIMATED_EXECUTOR_COUNTS := {
+const ANIMATED_COUNTS := {
 	&"IDLE": 4,
 	&"WALK": 6,
 	&"RUN": 6,
@@ -78,14 +75,14 @@ const ANIMATED_EXECUTOR_COUNTS := {
 }
 
 const ANIMATED_EXECUTOR_GHOST_PATHS := {
-	&"IDLE": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-idle.png",
-	&"WALK": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-walk.png",
-	&"RUN": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-run.png",
-	&"RISE": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-rise.png",
-	&"FALL": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-fall.png",
-	&"SHOT": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-shoot.png",
-	&"LOCK": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-lock.png",
-	&"DEFEAT": "res://assets/art/fighters/gilded-executor-animated-v1/ghost-defeat.png",
+	&"IDLE": "res://assets/art/fighters/duelist-polished-v2/ghost-idle.png",
+	&"WALK": "res://assets/art/fighters/duelist-polished-v2/ghost-walk.png",
+	&"RUN": "res://assets/art/fighters/duelist-polished-v2/ghost-run.png",
+	&"RISE": "res://assets/art/fighters/duelist-polished-v2/ghost-rise.png",
+	&"FALL": "res://assets/art/fighters/duelist-polished-v2/ghost-fall.png",
+	&"SHOT": "res://assets/art/fighters/duelist-polished-v2/ghost-shoot.png",
+	&"LOCK": "res://assets/art/fighters/duelist-polished-v2/ghost-lock.png",
+	&"DEFEAT": "res://assets/art/fighters/duelist-polished-v2/ghost-defeat.png",
 }
 
 const ROOK_ATLAS_PATHS := {
@@ -97,17 +94,6 @@ const ROOK_ATLAS_PATHS := {
 	&"SHOT": "res://assets/art/fighters/rook-animated-v2/shot.png",
 	&"LOCK": "res://assets/art/fighters/rook-animated-v2/lock.png",
 	&"DEFEAT": "res://assets/art/fighters/rook-animated-v2/defeat.png",
-}
-
-const ROOK_COUNTS := {
-	&"IDLE": 4,
-	&"WALK": 6,
-	&"RUN": 6,
-	&"RISE": 2,
-	&"FALL": 2,
-	&"SHOT": 4,
-	&"LOCK": 2,
-	&"DEFEAT": 4,
 }
 
 const ROOK_GHOST_PATHS := {
@@ -132,17 +118,6 @@ const PULSE_ATLAS_PATHS := {
 	&"DEFEAT": "res://assets/art/fighters/pulse-animated-v2/defeat.png",
 }
 
-const PULSE_COUNTS := {
-	&"IDLE": 4,
-	&"WALK": 6,
-	&"RUN": 6,
-	&"RISE": 2,
-	&"FALL": 2,
-	&"SHOT": 4,
-	&"LOCK": 2,
-	&"DEFEAT": 4,
-}
-
 const PULSE_GHOST_PATHS := {
 	&"IDLE": "res://assets/art/fighters/pulse-animated-v2/ghost-idle.png",
 	&"WALK": "res://assets/art/fighters/pulse-animated-v2/ghost-walk.png",
@@ -165,17 +140,6 @@ const ECLIPSE_ATLAS_PATHS := {
 	&"DEFEAT": "res://assets/art/fighters/eclipse-animated-v1/defeat.png",
 }
 
-const ECLIPSE_COUNTS := {
-	&"IDLE": 4,
-	&"WALK": 6,
-	&"RUN": 6,
-	&"RISE": 2,
-	&"FALL": 2,
-	&"SHOT": 4,
-	&"LOCK": 2,
-	&"DEFEAT": 4,
-}
-
 const ECLIPSE_GHOST_PATHS := {
 	&"IDLE": "res://assets/art/fighters/eclipse-animated-v1/ghost-idle.png",
 	&"WALK": "res://assets/art/fighters/eclipse-animated-v1/ghost-walk.png",
@@ -186,6 +150,75 @@ const ECLIPSE_GHOST_PATHS := {
 	&"LOCK": "res://assets/art/fighters/eclipse-animated-v1/ghost-lock.png",
 	&"DEFEAT": "res://assets/art/fighters/eclipse-animated-v1/ghost-defeat.png",
 }
+
+
+const ANIMATED_FIGHTERS := {
+	&"rook_animated_v2": {
+		"name": "The Rook — simplified animated arena fighter",
+		"atlases": ROOK_ATLAS_PATHS,
+		"ghosts": ROOK_GHOST_PATHS,
+		"ghost": "res://assets/art/fighters/rook-animated-v2/ghost.png",
+		"palette": {
+			&"body": Color("101b3d"),
+			&"secondary": Color("c45128"),
+			&"ink": Color("111117"),
+			&"defeat": Color(0.18, 0.19, 0.26, 0.82),
+		},
+	},
+	&"pulse_animated_v2": {
+		"name": "The Pulse — simplified animated arena fighter",
+		"atlases": PULSE_ATLAS_PATHS,
+		"ghosts": PULSE_GHOST_PATHS,
+		"ghost": "res://assets/art/fighters/pulse-animated-v2/ghost.png",
+		"palette": {
+			&"body": Color("c6f25b"),
+			&"secondary": Color("6d3e99"),
+			&"ink": Color("211426"),
+			&"defeat": Color(0.13, 0.08, 0.15, 0.82),
+		},
+	},
+	&"eclipse_animated_v1": {
+		"name": "The Eclipse — simplified animated arena fighter",
+		"atlases": ECLIPSE_ATLAS_PATHS,
+		"ghosts": ECLIPSE_GHOST_PATHS,
+		"ghost": "res://assets/art/fighters/eclipse-animated-v1/ghost.png",
+		"palette": {
+			&"body": Color("551d35"),
+			&"secondary": Color("e8e1d4"),
+			&"ink": Color("111016"),
+			&"defeat": Color(0.12, 0.07, 0.10, 0.82),
+		},
+	},
+}
+
+
+static func animated_fighter(id: StringName, player_color: Color) -> FighterSkin:
+	var data: Dictionary = ANIMATED_FIGHTERS[id]
+	var skin := FighterSkin.new()
+	skin.skin_id = id
+	skin.display_name = data["name"]
+	for state: StringName in data["atlases"]:
+		var texture := load(data["atlases"][state]) as Texture2D
+		if texture != null:
+			skin.sprite_atlases[state] = texture
+	skin.sprite_counts = ANIMATED_COUNTS.duplicate()
+	skin.sprite_cell_size = Vector2i(384, 256)
+	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
+	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
+	skin.ghost_texture = load(data["ghost"]) as Texture2D
+	for state: StringName in data["ghosts"]:
+		var texture := load(data["ghosts"][state]) as Texture2D
+		if texture != null:
+			skin.ghost_atlases[state] = texture
+	skin.palette = data["palette"].duplicate()
+	apply_player_identity(skin, player_color)
+	skin.ticks_per_frame = 5
+	skin.state_ticks_per_frame = {
+		&"IDLE": 12, &"WALK": 6, &"RUN": 4, &"RISE": 6,
+		&"FALL": 6, &"SHOT": 3, &"LOCK": 8, &"DEFEAT": 5,
+	}
+	skin.procedural_aim_arm_enabled = false
+	return skin
 
 
 func frame_count(state: StringName) -> int:
@@ -202,6 +235,18 @@ func has_sprite(state: StringName) -> bool:
 
 func ticks_for_state(state: StringName) -> int:
 	return maxi(1, int(state_ticks_per_frame.get(state, ticks_per_frame)))
+
+
+func motion_frame(state: StringName, tick: int, velocity: Vector2) -> int:
+	var count := frame_count(state)
+	if count <= 0:
+		return 0
+	if air_pose_speed_threshold > 0.0:
+		if state == &"RISE":
+			return mini(1, count - 1) if absf(velocity.y) < air_pose_speed_threshold else 0
+		if state == &"FALL":
+			return mini(1, count - 1) if velocity.y >= air_pose_speed_threshold else 0
+	return posmod(tick / ticks_for_state(state), count)
 
 
 static func executor_prototype(player_index: int) -> FighterSkin:
@@ -222,35 +267,6 @@ static func executor_prototype(player_index: int) -> FighterSkin:
 	return skin
 
 
-static func simplified_executor_proof() -> FighterSkin:
-	var skin := greybox(0)
-	skin.skin_id = &"gilded_executor_simplified_proof_v1"
-	skin.display_name = "The Gilded Executor — simplified arena proof"
-	skin.sprite_atlases = {}
-	for state: StringName in SIMPLIFIED_EXECUTOR_PATHS:
-		var texture := load(SIMPLIFIED_EXECUTOR_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = {
-		&"IDLE": 1, &"RUN": 1, &"RISE": 1,
-		&"FALL": 1, &"SHOT": 1, &"LOCK": 1,
-	}
-	skin.sprite_cell_size = Vector2i(256, 256)
-	# Calibrated against the legacy fighter in a shared gameplay capture. The
-	# source art occupies about 224/256 of the cell, producing ~51 visible pixels.
-	skin.sprite_draw_rect = Rect2(-29.0, -29.921875, 58.0, 58.0)
-	skin.sprite_tint = Color.WHITE
-	skin.visual_bounds = Rect2(-29.0, -30.0, 58.0, 54.0)
-	skin.ghost_texture = load(
-		"res://assets/art/fighters/gilded-executor-simplified-proof-v1/ghost.png"
-	) as Texture2D
-	skin.ticks_per_frame = 5
-	# The proof sprites still contain both arms. A layered aim arm belongs to the
-	# eventual production atlas; drawing the technical overlay now makes three.
-	skin.procedural_aim_arm_enabled = false
-	return skin
-
-
 ## Pre-rendered art carries one authored colour, so two players who picked the
 ## same fighter would be the same figure. A light wash toward the player's own
 ## accent separates them without repainting the art: `sprite_tint` multiplies, so
@@ -268,14 +284,17 @@ static func apply_player_identity(skin: FighterSkin, player_color: Color) -> voi
 
 static func animated_executor_proof(player_color: Color) -> FighterSkin:
 	var skin := greybox(0)
-	skin.skin_id = &"gilded_executor_animated_v1"
-	skin.display_name = "The Gilded Executor — animated arena prototype"
+	skin.shot_release_frame = 1
+	skin.air_pose_speed_threshold = 300.0
+	skin.sprite_texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	skin.skin_id = &"duelist_polished_v2"
+	skin.display_name = "The Duelist — polished cel animation"
 	skin.sprite_atlases = {}
 	for state: StringName in ANIMATED_EXECUTOR_PATHS:
 		var texture := load(ANIMATED_EXECUTOR_PATHS[state]) as Texture2D
 		if texture != null:
 			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = ANIMATED_EXECUTOR_COUNTS.duplicate()
+	skin.sprite_counts = ANIMATED_COUNTS.duplicate()
 	skin.sprite_cell_size = Vector2i(384, 256)
 	# The 224 px authored body height maps to the same ~51 px perceived height
 	# as the accepted single-pose proof. The wider cell preserves cape and limbs.
@@ -283,142 +302,13 @@ static func animated_executor_proof(player_color: Color) -> FighterSkin:
 	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
 	apply_player_identity(skin, player_color)
 	skin.ghost_texture = load(
-		"res://assets/art/fighters/gilded-executor-animated-v1/ghost.png"
+		"res://assets/art/fighters/duelist-polished-v2/ghost.png"
 	) as Texture2D
 	skin.ghost_atlases = {}
 	for state: StringName in ANIMATED_EXECUTOR_GHOST_PATHS:
 		var texture := load(ANIMATED_EXECUTOR_GHOST_PATHS[state]) as Texture2D
 		if texture != null:
 			skin.ghost_atlases[state] = texture
-	skin.ticks_per_frame = 5
-	skin.state_ticks_per_frame = {
-		&"IDLE": 12,
-		&"WALK": 6,
-		&"RUN": 4,
-		&"RISE": 6,
-		&"FALL": 6,
-		&"SHOT": 3,
-		&"LOCK": 8,
-		&"DEFEAT": 5,
-	}
-	skin.procedural_aim_arm_enabled = false
-	return skin
-
-
-static func animated_rook(player_color: Color) -> FighterSkin:
-	var skin := FighterSkin.new()
-	skin.skin_id = &"rook_animated_v2"
-	skin.display_name = "The Rook — simplified animated arena fighter"
-	skin.sprite_atlases = {}
-	for state: StringName in ROOK_ATLAS_PATHS:
-		var texture := load(ROOK_ATLAS_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = ROOK_COUNTS.duplicate()
-	skin.sprite_cell_size = Vector2i(384, 256)
-	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
-	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
-	skin.ghost_texture = load(
-		"res://assets/art/fighters/rook-animated-v2/ghost.png"
-	) as Texture2D
-	skin.ghost_atlases = {}
-	for state: StringName in ROOK_GHOST_PATHS:
-		var texture := load(ROOK_GHOST_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.ghost_atlases[state] = texture
-	skin.palette = {
-		&"body": Color("101b3d"),
-		&"secondary": Color("c45128"),
-		&"ink": Color("111117"),
-		&"defeat": Color(0.18, 0.19, 0.26, 0.82),
-	}
-	apply_player_identity(skin, player_color)
-	skin.ticks_per_frame = 5
-	skin.state_ticks_per_frame = {
-		&"IDLE": 12,
-		&"WALK": 6,
-		&"RUN": 4,
-		&"RISE": 6,
-		&"FALL": 6,
-		&"SHOT": 3,
-		&"LOCK": 8,
-		&"DEFEAT": 5,
-	}
-	skin.procedural_aim_arm_enabled = false
-	return skin
-
-
-static func animated_pulse(player_color: Color) -> FighterSkin:
-	var skin := FighterSkin.new()
-	skin.skin_id = &"pulse_animated_v2"
-	skin.display_name = "The Pulse — simplified animated arena fighter"
-	skin.sprite_atlases = {}
-	for state: StringName in PULSE_ATLAS_PATHS:
-		var texture := load(PULSE_ATLAS_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = PULSE_COUNTS.duplicate()
-	skin.sprite_cell_size = Vector2i(384, 256)
-	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
-	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
-	skin.ghost_texture = load(
-		"res://assets/art/fighters/pulse-animated-v2/ghost.png"
-	) as Texture2D
-	skin.ghost_atlases = {}
-	for state: StringName in PULSE_GHOST_PATHS:
-		var texture := load(PULSE_GHOST_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.ghost_atlases[state] = texture
-	skin.palette = {
-		&"body": Color("c6f25b"),
-		&"secondary": Color("6d3e99"),
-		&"ink": Color("211426"),
-		&"defeat": Color(0.13, 0.08, 0.15, 0.82),
-	}
-	apply_player_identity(skin, player_color)
-	skin.ticks_per_frame = 5
-	skin.state_ticks_per_frame = {
-		&"IDLE": 12,
-		&"WALK": 6,
-		&"RUN": 4,
-		&"RISE": 6,
-		&"FALL": 6,
-		&"SHOT": 3,
-		&"LOCK": 8,
-		&"DEFEAT": 5,
-	}
-	skin.procedural_aim_arm_enabled = false
-	return skin
-
-
-static func animated_eclipse(player_color: Color) -> FighterSkin:
-	var skin := FighterSkin.new()
-	skin.skin_id = &"eclipse_animated_v1"
-	skin.display_name = "The Eclipse — simplified animated arena fighter"
-	skin.sprite_atlases = {}
-	for state: StringName in ECLIPSE_ATLAS_PATHS:
-		var texture := load(ECLIPSE_ATLAS_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = ECLIPSE_COUNTS.duplicate()
-	skin.sprite_cell_size = Vector2i(384, 256)
-	skin.sprite_draw_rect = Rect2(-43.5, -29.921875, 87.0, 58.0)
-	skin.visual_bounds = Rect2(-43.5, -30.0, 87.0, 54.0)
-	skin.ghost_texture = load(
-		"res://assets/art/fighters/eclipse-animated-v1/ghost.png"
-	) as Texture2D
-	skin.ghost_atlases = {}
-	for state: StringName in ECLIPSE_GHOST_PATHS:
-		var texture := load(ECLIPSE_GHOST_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.ghost_atlases[state] = texture
-	skin.palette = {
-		&"body": Color("551d35"),
-		&"secondary": Color("e8e1d4"),
-		&"ink": Color("111016"),
-		&"defeat": Color(0.12, 0.07, 0.10, 0.82),
-	}
-	apply_player_identity(skin, player_color)
 	skin.ticks_per_frame = 5
 	skin.state_ticks_per_frame = {
 		&"IDLE": 12,

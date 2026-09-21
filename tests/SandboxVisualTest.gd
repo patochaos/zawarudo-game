@@ -14,6 +14,8 @@ func _capture() -> void:
 	await process_frame
 	await VisualCapture.pin_window(self)
 	game._sfx.muted = true
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_EXPERIMENTS)
 	game._menu._activate(game._menu.ROW_SANDBOX)
 	game._transition.visible = false
 	game.sandbox_toggle_ai()

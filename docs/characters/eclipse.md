@@ -1,5 +1,11 @@
 # The Eclipse — canonical character specification
 
+**Class Lab prototype available:** one destructible corona following a fixed out-and-back route. See [Class Lab](../CLASS_LAB.md) for current experimental rules and controls. The mechanics below document the preserved original kit, which remains benched outside the lab.
+
+**Gameplay status: BENCHED (September 4, 2026).** Unavailable in all play modes.
+Code, assets and this canonical reference are retained for future iteration.
+The Duelist is currently the only active fighter.
+
 Status: **visual canon v1**  
 Selectable class name: **THE ECLIPSE**  
 Visual archetype / production codename: **THE FALSE SAINT**  

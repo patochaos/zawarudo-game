@@ -42,7 +42,7 @@ const PAGES := [
 	{
 		"kicker": "COMBAT BRIEFING  02 / 06",
 		"title": "TRACE WHERE\nYOU WILL MOVE.",
-		"body": "Hold a direction during PLAN. The bright ghost moves while your real fighter stays frozen. The trail behind the ghost is the route you are recording.\n\nThe stamina bar is the amount of movement you can add this turn. Release the control whenever you want to stop adding movement and think.",
+		"body": "Hold a direction to move the bright ghost. Your real fighter stays frozen.\n\nThe timeline shows your recorded route, the throw diamond, and a dashed coast to the next freeze. Release the controls to stop recording and think.",
 		"callout_title": "WHAT YOU SHOULD SEE",
 		"callout": "A bright ghost at the route's end and a trail back to your real fighter.",
 		"visual_title": "MOVEMENT BECOMES A TIMELINE",
@@ -74,7 +74,7 @@ const PAGES := [
 		"callout_title": "WHAT YOU SHOULD SEE",
 		"callout": "The attack begins at the ghost — not at the frozen fighter you started from.",
 		"visual_title": "AIM FROM THE FUTURE POSITION",
-		"visual_caption": "Longer charge means more power. Each fighter turns this action into their own attack.",
+		"visual_caption": "Low charge spreads two slow daggers. High charge narrows them into a fast pair.",
 		"rows": [
 			["KEYBOARD", "Mouse aim  ·  hold/release LMB"],
 			["GAMEPAD", "Right stick  ·  hold/release R2"],
@@ -84,13 +84,13 @@ const PAGES := [
 	{
 		"kicker": "COMBAT BRIEFING  05 / 06",
 		"title": "CORRECT IT.\nTHEN LOCK IT.",
-		"body": "If the attack is wrong, UNDO removes the placed attack but keeps the movement route. RESET clears the whole route and refills its stamina.\n\nLOCK submits exactly what is shown. You may lock a partial route or no attack at all. If time runs out, the current plan is submitted automatically.",
+		"body": "Backspace / L1 rewinds 0.10s. Hold Alt / R1 to re-aim a placed throw. Comma / period shifts its timing.\n\nUNDO removes the throw; RESET clears the route. LOCK submits the plan. When time expires, your current plan executes.",
 		"callout_title": "SAFE TO EXPERIMENT",
 		"callout": "Nothing becomes real until execution. Edit freely while PLAN is visible.",
 		"visual_title": "REVISE BEFORE THE CLOCK RELEASES",
 		"visual_caption": "Undo the attack, reset the route, or lock the plan exactly as it stands.",
 		"rows": [
-			["UNDO ATTACK", "R / RMB*  ·  gamepad B  ·  UNDO   (*Pulse/Eclipse use R)"],
+			["UNDO ATTACK", "R / RMB  ·  gamepad B  ·  UNDO"],
 			["RESET ROUTE", "F  ·  gamepad X  ·  RESET"],
 			["LOCK PLAN", "Left Shift  ·  Start  ·  LOCK"],
 		],

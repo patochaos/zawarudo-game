@@ -38,3 +38,10 @@ Desktop.ini
 # Python helper caches
 __pycache__/
 *.pyc
+
+# Blender backup saves
+*.blend1
+
+# Generated preview captures
+/previews/*.gif
+/previews/*.json

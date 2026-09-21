@@ -15,6 +15,10 @@ func _run() -> void:
 	game._sfx.muted = true
 	game.start_quick_match(false, 0, 2,
 		[game.Weapon.DASHBLADE, game.Weapon.SHOCK])
+	# Explicit fixture for retained kits; these are unavailable through play setup.
+	game.player_weapons[0] = game.Weapon.DASHBLADE
+	game.player_weapons[1] = game.Weapon.SHOCK
+	game.restart()
 
 	_check(game.players[0].fighter_style == game.Weapon.DASHBLADE \
 			and game.players[1].fighter_style == game.Weapon.SHOCK,

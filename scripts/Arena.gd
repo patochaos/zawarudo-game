@@ -4,19 +4,28 @@ class_name Arena
 ## Renders the platform set. Layouts live in Levels.gd; damage state lives in
 ## GameManager. Terrain never damages a player — only arrows do.
 ##
-## Indestructible geometry is cool and flat; breakable geometry is warm, carries
+## Indestructible geometry uses cool dressed surfaces; breakable geometry is warm, carries
 ## hit pips, and reddens and cracks as it takes damage. Moving geometry keeps the
-## permanent silhouette but swaps its gold cap for a violet one and wears chevrons
+## permanent silhouette but swaps its top edge for violet and wears chevrons
 ## pointing along its rail. That three-way colour split is the only thing a player
 ## has to learn to read the arena — and the moving read has to survive execution,
 ## when every planning overlay is stripped away.
 
 const INDESTRUCTIBLE := -1
 const STAGE_TOP := Levels.STAGE_TOP
+const OBSERVATORY_SOLID := preload("res://assets/art/arenas/pendulum/solid.png")
+const OBSERVATORY_MOVING := preload("res://assets/art/arenas/pendulum/moving.png")
+const OBSERVATORY_BREAKABLE := preload("res://assets/art/arenas/pendulum/breakable.png")
+const SOLID_TEXTURES := [
+	preload("res://assets/art/arenas/crosshair-court/solid.png"),
+	preload("res://assets/art/arenas/endless-descent/solid.png"),
+	OBSERVATORY_SOLID,
+	preload("res://assets/art/arenas/pulse-chamber/solid.png"),
+	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
+	preload("res://assets/art/arenas/foundry/solid.png"),
+	preload("res://assets/art/arenas/collision-course/solid.png"),
+]
 
-const SOLID_FILL := Color(0.105, 0.15, 0.21)
-const SOLID_FACE := Color(0.055, 0.085, 0.13)
-const SOLID_EDGE := Color(0.015, 0.025, 0.045)
 const HARD_INK := Color(0.72, 0.92, 1.0)
 const HARD_ACCENTS := [
 	Color(0.95, 0.78, 0.28), Color(0.38, 0.80, 1.0), Color(0.72, 0.60, 1.0),
@@ -27,8 +36,6 @@ const HARD_ACCENTS := [
 const MOVER_TOP := Color(0.66, 0.55, 0.95)
 const MOVER_MARK := Color(0.80, 0.72, 1.0, 0.75)
 
-const BREAK_FILL := Color(0.42, 0.20, 0.075)
-const BREAK_BROKEN := Color(0.55, 0.075, 0.055)
 const BREAK_TOP := Color(1.0, 0.67, 0.16)
 const BREAK_TOP_BROKEN := Color(1.0, 0.20, 0.12)
 
@@ -69,20 +76,10 @@ func _draw() -> void:
 
 func _draw_solid(r: Rect2, motion: Dictionary = {}) -> void:
 	var moving: bool = not motion.is_empty()
-	var accent: Color = HARD_ACCENTS[level_theme]
-	draw_rect(Rect2(r.position + Vector2(7.0, 9.0), r.size), Color(0.01, 0.0, 0.025, 0.62))
-	draw_rect(r, SOLID_FILL)
-	draw_rect(Rect2(r.position + Vector2(0.0, 8.0), Vector2(r.size.x, maxf(0.0, r.size.y - 8.0))), SOLID_FACE)
-	# HARD always reads as cold metal with a bright double rail. Movers retain
-	# that material identity and add violet motion chevrons.
-	draw_rect(Rect2(r.position, Vector2(r.size.x, 5.0)), MOVER_TOP if moving else accent)
-	draw_line(r.position + Vector2(8.0, 10.0), Vector2(r.end.x - 8.0, r.position.y + 10.0),
-		MOVER_MARK if moving else Color(HARD_INK, 0.72), 1.5)
-	draw_rect(r, SOLID_EDGE, false, 2.0)
+	_draw_material_platform(r, OBSERVATORY_MOVING if moving else SOLID_TEXTURES[level_theme],
+		MOVER_TOP if moving else Color(0.51, 0.60, 0.70))
 	if moving:
 		_draw_travel_marks(r, motion)
-	else:
-		_draw_hard_rivets(r, accent)
 
 
 ## Chevrons along the axis of travel. They say "this moves, and along here" while
@@ -95,12 +92,17 @@ func _draw_travel_marks(r: Rect2, motion: Dictionary) -> void:
 	var d: Vector2 = axis.normalized()
 	var along: Vector2 = d.orthogonal() if absf(d.y) > absf(d.x) else d
 	var span: float = r.size.x if absf(along.x) > absf(along.y) else r.size.y
+	var tall := r.size.y > r.size.x * 2.0
+	if tall:
+		span = r.size.y
 	var count: int = clampi(int(span / 64.0), 1, 8)
 	for i in count:
 		var t: float = (float(i) + 0.5) / float(count)
 		var at: Vector2 = r.position + Vector2(r.size.x * t, minf(13.0, r.size.y * 0.55)) \
 			if absf(along.x) > absf(along.y) \
 			else r.position + Vector2(r.size.x * 0.5, r.size.y * t)
+		if tall:
+			at = r.position + Vector2(r.size.x * 0.5, r.size.y * t)
 		var wing: Vector2 = d.orthogonal() * 5.0
 		draw_line(at - wing - d * 4.0, at + d * 4.0, MOVER_MARK, 1.6, true)
 		draw_line(at + wing - d * 4.0, at + d * 4.0, MOVER_MARK, 1.6, true)
@@ -108,11 +110,8 @@ func _draw_travel_marks(r: Rect2, motion: Dictionary) -> void:
 
 func _draw_breakable(r: Rect2, hp: int, max_hp: int) -> void:
 	var wear: float = 1.0 - float(hp) / float(maxi(max_hp, 1))
-	draw_rect(Rect2(r.position + Vector2(7.0, 9.0), r.size), Color(0.01, 0.0, 0.025, 0.62))
-	draw_rect(r, BREAK_FILL.lerp(BREAK_BROKEN, wear))
-	draw_rect(Rect2(r.position, Vector2(r.size.x, 5.0)), BREAK_TOP.lerp(BREAK_TOP_BROKEN, wear))
-	draw_rect(r, SOLID_EDGE, false, 2.0)
-	_draw_break_stripes(r)
+	_draw_material_platform(r, OBSERVATORY_BREAKABLE,
+		BREAK_TOP.lerp(BREAK_TOP_BROKEN, wear), Color.WHITE.lerp(Color(1.0, 0.40, 0.30), wear))
 
 	# cracks deepen with damage
 	if wear > 0.01:
@@ -137,34 +136,56 @@ func _draw_breakable(r: Rect2, hp: int, max_hp: int) -> void:
 		x += pip + gap
 
 
-func _draw_ornaments(r: Rect2, col: Color) -> void:
-	if r.size.x < 54.0 or r.size.y < 13.0:
-		return
-	var count := clampi(int(r.size.x / 92.0), 1, 8)
-	for i in count:
-		var x: float = r.position.x + r.size.x * (float(i) + 0.5) / float(count)
-		var y: float = r.position.y + minf(13.0, r.size.y * 0.55)
-		var d := 3.0
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(x, y - d), Vector2(x + d, y), Vector2(x, y + d), Vector2(x - d, y),
-		]), col)
-
-
-func _draw_hard_rivets(r: Rect2, accent: Color) -> void:
-	if r.size.x < 44.0 or r.size.y < 12.0:
-		return
-	for x in range(int(r.position.x) + 12, int(r.end.x) - 5, 42):
-		draw_circle(Vector2(float(x), r.position.y + minf(11.0, r.size.y * 0.55)),
-			2.2, accent.lightened(0.35))
-
-
-func _draw_break_stripes(r: Rect2) -> void:
-	if r.size.y < 10.0:
-		return
-	for x in range(int(r.position.x) - int(r.size.y), int(r.end.x), 24):
-		var a := Vector2(float(x), r.end.y - 2.0)
-		var b := Vector2(float(x) + r.size.y, r.position.y + 5.0)
-		draw_line(a, b, Color(1.0, 0.48, 0.10, 0.55), 3.0)
+func _draw_material_platform(r: Rect2, texture: Texture2D, lip: Color,
+		tint: Color = Color.WHITE) -> void:
+	# Art stays inside collision. Deep bases get quiet masonry below one ledge;
+	# end caps retain their physical width on every authored platform length.
+	var moving: bool = texture == OBSERVATORY_MOVING
+	var base := Color("302217") if texture == OBSERVATORY_BREAKABLE else Color("141b29")
+	draw_rect(r, base * tint)
+	if moving and r.size.y > 32.0:
+		# Tall shutters need a mechanical face and full-height motion identity.
+		for x in [r.position.x + 2.0, r.end.x - 3.0]:
+			draw_line(Vector2(x, r.position.y + 2), Vector2(x, r.end.y - 2),
+				Color(MOVER_TOP, 0.65), 2.0)
+		for y in range(int(r.position.y) + 22, int(r.end.y) - 2, 22):
+			draw_line(Vector2(r.position.x + 6, y), Vector2(r.end.x - 6, y),
+				Color("293047"), 2.0)
+	elif r.size.y > 20.0 and level_theme == 1:
+		# Descent bulkheads use riveted steel cassettes, not masonry courses.
+		for x in range(int(r.position.x) + 6, int(r.end.x) - 4, 46):
+			var panel_width := minf(40.0, r.end.x - float(x) - 4.0)
+			if panel_width <= 0.0: continue
+			draw_rect(Rect2(x, r.position.y + 18, panel_width, r.size.y - 20), Color("182630"))
+			draw_line(Vector2(x, r.position.y + 19), Vector2(x, r.end.y - 3), Color("28424b"), 1.0)
+			for y in range(int(r.position.y) + 26, int(r.end.y) - 5, 55):
+				draw_circle(Vector2(x + 4, y), 1.2, Color("60706d"))
+				draw_line(Vector2(x + 10, y + 6), Vector2(x + panel_width - 4, y + 6), Color("0c141e"), 2.0)
+	elif r.size.y > 20.0:
+		for row_index in range(1, ceili(r.size.y / 24.0)):
+			var seam_y := minf(r.end.y - 1, r.position.y + float(row_index) * 24.0)
+			draw_line(Vector2(r.position.x, seam_y), Vector2(r.end.x, seam_y),
+				Color("0a101d"), 2.0)
+			for column in range(ceili(r.size.x / 72.0)):
+				var seam_x := r.position.x + float(column) * 72.0 + (36.0 if row_index % 2 else 0.0)
+				if seam_x < r.end.x:
+					draw_line(Vector2(seam_x, maxf(r.position.y + 16, seam_y - 24)),
+						Vector2(seam_x, seam_y), Color("0a101d"), 2.0)
+	var y := r.position.y
+	if y < r.end.y:
+		var height := minf(16.0, r.end.y - y)
+		var row := Rect2(r.position.x, y, r.size.x, height)
+		var cap := minf(12.0, r.size.x * 0.25)
+		draw_texture_rect_region(texture, Rect2(row.position, Vector2(cap, height)),
+			Rect2(0, 0, 24, 32), tint)
+		draw_texture_rect_region(texture,
+			Rect2(row.position + Vector2(cap, 0), Vector2(row.size.x - cap * 2, height)),
+			Rect2(24, 0, 208, 32), tint)
+		draw_texture_rect_region(texture,
+			Rect2(row.end.x - cap, y, cap, height), Rect2(232, 0, 24, 32), tint)
+	draw_line(r.position, Vector2(r.end.x, r.position.y), lip, 2.0)
+	draw_line(Vector2(r.position.x, r.end.y - 1), r.end - Vector2(0, 1),
+		Color("080b13"), 2.0)
 
 
 ## A non-wrapping side is an explicit steel bulkhead, never an invisible rule.

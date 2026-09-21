@@ -26,13 +26,14 @@ func _run() -> void:
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
-		"PLAY", "SANDBOX", "HOW TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "QUIT",
+		"START DUEL", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "SEND FEEDBACK", "QUIT",
 	], "the main menu must retain its primary destinations")
-	_check(menu._rows[menu.ROWS - 1].visible == false,
-		"rows the current page does not fill must stay hidden")
+	for slot in menu.ROWS:
+		_check(menu._rows[slot].visible == (slot < menu._page_names().size()),
+			"only rows filled by the current page are visible")
 	var play_footer: String = menu._footer.text
 	menu._row_buttons[menu.ROW_TUTORIAL].mouse_entered.emit()
-	_check(menu._footer.text != play_footer and "six-screen" in menu._footer.text,
+	_check(menu._footer.text != play_footer and "three short lessons" in menu._footer.text,
 		"hovering a row must replace the contextual footer copy")
 
 	menu._row_buttons[menu.ROW_CONTROLS].pressed.emit()
@@ -52,18 +53,36 @@ func _run() -> void:
 	# Play is a destination, not a page: it hands the whole local match over to
 	# the roster screen rather than unfolding a configuration list in place.
 	var opened := [0]
-	menu.roster_requested.connect(func(): opened[0] += 1)
+	menu.duel_requested.connect(func(): opened[0] += 1)
 	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
 	_check(opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
 		"Play must request the roster screen instead of opening a setup page")
+	menu.developer_mode = true
+	menu._activate(menu.ROW_EXPERIMENTS)
+	_check(menu._page_names().size() == 6, "experiments must have five modes and Back")
+	var trial_opened := [0]
+	menu.fate_trial_requested.connect(func(): trial_opened[0] += 1)
+	menu._row_buttons[menu.ROW_FATE_TRIAL].pressed.emit()
+	_check(trial_opened[0] == 1 and menu._page == menu.MenuPage.EXPERIMENTS,
+		"Fate Trial must request its direct single-player launch")
+	var close_camera_opened := [0]
+	menu.close_camera_requested.connect(func(): close_camera_opened[0] += 1)
+	menu._row_buttons[menu.ROW_CLOSE_CAMERA].pressed.emit()
+	_check(close_camera_opened[0] == 1 and menu._page == menu.MenuPage.EXPERIMENTS,
+		"Close Camera must request its isolated prototype launch")
 	var sandbox_opened := [0]
 	menu.sandbox_requested.connect(func(): sandbox_opened[0] += 1)
 	menu._row_buttons[menu.ROW_SANDBOX].pressed.emit()
-	_check(sandbox_opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
+	_check(sandbox_opened[0] == 1 and menu._page == menu.MenuPage.EXPERIMENTS,
 		"Sandbox must request its direct launch without opening setup")
-	_check(menu.MenuPage.keys() == ["MAIN", "CONTROLS", "OPTIONS", "BINDINGS"],
+	_check(menu.MenuPage.keys() == ["MAIN", "CONTROLS", "OPTIONS", "BINDINGS", "EXPERIMENTS"],
 		"the title screen must no longer carry a setup page")
 
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._page == menu.MenuPage.MAIN and menu._cursor == menu.ROW_EXPERIMENTS,
+		"Escape must return from experiments to its main-menu row")
+	menu.handle_key(KEY_ESCAPE)
+	_check(menu._cursor == menu.ROW_PLAY, "title Escape must focus Play without exiting")
 	var changed := [[]]
 	menu.option_changed.connect(func(key, value): changed[0] = [key, value])
 	menu._activate(menu.ROW_OPTIONS)

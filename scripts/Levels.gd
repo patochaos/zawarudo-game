@@ -61,6 +61,44 @@ static func build(index: int, player_count: int = 4) -> Dictionary:
 	return _finish(_layout(index), clampi(player_count, 2, 4))
 
 
+## The compact arena authored for Close Camera. It is deliberately outside the
+## normal seven-arena rotation: only the dedicated mode can load it.
+static func build_close_camera() -> Dictionary:
+	return _finish({
+		"name": "KNIFE COURT",
+		"feature": "CLOSE CAMERA // intimate planning, full-arena execution.",
+		"wrap_x": true,
+		"spawns": [
+			Vector2(400.0, 596.0), Vector2(880.0, 596.0),
+			Vector2(380.0, 371.0), Vector2(900.0, 371.0),
+		],
+		"respawn_points": [
+			Vector2(160.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(180.0, 481.0), Vector2(1100.0, 481.0),
+		],
+		"core_spawns": [
+			Vector2(220.0, 460.0), Vector2(640.0, 445.0), Vector2(1060.0, 460.0),
+		],
+		"hazards": [],
+		"platforms": [
+			{"rect": Rect2(0, 540, 56, 80), "hp": -1},
+			{"rect": Rect2(1224, 540, 56, 80), "hp": -1},
+			{"rect": Rect2(100, 505, 260, 18), "hp": -1},
+			{"rect": Rect2(920, 505, 260, 18), "hp": -1},
+			{"rect": Rect2(260, 395, 240, 18), "hp": 3},
+			{"rect": Rect2(780, 395, 240, 18), "hp": 3},
+			{
+				"rect": Rect2(460, 285, 160, 16), "hp": -1,
+				"motion": {
+					"axis": Vector2.RIGHT, "travel": 200.0, "period": 240, "phase": 0.0,
+				},
+			},
+			{"rect": Rect2(604, 500, 72, 120), "hp": -1},
+		],
+	}, 2)
+
+
 ## A quiet room for learning the three basic verbs. The open horizontal seam
 ## lets the player test wrapping in either direction without enemies, hazards,
 ## moving pieces, or breakable geometry competing for attention.
@@ -83,6 +121,38 @@ static func build_tutorial() -> Dictionary:
 			{"rect": Rect2(80, 500, 250, 16), "hp": -1},
 			{"rect": Rect2(510, 420, 260, 16), "hp": -1},
 			{"rect": Rect2(950, 500, 250, 16), "hp": -1},
+		],
+	}, 2)
+
+
+## The first single-player prototype is deliberately authored as a situation,
+## not a fair versus arena. A hostile echo stands to the right while one of its
+## earlier knives is already entering from the left. The player therefore reads
+## two known futures from the first freeze instead of waiting for a bot to invent
+## an interesting position.
+static func build_fate_trial_crossfire() -> Dictionary:
+	return _finish({
+		"name": "THE CROSSFIRE",
+		"feature": "FATE TRIAL // survive three revealed volleys.",
+		"spawns": [
+			Vector2(300.0, 596.0), Vector2(1050.0, 596.0),
+			Vector2(180.0, 406.0), Vector2(1100.0, 406.0),
+		],
+		"respawn_points": [
+			Vector2(300.0, 596.0), Vector2(1050.0, 596.0),
+		],
+		"core_spawns": [],
+		"hazards": [],
+		"platforms": [
+			# Side balconies offer vertical escape routes without blocking the
+			# hostile ground-level firing lane.
+			{"rect": Rect2(90, 470, 250, 16), "hp": -1},
+			{"rect": Rect2(940, 470, 250, 16), "hp": -1},
+			{"rect": Rect2(420, 370, 180, 16), "hp": -1},
+			{"rect": Rect2(680, 370, 180, 16), "hp": -1},
+			# Fragile low cover can catch one trajectory, but relying on it changes
+			# the board inherited by the later windows.
+			{"rect": Rect2(565, 535, 150, 16), "hp": 1},
 		],
 	}, 2)
 
@@ -133,6 +203,8 @@ static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 
 
 static func wrap_label(lv: Dictionary) -> String:
+	if lv.get("upper_side_passages", false):
+		return "WRAP ↕ · UPPER ↔"
 	if lv["wrap_x"] and lv["wrap_y"]:
 		return "WRAP ↔ ↕"
 	if lv["wrap_x"]:
@@ -153,7 +225,7 @@ static func wrap_label(lv: Dictionary) -> String:
 static func _crosshair_court() -> Dictionary:
 	return {
 		"name": "CROSSHAIR COURT",
-		"feature": "BASIC // static cover makes knife collisions and future danger easy to read.",
+		"feature": "START HERE // catch a landing with a slow fan, or bank a fast throw off hard cover.",
 		"spawns": [
 			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
 			Vector2(140.0, 296.0), Vector2(1140.0, 296.0),
@@ -193,7 +265,7 @@ static func _crosshair_court() -> Dictionary:
 static func _shattered_sanctum() -> Dictionary:
 	return {
 		"name": "SHATTERED SANCTUM",
-		"feature": "COLLAPSE // break the middle bridge to open two vertical wrap chutes.",
+		"feature": "COVER PRACTICE // break the bridge, then threaten the crossing through the new gap.",
 		"wrap_x": true,
 		"wrap_y": true,
 		"skip_ground": true,
@@ -235,50 +307,54 @@ static func _shattered_sanctum() -> Dictionary:
 
 ## A four-corner vertical loop over a hole in the world. P1/P2 start on the
 ## split floor and P3/P4 on high permanent perches.
-## Side islands make the full climb indestructible; inner breakable steps offer
-## faster diagonals. A hanging centre pillar splits the upper firing lane while
-## leaving two broad vertical portals around it.
+## Offset side islands make the full climb indestructible; inner breakable steps
+## offer faster diagonals. Duels leave the upper firing lane open; a hanging
+## centre pillar separates the extra high spawns in three/four-player matches.
 static func _endless_descent() -> Dictionary:
 	return {
 		"name": "ENDLESS DESCENT",
-		"feature": "TUNNELS // threats can arrive from left, right, above or below through four-way wrap.",
+		"upper_side_passages": true,
+		"feature": "1v1 // drop through the shaft to return above; cross the side passages upstairs.",
 		"wrap_x": true,
 		"wrap_y": true,
 		"skip_ground": true,
 		# On the solid parts of the floor, either side of the hole.
 		"spawns": [
-			Vector2(280.0, 596.0), Vector2(1000.0, 596.0),
+			Vector2(350.0, 596.0), Vector2(930.0, 596.0),
 			Vector2(160.0, 276.0), Vector2(1120.0, 276.0),
 		],
 		"respawn_points": [
 			Vector2(120.0, 596.0), Vector2(340.0, 596.0),
 			Vector2(940.0, 596.0), Vector2(1160.0, 596.0),
 			Vector2(130.0, 276.0), Vector2(1150.0, 276.0),
-			Vector2(240.0, 446.0), Vector2(360.0, 446.0),
-			Vector2(920.0, 446.0), Vector2(1040.0, 446.0),
+			Vector2(160.0, 446.0), Vector2(250.0, 446.0),
+			Vector2(1030.0, 446.0), Vector2(1120.0, 446.0),
 		],
-		"core_spawns": [Vector2(290.0, 440.0), Vector2(640.0, 510.0), Vector2(990.0, 440.0)],
+		"core_spawns": [Vector2(490.0, 440.0), Vector2(640.0, 510.0), Vector2(790.0, 440.0)],
 		"platforms": [
 			# The gate sits directly below the HUD, but its opening continues to the
 			# real top edge. Bodies and knives wrap only once they leave the screen.
 			{"rect": Rect2(0, STAGE_TOP, 360, 16), "hp": -1}, # top gate, gap 360..920
 			{"rect": Rect2(920, STAGE_TOP, 360, 16), "hp": -1},
 			# Safe high-corner spawn perches, with enough headroom below the ceiling.
-			{"rect": Rect2(70, 300, 210, 16), "hp": -1},
-			{"rect": Rect2(1000, 300, 210, 16), "hp": -1},
+			{"rect": Rect2(70, 300, 160, 16), "hp": -1},
+			{"rect": Rect2(1050, 300, 160, 16), "hp": -1},
 			{"rect": Rect2(0, 620, 430, 70), "hp": -1},      # floor, gap 430..850
 			{"rect": Rect2(850, 620, 430, 70), "hp": -1},
-			{"rect": Rect2(0, 330, 70, 170), "hp": -1},      # horizontal portal frames
-			{"rect": Rect2(1210, 330, 70, 170), "hp": -1},
-			# Permanent side islands are the guaranteed lower-to-upper route.
-			{"rect": Rect2(180, 470, 220, 16), "hp": -1},
-			{"rect": Rect2(880, 470, 220, 16), "hp": -1},
+			# Lower bulkheads close the ground shortcut. The only side passages
+			# are above these walls, reached by the permanent two-step climb.
+			{"rect": Rect2(0, 330, 70, 390), "hp": -1},
+			{"rect": Rect2(1210, 330, 70, 390), "hp": -1},
+			# Offset from the starting bodies: a held outward jump can clear the
+			# edge instead of hitting a ceiling directly above the spawn.
+			{"rect": Rect2(120, 470, 170, 16), "hp": -1},
+			{"rect": Rect2(990, 470, 170, 16), "hp": -1},
 			# Faster inner stairs can be destroyed to reopen diagonal knife lanes.
-			{"rect": Rect2(300, 385, 170, 16), "hp": 2},
-			{"rect": Rect2(810, 385, 170, 16), "hp": 2},
+			{"rect": Rect2(330, 385, 140, 16), "hp": 2},
+			{"rect": Rect2(810, 385, 140, 16), "hp": 2},
 			# Anchored to the top gate and touching the centre beam: it blocks the
 			# P3/P4 opening line but leaves a vertical portal on either side.
-			{"rect": Rect2(620, STAGE_TOP, 40, 277), "hp": -1},
+			{"rect": Rect2(620, STAGE_TOP, 40, 277), "hp": -1, "min_players": 3},
 			{"rect": Rect2(540, 335, 200, 16), "hp": 3},
 			{"rect": Rect2(575, 545, 130, 14), "hp": 2},     # the tempting perch
 			{"rect": Rect2(445, 485, 110, 14), "hp": 2, "min_players": 3},
@@ -294,7 +370,7 @@ static func _endless_descent() -> Dictionary:
 static func _pendulum() -> Dictionary:
 	return {
 		"name": "PENDULUM",
-		"feature": "VERTICAL LOOP // ride the lift or beat it through the top/bottom portal.",
+		"feature": "TIMING PRACTICE // intercept a landing after the lift or the top/bottom portal.",
 		"wrap_y": true,
 		"skip_ground": true,
 		"spawns": [
@@ -330,45 +406,49 @@ static func _pendulum() -> Dictionary:
 	}
 
 
-## An asymmetric horizontal loop with two loaded pulse orbs. The terrain aims
-## movement toward them, so a deliberate detonation can slingshot a whole fight
-## across the seam instead of merely disturbing a symmetric firing lane.
+## A fair opening with two contested pulse orbs. Both fighters have permanent
+## stairs, an exposed inner perch and fragile cover below the blast footprint.
+## The ground lane offers a quiet approach; taking height brings the orbs into play.
 static func _pulse_chamber() -> Dictionary:
 	return {
 		"name": "PULSE CHAMBER",
-		"feature": "SLINGSHOT // paired pulse orbs turn the wrap route into a pinball table.",
+		"feature": "1v1 HAZARDS // hit an orb with a knife to push fighters and redirect knives. Dark = recharging.",
 		"wrap_x": true,
 		"spawns": [
-			Vector2(170.0, 596.0), Vector2(1110.0, 596.0),
-			Vector2(330.0, 336.0), Vector2(900.0, 246.0),
+			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
+			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
 		],
 		"respawn_points": [
 			Vector2(100.0, 596.0), Vector2(500.0, 596.0),
 			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(90.0, 446.0), Vector2(330.0, 336.0), Vector2(610.0, 416.0),
-			Vector2(900.0, 246.0), Vector2(930.0, 496.0), Vector2(1190.0, 306.0),
+			Vector2(190.0, 476.0), Vector2(1090.0, 476.0), Vector2(640.0, 446.0),
+			Vector2(420.0, 316.0), Vector2(860.0, 316.0),
+			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
 		],
-		"core_spawns": [Vector2(110.0, 400.0), Vector2(640.0, 350.0), Vector2(1050.0, 270.0)],
+		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
 		"platforms": [
-			# Staggered islands create a loop with no mirrored firing row.
-			{"rect": Rect2(0, 470, 180, 16), "hp": -1},
-			{"rect": Rect2(1100, 330, 180, 16), "hp": -1},
-			{"rect": Rect2(220, 360, 220, 16), "hp": -1},
-			{"rect": Rect2(520, 440, 180, 16), "hp": -1},
-			{"rect": Rect2(800, 270, 200, 16), "hp": -1},
-			{"rect": Rect2(820, 520, 220, 16), "hp": -1},
-			{"rect": Rect2(50, 290, 120, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(1030, 450, 120, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
+			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
+			{"rect": Rect2(330, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(770, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(0, 290, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 290, 240, 16), "hp": -1},
+			# Central high ground is exposed to either player's loaded orb.
+			{"rect": Rect2(550, 470, 180, 16), "hp": -1},
+			{"rect": Rect2(440, 555, 120, 16), "hp": 2},
+			{"rect": Rect2(720, 555, 120, 16), "hp": 2},
+			{"rect": Rect2(250, 415, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(920, 415, 110, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
-				"home": Vector2(430.0, 420.0),
-				"blast_radius": 165.0,
+				"home": Vector2(430.0, 425.0),
+				"blast_radius": 180.0,
 				"recharge_windows": 2,
 			},
 			{
-				"home": Vector2(850.0, 360.0),
-				"blast_radius": 165.0,
+				"home": Vector2(850.0, 425.0),
+				"blast_radius": 180.0,
 				"recharge_windows": 2,
 			},
 			{

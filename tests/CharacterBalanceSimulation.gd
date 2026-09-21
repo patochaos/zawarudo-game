@@ -89,6 +89,9 @@ func _run() -> void:
 
 func _run_match(game, level: int, roster: Array, seed_value: int) -> void:
 	game.start_quick_match(false, level, roster.size(), roster)
+	# Benchmark retained prototypes explicitly, outside the active roster.
+	for i in roster.size():
+		game.player_weapons[i] = int(roster[i])
 	game.hits_to_win = TOURNAMENT_HITS_TO_WIN
 	game.rng.seed = seed_value
 	game.restart()

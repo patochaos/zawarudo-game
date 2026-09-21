@@ -38,9 +38,9 @@ func _capture() -> void:
 	roster.devices[1] = 7
 	roster._set_role(2, roster.ROLE_CPU_FIRST + 2)
 	roster._set_role(3, roster.ROLE_CPU_FIRST + 0)
-	roster.weapons[1] = roster.CHAKRAM
-	roster.weapons[2] = roster.SHOCK
-	roster.weapons[3] = roster.DASHBLADE
+	roster.weapons[1] = roster.DUELIST
+	roster.weapons[2] = roster.DUELIST
+	roster.weapons[3] = roster.DUELIST
 	roster.ready_slots[0] = true
 	roster.cursor_slot = 1
 	roster.row = roster.ROW_ROLE

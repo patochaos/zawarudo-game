@@ -8,7 +8,7 @@ class_name Effects
 enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION }
 
 const LIFE := {Kind.SPARK: 0.35, Kind.SHATTER: 0.55, Kind.KILL: 0.9,
-	Kind.CLASH: 0.42, Kind.AFTERMATH: 0.72, Kind.EXPLOSION: 0.68}
+	Kind.CLASH: 0.42, Kind.AFTERMATH: 1.4, Kind.EXPLOSION: 0.68}
 const TEX_SPARK := preload("res://assets/kenney/vfx/spark.png")
 const TEX_SLASH := preload("res://assets/kenney/vfx/slash.png")
 const TEX_CIRCLE := preload("res://assets/kenney/vfx/temporal-circle.png")
@@ -18,6 +18,12 @@ const TEX_RING := preload("res://assets/kenney/vfx/ring-mask.png")
 const TEX_INK_SPLAT := preload("res://assets/kenney/vfx/ink-splat.png")
 const TEX_SONIC_RING := preload("res://assets/kenney/vfx/sonic-ring.png")
 const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
+const IMPACT_FRAMES := [
+	preload("res://assets/art/combat/impact-0.png"),
+	preload("res://assets/art/combat/impact-1.png"),
+	preload("res://assets/art/combat/impact-2.png"),
+	preload("res://assets/art/combat/impact-3.png"),
+]
 
 var _fx: Array = []   # [{kind, pos, col, t, seed, scale}]
 var _remembered: Array = []   # important execution events, revealed on refreeze
@@ -41,9 +47,17 @@ func clear_all() -> void:
 ## restrained world-space echoes when planning begins, so the player can parse
 ## what changed without a replay or combat log.
 func remember(label: String, pos: Vector2, col: Color) -> void:
-	if _remembered.size() >= 4:
-		_remembered.pop_front()
-	_remembered.append({"label": label, "pos": pos, "col": col})
+	var priority := 3 if label == "HIT" else (2 if label == "BROKEN" else 1)
+	# Keep decisive causes even if a later volley produces many small clashes.
+	if _remembered.size() >= 3:
+		var lowest := 0
+		for i in _remembered.size():
+			if int(_remembered[i]["priority"]) < int(_remembered[lowest]["priority"]):
+				lowest = i
+		if priority < int(_remembered[lowest]["priority"]):
+			return
+		_remembered.remove_at(lowest)
+	_remembered.append({"label": label, "pos": pos, "col": col, "priority": priority})
 
 
 func reveal_aftermath() -> void:
@@ -73,9 +87,7 @@ func _draw() -> void:
 		var u: float = clampf(f["t"] / LIFE[k], 0.0, 1.0)
 		match k:
 			Kind.SPARK:
-				_burst(f, u, 6, 26.0, 2.0)
-				_sprite(f, TEX_SPARK, 28.0 + 18.0 * u, (1.0 - u) * 0.44,
-					float(f["seed"]) * 0.71)
+				_knife_impact(f, u, false)
 			Kind.SHATTER:
 				_burst(f, u, 11, 58.0, 3.0)
 				_sprite(f, TEX_SLASH, 62.0 + 26.0 * u, (1.0 - u) * 0.30,
@@ -95,20 +107,7 @@ func _draw() -> void:
 				_burst(f, u, 16, 120.0, 3.0)
 				draw_circle(f["pos"], 26.0 * (1.0 - u), Color(c.r, c.g, c.b, (1.0 - u) * 0.35))
 			Kind.CLASH:
-				var c: Color = f["col"]
-				_burst(f, u, 10, 52.0, 2.4)
-				_sprite(f, TEX_SLASH, 54.0 + 36.0 * u, (1.0 - u) * 0.40,
-					float(f["seed"]) * 0.83)
-				_sprite(f, TEX_SPARK, 46.0 + 24.0 * u, (1.0 - u) * 0.30,
-					-float(f["seed"]) * 0.37, Color(1.0, 0.94, 0.65))
-				draw_arc(f["pos"], 5.0 + 28.0 * u, 0.0, TAU, 8,
-					Color(c.r, c.g, c.b, (1.0 - u) * 0.9), 2.5 * (1.0 - u) + 0.5)
-				for ray in 4:
-					var angle: float = PI * 0.25 + float(ray) * PI * 0.5
-					var reach: float = 34.0 * (1.0 - pow(1.0 - u, 2.0))
-					draw_line(f["pos"] - Vector2.from_angle(angle) * reach,
-						f["pos"] + Vector2.from_angle(angle) * reach,
-						Color(1.0, 0.94, 0.65, 1.0 - u), 2.0)
+				_knife_impact(f, u, true)
 			Kind.AFTERMATH:
 				var c: Color = f["col"]
 				var alpha: float = pow(1.0 - u, 1.6)
@@ -138,6 +137,26 @@ func _draw() -> void:
 					Color(hot.r, hot.g, hot.b, (1.0 - u) * 0.70))
 				draw_arc(f["pos"], (12.0 + 96.0 * u) * scale, 0.0, TAU, 42,
 					Color(c.r, c.g, c.b, (1.0 - u) * 0.90), 5.0 * (1.0 - u) + 1.0)
+
+
+## Four authored metallic poses, a brief contact glint, then a quiet falloff.
+## Fixed footprint avoids covering the next knife during repeated collisions.
+func _knife_impact(f: Dictionary, u: float, clash: bool) -> void:
+	var frame := mini(3, int(u * 4.0))
+	var diameter := 76.0 if clash else 44.0
+	var angle := float(f["seed"]) * 0.7391
+	var fade := pow(1.0 - u, 1.4)
+	_sprite(f, IMPACT_FRAMES[frame], diameter, fade * 0.95, angle,
+		(f["col"] as Color).lightened(0.3))
+	var glint := maxf(0.0, 1.0 - u / 0.22)
+	var strength := 0.35 if reduced_flashes else 0.8
+	if glint > 0.0:
+		draw_circle(f["pos"], (3.0 if clash else 2.0) * glint,
+			Color(1.0, 0.96, 0.82, glint * strength))
+	if clash:
+		var c: Color = f["col"]
+		draw_arc(f["pos"], 4.0 + 18.0 * u, angle, angle + PI * 1.35, 16,
+			Color(c.r, c.g, c.b, fade * strength * 0.65), 1.25, true)
 
 
 func _sprite(f: Dictionary, texture: Texture2D, diameter: float, alpha: float,

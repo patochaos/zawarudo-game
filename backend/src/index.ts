@@ -6,6 +6,7 @@ const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const ROOM_CODE_LENGTH = 6;
 
 interface CreateRoomBody {
+  capacity: 2 | 4;
   level: number;
   weapon: number;
   protocol: number;
@@ -110,7 +111,11 @@ async function readCreateBody(request: Request): Promise<CreateRoomBody | null> 
   if (typeof protocol !== "number" || !Number.isInteger(protocol)) {
     return null;
   }
-  return { level, weapon, protocol };
+  const capacity = "capacity" in value ? value.capacity : 2;
+  if (capacity !== 2 && capacity !== 4) {
+    return null;
+  }
+  return { level, weapon, protocol, capacity };
 }
 
 async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
@@ -134,8 +139,8 @@ async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
   return { weapon, protocol };
 }
 
-// A client that speaks a different protocol version cannot simulate the match deterministically,
-// so it is turned away with a message it can show verbatim instead of joining a broken room.
+// Protocol 2 remains available for legacy two-player clients. Room membership must still
+// use a single protocol so different client simulations never share a match.
 function protocolMismatch(request: Request, env: Env, protocol: number): Response {
   return json(request, env, {
     error: `Protocol version mismatch: this server speaks protocol ${PROTOCOL_VERSION}, `
@@ -149,8 +154,12 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
   if (body === null) {
     return json(request, env, { error: "Invalid room settings" }, 400);
   }
-  if (body.protocol !== PROTOCOL_VERSION) {
+  if (body.protocol !== PROTOCOL_VERSION && body.protocol !== 2) {
     return protocolMismatch(request, env, body.protocol);
+  }
+
+  if (body.protocol === 2 && body.capacity !== 2) {
+    return json(request, env, { error: "Four-player rooms require protocol 3. Update the game." }, 400);
   }
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -158,10 +167,10 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
     const token = randomHex(32);
     const seed = randomSeed();
     const stub = env.ROOMS.getByName(room);
-    if (await stub.reserve(room, token, body.level, seed, body.weapon)) {
+    if (await stub.reserve(room, token, body.level, seed, body.weapon, body.capacity, body.protocol)) {
       return json(request, env, {
         room, token, player: 0, level: body.level, weapon: body.weapon,
-        protocol: body.protocol,
+        protocol: body.protocol, capacity: body.capacity,
       }, 201);
     }
   }
@@ -173,12 +182,19 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
   if (body === null) {
     return json(request, env, { error: "Invalid fighter" }, 400);
   }
-  if (body.protocol !== PROTOCOL_VERSION) {
+  if (body.protocol !== PROTOCOL_VERSION && body.protocol !== 2) {
     return protocolMismatch(request, env, body.protocol);
   }
   const token = randomHex(32);
-  const result = await env.ROOMS.getByName(room).join(token, body.weapon);
+  const result = await env.ROOMS.getByName(room).join(token, body.weapon, body.protocol);
   if (!result.ok) {
+    if (result.reason === "protocol_mismatch") {
+      return json(request, env, {
+        error: `Protocol version mismatch: this room uses protocol ${result.protocol}, `
+          + `the client sent ${body.protocol}. All players must use the same game version.`,
+        protocol: result.protocol,
+      }, 400);
+    }
     if (result.reason === "missing") {
       return json(request, env, { error: "Room not found" }, 404);
     }
@@ -188,7 +204,8 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
     return json(request, env, { error: "Room is full" }, 409);
   }
   return json(request, env, {
-    room, token, player: 1, weapon: body.weapon, protocol: body.protocol,
+    room, token, player: result.player, weapon: body.weapon, protocol: body.protocol,
+    capacity: result.capacity,
   }, 200);
 }
 
@@ -209,7 +226,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return json(request, env, { error: "Origin not allowed" }, 403);
   }
   if (request.method === "GET" && url.pathname === "/health") {
-    return json(request, env, { ok: true, service: "zawarudo-rooms" });
+    return json(request, env, { ok: true, service: "zawarudo-rooms", protocol: PROTOCOL_VERSION, capacities: [2, 4], legacy_protocol: 2 });
   }
   if (request.method === "POST" && url.pathname === "/rooms") {
     return createRoom(request, env);

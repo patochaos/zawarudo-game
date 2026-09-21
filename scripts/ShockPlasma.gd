@@ -130,10 +130,6 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 	return result
 
 
-func overlaps_circle(center: Vector2, radius: float) -> bool:
-	return swept_circle_contact(prev_pos, position, center, radius + COLLISION_RADIUS)
-
-
 static func swept_circle_contact(from: Vector2, to: Vector2,
 		center: Vector2, combined_radius: float) -> bool:
 	var travel := to - from

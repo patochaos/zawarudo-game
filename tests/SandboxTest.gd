@@ -18,6 +18,8 @@ func _run() -> void:
 	game._sfx.muted = true
 	game._transition.visible = false
 
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_EXPERIMENTS)
 	game._menu._activate(game._menu.ROW_SANDBOX)
 	game._transition.visible = false
 	_check(game.state == Phase.FREEPLAY and game.level_index == 0,
@@ -31,8 +33,8 @@ func _run() -> void:
 		"CPU-only controls must communicate their unavailable state")
 
 	game._tuning._sandbox_buttons[0].pressed.emit()
-	_check(game.player_weapons[0] == game.Weapon.DASHBLADE,
-		"P1 class button must cycle the running fighter")
+	_check(game.player_weapons[0] == game.Weapon.KNIVES,
+		"P1 class button must keep Duelist selected")
 	game._tuning._sandbox_buttons[1].pressed.emit()
 	_check(game.level_index == 1,
 		"Arena button must cycle and reset into the next authored level")
@@ -44,8 +46,8 @@ func _run() -> void:
 		and not game._tuning._sandbox_buttons[4].disabled,
 		"adding a CPU must enable its class and skill controls")
 	game._tuning._sandbox_buttons[3].pressed.emit()
-	_check(game.player_weapons[1] == game.Weapon.DASHBLADE,
-		"CPU class button must cycle the live opponent")
+	_check(game.player_weapons[1] == game.Weapon.KNIVES,
+		"CPU class button must keep the opponent as Duelist")
 	game._tuning._sandbox_buttons[4].pressed.emit()
 	_check(game.player_difficulty(1) == game.Difficulty.RUTHLESS,
 		"CPU skill button must cycle the opponent's real AI preset")
@@ -58,8 +60,8 @@ func _run() -> void:
 		"the sandbox CPU must enter the shipped AI planning/execution loop")
 
 	game._tuning.handle_key(KEY_F1, false)
-	_check(game.player_weapons[0] == game.Weapon.SHOCK,
-		"F1 must share the class-cycle action used by the button")
+	_check(game.player_weapons[0] == game.Weapon.KNIVES,
+		"F1 must keep the only active class selected")
 	game._tuning.handle_key(KEY_F2, true)
 	_check(game.level_index == 0,
 		"Shift+F2 must cycle the arena backward")

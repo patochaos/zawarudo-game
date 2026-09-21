@@ -21,8 +21,9 @@ func _run() -> void:
 
 	var roster = game._roster
 	var setup = game._setup
-	game._menu._activate(game._menu.ROW_PLAY)
-	_check(game.state == Phase.ROSTER, "Play must open the lineup screen")
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_CUSTOM)
+	_check(game.state == Phase.ROSTER, "Custom Match must open the lineup screen")
 
 	# The formation is built by filling slots, not by naming a head count.
 	roster._set_role(1, roster.ROLE_PLAYER)
@@ -80,7 +81,8 @@ func _run() -> void:
 
 	# Leaving Team Battle must retire the sides rather than leave them latched.
 	game._open_menu()
-	game._menu._activate(game._menu.ROW_PLAY)
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_CUSTOM)
 	roster._debug_pads.clear()
 	roster.refresh_connections()
 	_check(roster.kinds[1] == roster.SlotKind.CPU,

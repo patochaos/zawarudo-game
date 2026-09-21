@@ -1,4 +1,4 @@
-# ZAWARUDO 0.2.0-playtest.1 — itch.io upload
+# ZAWARUDO 0.2.0-playtest.2 — itch.io upload
 
 The ready-to-upload files are generated in `build/itch/`:
 
@@ -21,8 +21,8 @@ The ready-to-upload files are generated in `build/itch/`:
 After creating the itch.io project page and installing/authenticating butler:
 
 ```powershell
-butler push "build/itch/web" patochaos/za-warudo:html5 --userversion 0.2.0-playtest.1
-butler push "build/itch/windows" patochaos/za-warudo:windows --userversion 0.2.0-playtest.1
+butler push "build/itch/web" patochaos/zawarudo:html5 --userversion 0.2.0-playtest.2
+butler push "build/itch/windows" patochaos/zawarudo:windows --userversion 0.2.0-playtest.2
 ```
 
 On the itch.io edit page, mark the `html5` channel as playable in the browser.

@@ -105,7 +105,7 @@ class ArenaPlan:
 					Color(body.r, body.g, body.b, 0.28))
 
 		var spawns: Array = layout.get("spawns", [])
-		for i in spawns.size():
+		for i in mini(spawns.size(), int(layout.get("player_count", 2))):
 			var point := _to_plan_point(spawns[i])
 			var accent: Color = ACCENTS[i % ACCENTS.size()]
 			draw_circle(point, 9.0, Color(accent.r, accent.g, accent.b, 0.22))
@@ -118,7 +118,9 @@ class ArenaPlan:
 			]), Color(0.92, 0.86, 0.58, 0.75))
 		for hazard: Dictionary in layout.get("hazards", []):
 			var orb := _to_plan_point(hazard.get("home", Vector2.ZERO))
-			draw_arc(orb, 7.0, 0.0, TAU, 18, Color(1.0, 0.42, 0.36, 0.90), 2.0)
+			draw_arc(orb, float(hazard.get("blast_radius", 190.0)) * PLAN_SCALE,
+				0.0, TAU, 40, Color(0.30, 0.96, 1.0, 0.22), 1.0)
+			draw_arc(orb, 7.0, 0.0, TAU, 18, Color(0.30, 0.96, 1.0, 0.90), 2.0)
 
 		draw_rect(PLAN, Color(0.91, 0.66, 0.22, 0.55), false, 1.5)
 
@@ -475,7 +477,8 @@ func _refresh() -> void:
 	_write("rule_value_0", "%s" % MODE_NAMES[battle_mode])
 	_write("rule_note_0", MODE_NOTES[battle_mode])
 	_write("rule_value_1", str(layout["name"]))
-	_write("rule_note_1", "%d OF %d" % [level + 1, Levels.count()])
+	_write("rule_note_1", "FEATURED 1v1 · %d OF %d" % [level + 1, Levels.count()]
+		if count == 2 and level in [1, 3] else "%d OF %d" % [level + 1, Levels.count()])
 	_write("rule_value_2", "NO SCORE" if free_play else "FIRST TO %d" % match_lives)
 	_write("rule_note_2", "FREE PLAY KEEPS NO SCORE" if free_play else "")
 	_tint("rule_value_2", Color(0.55, 0.51, 0.62) if free_play else HOT)
@@ -501,7 +504,7 @@ func _refresh() -> void:
 	_write("arena_name", str(layout["name"]))
 	_write("arena_wrap", Levels.wrap_label(layout))
 	_write("arena_feature", str(layout.get("feature", "")))
-	_write("plan_legend", "VIOLET SOLID  ·  GOLD BREAKABLE  ·  DOTS SPAWNS")
+	_write("plan_legend", "VIOLET SOLID · GOLD BREAKABLE · DOTS FIGHTERS · CYAN HAZARDS")
 
 	_write("back", "‹  BACK TO FIGHTERS")
 	_write("start", "START FREE PLAY" if free_play else "START MATCH")

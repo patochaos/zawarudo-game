@@ -9,7 +9,7 @@ signal message_received(message: Dictionary)
 signal status_changed(text: String, is_error: bool)
 
 const API_URL := "https://zawarudo-rooms.patochaos.workers.dev"
-const PROTOCOL_VERSION := 2
+const PROTOCOL_VERSION := 3
 const HEARTBEAT_SECONDS := 20.0
 const RECONNECT_SECONDS := 1.5
 
@@ -34,14 +34,14 @@ func _ready() -> void:
 	add_child(_http)
 
 
-func create_room(level: int, weapon: int = 0) -> void:
+func create_room(level: int, weapon: int = 0, capacity: int = 4) -> void:
 	if _request_kind != RequestKind.NONE:
 		return
 	_request_kind = RequestKind.CREATE
 	status_changed.emit("CREATING PRIVATE ROOM…", false)
 	var headers := PackedStringArray(["Content-Type: application/json"])
-	var err := _http.request(API_URL + "/rooms", headers, HTTPClient.METHOD_POST,
-		JSON.stringify({"level": level, "weapon": weapon, "protocol": PROTOCOL_VERSION}))
+	var err := _http.request(_api_url() + "/rooms", headers, HTTPClient.METHOD_POST,
+		JSON.stringify({"level": level, "weapon": weapon, "capacity": capacity, "protocol": PROTOCOL_VERSION}))
 	if err != OK:
 		_request_kind = RequestKind.NONE
 		status_changed.emit("COULD NOT START ROOM REQUEST", true)
@@ -56,7 +56,7 @@ func join_room(code: String, weapon: int = 0) -> void:
 		return
 	_request_kind = RequestKind.JOIN
 	status_changed.emit("JOINING ROOM %s…" % clean, false)
-	var err := _http.request(API_URL + "/rooms/%s/join" % clean,
+	var err := _http.request(_api_url() + "/rooms/%s/join" % clean,
 		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST,
 		JSON.stringify({"weapon": weapon, "protocol": PROTOCOL_VERSION}))
 	if err != OK:
@@ -95,8 +95,8 @@ func send_rematch(level: int) -> bool:
 	return _send({"type": "rematch", "level": level})
 
 
-## Claim an abandoned match. The room grants it only while the opponent is
-## actually disconnected, so this cannot be used to rage-quit a live rival.
+## Claim an abandoned match. The room grants it only when every other living
+## player is disconnected.
 func send_forfeit() -> bool:
 	return _send({"type": "forfeit"})
 
@@ -117,7 +117,7 @@ func _process(delta: float) -> void:
 		if not _socket_was_open:
 			_socket_was_open = true
 			_heartbeat_left = HEARTBEAT_SECONDS
-			status_changed.emit("CONNECTED — WAITING FOR OPPONENT", false)
+			status_changed.emit("CONNECTED // WAITING FOR PLAYERS", false)
 			_flush_pending_messages()
 		while _peer.get_available_packet_count() > 0:
 			var text := _peer.get_packet().get_string_from_utf8()
@@ -155,7 +155,7 @@ func _on_http_completed(_result: int, response_code: int,
 	room_code = str(decoded.get("room", ""))
 	_token = str(decoded.get("token", ""))
 	player_slot = int(decoded.get("player", -1))
-	if room_code.is_empty() or _token.is_empty() or player_slot < 0:
+	if room_code.is_empty() or _token.is_empty() or player_slot < 0 or player_slot >= 4:
 		status_changed.emit("ROOM SERVICE RETURNED INVALID DATA", true)
 		return
 	_manual_close = false
@@ -169,7 +169,7 @@ func _connect_socket() -> void:
 		return
 	_peer = WebSocketPeer.new()
 	_socket_was_open = false
-	var socket_url := API_URL.replace("https://", "wss://").replace("http://", "ws://")
+	var socket_url := _api_url().replace("https://", "wss://").replace("http://", "ws://")
 	var err := _peer.connect_to_url("%s/rooms/%s/socket?token=%s" % [
 		socket_url, room_code, _token,
 	])
@@ -177,6 +177,11 @@ func _connect_socket() -> void:
 		_peer = null
 		_reconnect_at = Time.get_ticks_msec() * 0.001 + RECONNECT_SECONDS
 		status_changed.emit("WEBSOCKET CONNECTION FAILED — RETRYING…", true)
+
+
+func _api_url() -> String:
+	var override := OS.get_environment("ZAWARUDO_API_URL").strip_edges().trim_suffix("/")
+	return API_URL if override.is_empty() else override
 
 
 func _send(payload: Dictionary) -> bool:

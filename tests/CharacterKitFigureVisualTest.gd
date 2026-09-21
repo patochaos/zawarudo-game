@@ -15,6 +15,10 @@ func _capture() -> void:
 	game._sfx.muted = true
 	game.start_quick_match(false, 0, 2,
 		[game.Weapon.DASHBLADE, game.Weapon.SHOCK])
+	# Explicit fixture for retained kits; these are unavailable through play setup.
+	game.player_weapons[0] = game.Weapon.DASHBLADE
+	game.player_weapons[1] = game.Weapon.SHOCK
+	game.restart()
 	game._transition.visible = false
 	game._ui.visible = false
 	game._preview.visible = false

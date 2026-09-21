@@ -10,6 +10,7 @@ const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
 const PANEL_MAX_H := 430.0
+const SUPER_DIAL := preload("res://assets/art/combat/super-dial.png")
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
 const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
 const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
@@ -24,6 +25,7 @@ class CutInArt:
 	var elapsed: float = 0.0
 	var duration: float = DURATION
 	var playing: bool = false
+	var reduced_flashes: bool = false
 	var portrait: Texture2D = DUELIST_PORTRAIT
 	var _tone_texture: ImageTexture
 
@@ -75,7 +77,7 @@ class CutInArt:
 		# The cut-in snaps on as a hard black frame, then the central manga panel
 		# expands vertically. The slight horizontal shake is deterministic.
 		draw_rect(Rect2(0.0, 0.0, W, H), ink)
-		var shake := Vector2(sin(elapsed * 74.0), cos(elapsed * 61.0)) * (4.0 * (1.0 - intro))
+		var shake := Vector2.ZERO if reduced_flashes else Vector2(sin(elapsed * 74.0), cos(elapsed * 61.0)) * (4.0 * (1.0 - intro))
 		var panel_h: float = lerpf(18.0, PANEL_MAX_H, ease(intro, 0.45))
 		var top: float = H * 0.5 - panel_h * 0.5
 		var panel := PackedVector2Array([
@@ -107,13 +109,31 @@ class CutInArt:
 
 		var portrait_x: float = 330.0 if owner_index == 0 else 950.0
 		var face: float = 1.0 if owner_index == 0 else -1.0
-		_draw_portrait(Vector2(portrait_x, H * 0.5 + 34.0) + shake, face, accent, alpha, u)
-		_draw_copy(top, panel_h, accent, alpha, shake)
+		# Anticipation: the blade dial appears first. Portrait and title strike
+		# together, then five accents sweep toward release within the same pause.
+		var strike := clampf((u - 0.12) / 0.10, 0.0, 1.0)
+		var release := clampf((u - 0.70) / 0.30, 0.0, 1.0)
+		var dial_size := lerpf(420.0, 490.0, intro) + release * 38.0
+		draw_set_transform(Vector2(portrait_x, H * 0.5),
+			0.0 if reduced_flashes else (-0.12 + u * 0.18) * face)
+		draw_texture_rect(SUPER_DIAL,
+			Rect2(Vector2.ONE * -dial_size * 0.5, Vector2.ONE * dial_size), false,
+			Color(accent.r, accent.g, accent.b, alpha * 0.7))
+		draw_set_transform(Vector2.ZERO)
+		_draw_portrait(Vector2(portrait_x - face * (1.0 - strike) * 24.0,
+			H * 0.5 + 34.0) + shake, face, accent, alpha * strike, u)
+		_draw_copy(top, panel_h, accent, alpha * strike, shake)
+		var copy_x := 600.0 if owner_index == 0 else 80.0
+		for wave in 5:
+			var lit := clampf((u - 0.44 - float(wave) * 0.065) / 0.06, 0.0, 1.0)
+			var at := Vector2(copy_x + 180.0 + float(wave) * 46.0, top + panel_h - 72.0)
+			draw_line(at, at + Vector2(19.0, -12.0),
+				Color(accent.r, accent.g, accent.b, alpha * strike * (0.16 + lit * 0.7)), 3.0, true)
 
-		# A one-frame white impact flash makes the transition read immediately.
+		# A narrow entry glint marks the cut without a full-screen white flash.
 		var flash: float = maxf(0.0, 1.0 - u / 0.055)
-		if flash > 0.0:
-			draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.98, 0.88, flash * 0.82))
+		if flash > 0.0 and not reduced_flashes:
+			draw_rect(Rect2(0.0, H * 0.5 - 2.0, W, 4.0), Color(1.0, 0.98, 0.88, flash * 0.65))
 
 	func _build_tone_texture() -> ImageTexture:
 		var image := Image.create(int(W), int(PANEL_MAX_H), false, Image.FORMAT_RGBA8)
@@ -138,20 +158,16 @@ class CutInArt:
 	func _draw_copy(top: float, panel_h: float, accent: Color, alpha: float, shake: Vector2) -> void:
 		var copy_x: float = 600.0 if owner_index == 0 else 80.0
 		draw_string(ThemeDB.fallback_font, Vector2(copy_x, top + 76.0) + shake,
-			"IT'S ALL USELESS", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 24,
+			"THE MOMENT IS YOURS", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 24,
 			Color(0.98, 0.96, 0.88, 0.88 * alpha))
-		# Six calls split evenly across two bounded lines: the fixed 590px width
-		# keeps the chant clear of both the portrait and the panel edge.
+		# Bounded title stays clear of the portrait in either player orientation.
 		for line in 2:
 			draw_string(ThemeDB.fallback_font,
 				Vector2(copy_x, top + panel_h * (0.49 + float(line) * 0.22)) + shake,
-				"MUDA MUDA MUDA", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 55,
+				"MUDA MUDA", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 55,
 				Color(accent.r, accent.g, accent.b, alpha))
-		draw_line(Vector2(copy_x + 34.0, top + panel_h * 0.78) + shake,
-			Vector2(copy_x + 556.0, top + panel_h * 0.78 - 20.0) + shake,
-			Color(0.98, 0.90, 0.54, 0.82 * alpha), 5.0)
-		draw_string(ThemeDB.fallback_font, Vector2(copy_x + 4.0, top + panel_h - 30.0) + shake,
-			"PLAYER %d  //  SUPER" % (owner_index + 1), HORIZONTAL_ALIGNMENT_LEFT, 540.0, 18,
+		draw_string(ThemeDB.fallback_font, Vector2(copy_x, top + panel_h - 30.0) + shake,
+			"PLAYER %d  //  SUPER" % (owner_index + 1), HORIZONTAL_ALIGNMENT_CENTER, 590.0, 18,
 			Color(0.78, 0.80, 0.88, 0.86 * alpha))
 
 	func _draw_portrait(at: Vector2, face: float, accent: Color, alpha: float, u: float) -> void:
@@ -198,7 +214,8 @@ func _ready() -> void:
 	_portrait_warmup.call_deferred("queue_free")
 
 
-func play(who: int, tint: Color, fighter: Variant = 0) -> void:
+func play(who: int, tint: Color, fighter: Variant = 0, reduce_flashes: bool = false) -> void:
+	_art.reduced_flashes = reduce_flashes
 	_art.begin(who, tint, fighter)
 
 

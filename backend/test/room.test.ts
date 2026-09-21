@@ -20,12 +20,27 @@ afterAll(async () => {
 });
 
 describe("Room durable object", () => {
+  it("runs a full legacy protocol 2 turn", async () => {
+    const response = await post("/rooms", { level: 0, weapon: 0, protocol: 2 });
+    const created = await response.json<{ room: string; token: string }>();
+    const joined = await post(`/rooms/${created.room}/join`, { weapon: 2, protocol: 2 });
+    const guest = await joined.json<{ token: string }>();
+    const sockets = [await TestSocket.open(created.room, created.token), await TestSocket.open(created.room, guest.token)];
+    try {
+      for (const socket of sockets) expect(await socket.waitFor("match_start")).toMatchObject({ weapons: [0, 2] });
+      for (const socket of sockets) socket.sendPlan(1);
+      for (const socket of sockets) expect((await socket.waitFor("turn_plans")).plans).toHaveLength(2);
+      for (const socket of sockets) socket.send({ type: "turn_complete", turn: 1, digest: digest("a") });
+      for (const socket of sockets) expect(await socket.waitFor("turn_start")).toMatchObject({ turn: 2 });
+    } finally { for (const socket of sockets) socket.close(); }
+  });
+
   it("reserves a room once and assigns the guest slot", async () => {
     const room = env.ROOMS.getByName("ABC234");
     expect(await room.reserve("ABC234", "a".repeat(64), 1, 1234, 2)).toBe(true);
     expect(await room.reserve("ABC234", "b".repeat(64), 2, 9999, 3)).toBe(false);
 
-    expect(await room.join("c".repeat(64), 4)).toEqual({ ok: true, player: 1 });
+    expect(await room.join("c".repeat(64), 4)).toEqual({ ok: true, player: 1, capacity: 2 });
     expect(await room.join("d".repeat(64), 0)).toEqual({ ok: false, reason: "full" });
     expect(await room.getInfo()).toEqual({
       exists: true,
@@ -34,7 +49,9 @@ describe("Room durable object", () => {
       seed: 1234,
       turn: 1,
       hasGuest: true,
+      protocol: 3,
       weapons: [2, 4],
+      capacity: 2,
     });
   });
 
@@ -43,7 +60,7 @@ describe("Room durable object", () => {
     expect(stale.status).toBe(400);
     await expect(stale.json<{ error: string }>()).resolves.toMatchObject({
       error: expect.stringContaining("Protocol version mismatch") as unknown as string,
-      protocol: 2,
+      protocol: 3,
     });
 
     const created = await createRoom(6, 2);
@@ -58,7 +75,7 @@ describe("Room durable object", () => {
 describe("lockstep turn cycle", () => {
   it("starts the match once both sockets are connected", async () => {
     const created = await createRoom(3, 2);
-    const guestToken = await post(`/rooms/${created.room}/join`, { weapon: 4, protocol: 2 })
+    const guestToken = await post(`/rooms/${created.room}/join`, { weapon: 4, protocol: 3 })
       .then((response) => response.json<{ token: string }>())
       .then((body) => body.token);
 
@@ -460,5 +477,115 @@ describe("forfeit", () => {
     expect((await env.ROOMS.getByName(fixture.room).getInfo()).phase).toBe("desync");
 
     fixture.host.close();
+  });
+});
+
+
+describe("four-player rooms", () => {
+  async function connectFour(): Promise<{ room: string; sockets: TestSocket[]; tokens: string[] }> {
+    const created = await createRoom(0, 0, 4);
+    const tokens = [created.token];
+    const sockets = [await TestSocket.open(created.room, created.token)];
+    for (let slot = 1; slot < 4; slot += 1) {
+      const response = await post(`/rooms/${created.room}/join`, {
+        weapon: [0, 2, 3, 4][slot], protocol: 3,
+      });
+      const joined = await response.json<{ token: string; player: number; capacity: number }>();
+      expect(joined.player).toBe(slot);
+      expect(joined.capacity).toBe(4);
+      tokens.push(joined.token);
+      if (slot < 3) {
+        sockets.push(await TestSocket.open(created.room, joined.token));
+        await settle();
+        expect(sockets[0]?.types()).not.toContain("match_start");
+      }
+    }
+    // Reserving the fourth slot is insufficient until its socket arrives.
+    expect((await env.ROOMS.getByName(created.room).getInfo()).phase).toBe("waiting");
+    sockets.push(await TestSocket.open(created.room, tokens[3]!));
+    for (const socket of sockets) {
+      expect(await socket.waitFor("match_start")).toMatchObject({ capacity: 4, weapons: [0, 2, 3, 4] });
+      socket.drain();
+    }
+    return { room: created.room, sockets, tokens };
+  }
+
+  it("waits for all four plans, digests, match reports, and rematch votes", async () => {
+    const { room, sockets } = await connectFour();
+    try {
+      expect((await post(`/rooms/${room}/join`, { weapon: 0, protocol: 3 })).status).toBe(409);
+      for (const socket of sockets.slice(0, 3)) socket.sendPlan(1);
+      await settle();
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("planning");
+      sockets[3]!.sendPlan(1);
+      for (const socket of sockets) expect((await socket.waitFor("turn_plans")).plans).toHaveLength(4);
+      for (const socket of sockets.slice(0, 3)) socket.send({ type: "turn_complete", turn: 1, digest: digest("a") });
+      await settle();
+      expect((await env.ROOMS.getByName(room).getInfo()).turn).toBe(1);
+      sockets[3]!.send({ type: "turn_complete", turn: 1, digest: digest("a") });
+      for (const socket of sockets) expect(await socket.waitFor("turn_start")).toMatchObject({ turn: 2 });
+      for (const socket of sockets) socket.sendPlan(2);
+      for (const socket of sockets) await socket.waitFor("turn_plans");
+      for (const socket of sockets.slice(0, 3)) socket.send({ type: "match_over", turn: 2, winner: 3, digest: digest("b") });
+      await settle();
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("executing");
+      sockets[3]!.send({ type: "match_over", turn: 2, winner: 3, digest: digest("b") });
+      for (const socket of sockets) expect(await socket.waitFor("match_over")).toMatchObject({ winner: 3 });
+      for (const socket of sockets.slice(0, 3)) socket.send({ type: "rematch", level: 2 });
+      await settle();
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("game_over");
+      sockets[3]!.send({ type: "rematch", level: 1 });
+      for (const socket of sockets) expect(await socket.waitFor("match_start")).toMatchObject({ capacity: 4, level: 2, turn: 1 });
+    } finally { for (const socket of sockets) socket.close(); }
+  });
+
+  it("starts an agreed rematch when a disconnected voter reconnects", async () => {
+    const { room, sockets, tokens } = await connectFour();
+    try {
+      for (const socket of sockets) socket.sendPlan(1);
+      for (const socket of sockets) await socket.waitFor("turn_plans");
+      for (const socket of sockets) socket.send({ type: "match_over", turn: 1, winner: 2, digest: digest("a") });
+      for (const socket of sockets) await socket.waitFor("match_over");
+      sockets[3]!.send({ type: "rematch", level: 0 });
+      await sockets[3]!.waitFor("rematch_status");
+      sockets[3]!.close();
+      await settle();
+      for (const socket of sockets.slice(0, 3)) socket.send({ type: "rematch", level: 2 });
+      await settle();
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("game_over");
+      sockets[3] = await TestSocket.open(room, tokens[3]!);
+      for (const socket of sockets) expect(await socket.waitFor("match_start")).toMatchObject({ capacity: 4, turn: 1, level: 2 });
+    } finally { for (const socket of sockets) socket.close(); }
+  });
+
+  it("detects disagreement between a continuing turn and game over", async () => {
+    const { room, sockets } = await connectFour();
+    try {
+      for (const socket of sockets) socket.sendPlan(1);
+      for (const socket of sockets) await socket.waitFor("turn_plans");
+      sockets[0]!.send({ type: "turn_complete", turn: 1, digest: digest("a") });
+      await sockets[0]!.waitFor("turn_complete_ack");
+      sockets[3]!.send({ type: "match_over", turn: 1, winner: 3, digest: digest("b") });
+      for (const socket of sockets) await socket.waitFor("desync");
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("desync");
+    } finally { for (const socket of sockets) socket.close(); }
+  });
+
+  it("checks the fourth digest and refuses a false disconnect winner", async () => {
+    const { room, sockets, tokens } = await connectFour();
+    try {
+      sockets[3]!.close();
+      await settle();
+      sockets[0]!.send({ type: "forfeit" });
+      await sockets[0]!.waitForError("forfeit_unavailable");
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("planning");
+      sockets[3] = await TestSocket.open(room, tokens[3]!);
+      expect(await sockets[3]!.waitFor("room_state")).toMatchObject({ capacity: 4, connected: [true, true, true, true] });
+      for (const socket of sockets) socket.sendPlan(1);
+      for (const socket of sockets) await socket.waitFor("turn_plans");
+      for (let slot = 0; slot < 4; slot += 1) sockets[slot]!.send({ type: "turn_complete", turn: 1, digest: digest(slot === 3 ? "b" : "a") });
+      for (const socket of sockets) await socket.waitFor("desync");
+      expect((await env.ROOMS.getByName(room).getInfo()).phase).toBe("desync");
+    } finally { for (const socket of sockets) socket.close(); }
   });
 });

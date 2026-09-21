@@ -25,6 +25,12 @@ func _run() -> void:
 	_check(cut_in._art.portrait == cut_in.ROOK_PORTRAIT,
 		"a SUPER must keep the attacking fighter's own portrait")
 	cut_in.cancel()
+	cut_in.play(0, Color.GOLD, 0, true)
+	_check(cut_in._art.reduced_flashes, "SUPER must honor reduced flashes")
+	cut_in._art._process(cut_in.DURATION - 0.01)
+	_check(cut_in.is_active(), "presentation must preserve the complete gameplay pause")
+	cut_in._art._process(0.02)
+	_check(not cut_in.is_active(), "presentation must release at the existing deadline")
 	cut_in.queue_free()
 
 	if _failures == 0:

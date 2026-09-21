@@ -19,6 +19,21 @@ func _capture() -> void:
 	if error != OK:
 		quit(error)
 		return
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_EXPERIMENTS)
+	await VisualCapture.await_transition(self, game)
+	error = _save("res://previews/menu-experiments-current.png")
+	if error != OK:
+		quit(error)
+		return
+	game._menu.handle_key(KEY_ESCAPE)
+	game._menu._activate(game._menu.ROW_CONTROLS)
+	await VisualCapture.await_transition(self, game)
+	error = _save("res://previews/menu-controls-current.png")
+	if error != OK:
+		quit(error)
+		return
+	game._menu.handle_key(KEY_ESCAPE)
 	game._menu._activate(game._menu.ROW_OPTIONS)
 	await VisualCapture.await_transition(self, game)
 	error = _save("res://previews/menu-options-current.png")

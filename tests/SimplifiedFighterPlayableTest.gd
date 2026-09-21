@@ -39,10 +39,12 @@ func _run() -> void:
 		_check(executor.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 			"the simplified sprite must not change collision")
 		if visual != null:
-			_check(visual.skin.skin_id == &"gilded_executor_animated_v1",
+			_check(visual.skin.skin_id == &"duelist_polished_v2",
 				"P1 must load the animated simplified skin")
 			_check(visual.skin.sprite_draw_rect.size.is_equal_approx(Vector2(87.0, 58.0)),
 				"the filled sprite must match the legacy fighter's perceived size")
+			_check(visual.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+				"the polished sprite must filter its downscaled silhouette")
 			_check(visual.skin.ghost_texture != null,
 				"the simplified fighter must provide its own planning ghost silhouette")
 			_check(not visual.skin.procedural_aim_arm_enabled,
@@ -63,6 +65,26 @@ func _run() -> void:
 					"%s must expose every authored frame" % state)
 				_check(visual.skin.ghost_atlases.get(state) is Texture2D,
 					"%s must have a matching animated ghost mask" % state)
+				var art: Image = visual.skin.sprite_atlases[state].get_image()
+				var mask: Image = visual.skin.ghost_atlases[state].get_image()
+				_check(art.has_mipmaps(), "%s must include downsampling levels" % state)
+				_check(art.get_size() == Vector2i(384 * expected_counts[state], 256),
+					"%s atlas must match the runtime cell layout" % state)
+				_check(mask.get_size() == art.get_size(), "%s ghost must match art size" % state)
+				for frame_index in expected_counts[state]:
+					var region := Rect2i(frame_index * 384, 0, 384, 256)
+					var body_image := art.get_region(region)
+					var ghost_image := mask.get_region(region)
+					var bounds := body_image.get_used_rect()
+					_check(bounds.size.x > 20 and bounds.size.y > 20,
+						"%s frame %d must contain artwork" % [state, frame_index])
+					_check(bounds.position.x > 0 and bounds.position.y > 0
+							and bounds.end.x < 384 and bounds.end.y < 256,
+						"%s frame %d must retain a filtering gutter" % [state, frame_index])
+					for y in range(0, 256, 3):
+						for x in range(0, 384, 3):
+							_check(is_equal_approx(body_image.get_pixel(x, y).a, ghost_image.get_pixel(x, y).a),
+								"%s prediction silhouette must follow the polished art" % state)
 
 			game.ghost_velocity_path[0] = PackedVector2Array([
 				Vector2(180.0, 0.0), Vector2(0.0, -180.0), Vector2(0.0, 180.0),
@@ -78,6 +100,15 @@ func _run() -> void:
 				"an upward ghost must use RISE")
 			_check(fall_ghost["state"] == FighterVisual.FALL,
 				"a downward ghost must use FALL")
+			_check(rise_ghost["frame"] == 1 and fall_ghost["frame"] == 0,
+				"airborne prediction must distinguish apex from early descent")
+			for tick in [0, 6, 12, 60]:
+				_check(visual.skin.motion_frame(FighterVisual.RISE, tick, Vector2(0, -650)) == 0,
+					"strong ascent must hold the launch pose without cycling")
+				_check(visual.skin.motion_frame(FighterVisual.RISE, tick, Vector2(0, -100)) == 1,
+					"approaching apex must hold the extended pose without cycling")
+				_check(visual.skin.motion_frame(FighterVisual.FALL, tick, Vector2(0, 650)) == 1,
+					"fast descent must hold the braced pose without cycling")
 			executor.plan.shot_tick = 1
 			var shot_ghost: Dictionary = preview._ghost_sprite_pose(executor, visual.skin, 1)
 			_check(shot_ghost["state"] == FighterVisual.SHOT and shot_ghost["frame"] == 1,
@@ -106,6 +137,14 @@ func _run() -> void:
 			_check(visual.body_state == FighterVisual.LOCK, "confirmation must select LOCK")
 			executor.plan.shot_tick = 0
 			game.state = Phase.EXECUTING
+			game.exec_tick = -3
+			visual.sync_from_player()
+			_check(visual.body_state == FighterVisual.SHOT and visual.body_frame == 0,
+				"the dagger wind-up must precede the authoritative release")
+			game.exec_tick = 0
+			visual.sync_from_player()
+			_check(visual.body_state == FighterVisual.SHOT and visual.body_frame == 1,
+				"the empty extended hand must coincide with projectile release")
 			game.exec_tick = 9
 			visual.sync_from_player()
 			_check(visual.body_state == FighterVisual.SHOT and visual.body_frame == 3,

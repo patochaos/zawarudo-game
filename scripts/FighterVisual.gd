@@ -43,6 +43,7 @@ class AimArm extends Node2D:
 func configure(fighter: Player, fighter_skin: FighterSkin) -> void:
 	_fighter = fighter
 	skin = fighter_skin
+	texture_filter = skin.sprite_texture_filter
 
 
 func _ready() -> void:
@@ -88,14 +89,14 @@ func sync_from_player() -> void:
 	var state_ticks := skin.ticks_for_state(body_state)
 	var frame_step: int = tick / state_ticks
 	if body_state == SHOT:
-		frame_step = maxi(0, _presentation_exec_tick() - _fighter.plan.shot_tick) \
-			/ state_ticks
+		var elapsed := _presentation_exec_tick() - _fighter.plan.shot_tick
+		frame_step = maxi(0, elapsed + skin.shot_release_frame * state_ticks) / state_ticks
 		body_frame = mini(frame_count - 1, frame_step)
 	elif body_state == DEFEAT:
 		frame_step = int(_defeat_elapsed * 60.0) / state_ticks
 		body_frame = mini(frame_count - 1, frame_step)
 	else:
-		body_frame = posmod(frame_step, frame_count)
+		body_frame = skin.motion_frame(body_state, tick, _fighter.vel)
 
 
 func _presentation_body_tick() -> int:
@@ -135,7 +136,8 @@ func _shot_is_visible(phase: int) -> bool:
 			or phase not in [Phase.EXECUTING, Phase.REPLAY]:
 		return false
 	var elapsed := _presentation_exec_tick() - _fighter.plan.shot_tick
-	return elapsed >= 0 and elapsed < skin.frame_count(SHOT) * skin.ticks_for_state(SHOT)
+	return elapsed >= -skin.shot_release_frame * skin.ticks_for_state(SHOT) \
+		and elapsed < skin.frame_count(SHOT) * skin.ticks_for_state(SHOT)
 
 
 func body_signature() -> String:

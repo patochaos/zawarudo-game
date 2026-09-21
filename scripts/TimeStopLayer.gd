@@ -20,15 +20,9 @@ var _resume_flash: float = 0.0
 var _impact_flash: float = 0.0
 var _impact_at: Vector2 = Vector2.ZERO
 var _impact_color: Color = Color.WHITE
-var _motes: PackedVector2Array = PackedVector2Array()
 
 
 func _ready() -> void:
-	var seeded := RandomNumberGenerator.new()
-	seeded.seed = 19780607
-	for i in 28:
-		_motes.append(Vector2(seeded.randf_range(28.0, W - 28.0),
-			seeded.randf_range(270.0, H - 105.0)))
 	set_process(true)
 
 
@@ -88,7 +82,9 @@ func _draw_frozen_world() -> void:
 
 	# An incomplete clock face sits behind the arena action. It is a motif, not
 	# a timer: the actual countdown remains in the HUD.
-	for hour in 12:
+	# Pendulum already has a physical clock behind play. Avoid a second dial.
+	var show_clock: bool = gm.level_index != 2
+	for hour in (12 if show_clock else 0):
 		var angle: float = -PI * 0.5 + TAU * float(hour) / 12.0
 		var d := Vector2.from_angle(angle)
 		var long_tick: float = 17.0 if hour % 3 == 0 else 10.0
@@ -96,19 +92,13 @@ func _draw_frozen_world() -> void:
 			CLOCK_CENTRE + d * CLOCK_RADIUS,
 			Color(1.0, 0.76, 0.24, 0.13 if hour % 3 == 0 else 0.075),
 			2.0 if hour % 3 == 0 else 1.0)
-	draw_arc(CLOCK_CENTRE, CLOCK_RADIUS, PI * 0.08, PI * 0.78, 48,
-		Color(0.88, 0.64, 0.23, 0.07), 1.0)
-	draw_arc(CLOCK_CENTRE, CLOCK_RADIUS, PI * 1.08, PI * 1.78, 48,
-		Color(0.88, 0.64, 0.23, 0.07), 1.0)
+	if show_clock:
+		draw_arc(CLOCK_CENTRE, CLOCK_RADIUS, PI * 0.08, PI * 0.78, 48,
+			Color(0.88, 0.64, 0.23, 0.07), 1.0)
+		draw_arc(CLOCK_CENTRE, CLOCK_RADIUS, PI * 1.08, PI * 1.78, 48,
+			Color(0.88, 0.64, 0.23, 0.07), 1.0)
 
-	# Gold particles held perfectly still sell the frozen air.
-	for i in _motes.size():
-		var p: Vector2 = _motes[i]
-		var radius: float = 1.0 + float(i % 3) * 0.45
-		var c := Color(1.0, 0.80, 0.32, 0.12 + float(i % 4) * 0.025)
-		draw_circle(p, radius, c)
-		if i % 5 == 0:
-			draw_line(p - Vector2(4.0, 0.0), p + Vector2(4.0, 0.0), c, 1.0)
+	# All arena dust now exists in both phases and freezes in Backdrop.
 
 	if _freeze_flash <= 0.0:
 		return

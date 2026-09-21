@@ -1,0 +1,26 @@
+extends SceneTree
+
+const MAIN_SCENE := preload("res://scenes/Main.tscn")
+const VisualCapture := preload("res://tests/VisualCaptureHelper.gd")
+
+
+func _init() -> void:
+	call_deferred("_capture")
+
+
+func _capture() -> void:
+	var game = MAIN_SCENE.instantiate()
+	root.add_child(game)
+	await process_frame
+	await VisualCapture.pin_window(self)
+	game._sfx.muted = true
+	game._menu.developer_mode = true
+	game._menu._activate(game._menu.ROW_EXPERIMENTS)
+	game._menu._activate(game._menu.ROW_FATE_TRIAL)
+	await VisualCapture.await_transition(self, game)
+	game._ui.show_controls(true)
+	game._ui.refresh()
+	await VisualCapture.settle(self, 4)
+	var error := VisualCapture.save(self, "user://fate-trial-01-visual.png",
+		"Fate Trial 01 preview", Vector2i(1280, 720))
+	quit(error)

@@ -40,8 +40,8 @@ export async function post(path: string, body: Record<string, unknown>): Promise
   }));
 }
 
-export async function createRoom(level = 1, weapon = 0): Promise<CreatedRoom> {
-  const response = await post("/rooms", { level, weapon, protocol: PROTOCOL_VERSION });
+export async function createRoom(level = 1, weapon = 0, capacity = 2): Promise<CreatedRoom> {
+  const response = await post("/rooms", { level, weapon, capacity, protocol: PROTOCOL_VERSION });
   if (response.status !== 201) {
     throw new Error(`create failed: ${response.status} ${await response.text()}`);
   }
