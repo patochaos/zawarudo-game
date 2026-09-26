@@ -68,7 +68,7 @@ retired too. Do not reopen this line.
 Shrinking the world to 1024×576 would buy about 1.6 percentage points of apparent
 size and cost every authored layout, every spawn socket, every movement and
 stamina distance, the AI's search ranges, and every number in
-`CHARACTER_MOVEMENT_BALANCE_2026-08-21.md`. It would land directly on top of the
+`archive/CHARACTER_MOVEMENT_BALANCE_2026-08-21.md`. It would land directly on top of the
 open balance work (item 18). The 32×48 box is a protected contract besides.
 
 **3. The lever already exists, and it is visual-only.**

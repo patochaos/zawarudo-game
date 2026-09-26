@@ -385,7 +385,7 @@ Before accepting a Rook asset, answer yes to all of these:
 - Runtime portrait: `assets/art/portraits/rook-portrait-v1.png`
 - Approved direction mockup: `docs/concepts/velocity-rework/velocity-heavy-shield-lancer-mockup-v1.png`
 - Retained alternate idea, **not Rook canon**: `docs/concepts/velocity-rework/velocity-imprisoned-angel-mockup-v1.png`
-- Mechanics reference: `docs/VELOCITY_LOST_FRAMES_PROTOTYPE_2026-08-20.md`
+- Mechanics reference: `docs/archive/VELOCITY_LOST_FRAMES_PROTOTYPE_2026-08-20.md`
 
 Superseded for visual identity: all earlier `velocity-*-portrait-v1.png` concept
 variants and `dashblade-portrait-v1.png`. They remain as historical exploration

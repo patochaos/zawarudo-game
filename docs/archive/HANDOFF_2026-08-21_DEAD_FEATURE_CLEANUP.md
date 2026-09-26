@@ -15,7 +15,7 @@
 
 - `docs/PRODUCTION_ROADMAP.md` — gates and the protected gameplay contract
 - `docs/GAME_DESIGN.md` — pillars and experience contracts (Spanish)
-- `docs/CHARACTER_MOVEMENT_BALANCE_2026-08-21.md` — the live balance problem
+- `docs/archive/CHARACTER_MOVEMENT_BALANCE_2026-08-21.md` — the live balance problem
 - `README.md` — player-facing rules; kept in sync with this branch
 
 ---
@@ -261,7 +261,7 @@ review so earlier discussion still maps.
 ### Gameplay
 
 - **18 — Balance.** The headline problem, already documented in
-  `docs/CHARACTER_MOVEMENT_BALANCE_2026-08-21.md`: Static Witch **71.4 %** win
+  `docs/archive/CHARACTER_MOVEMENT_BALANCE_2026-08-21.md`: Static Witch **71.4 %** win
   rate; Broodtail beats Velocity **7–0** while losing to the other two. The doc's
   own conclusion is that it is the kit, not locomotion. Start at
   `shock_plasma_range_full` (1440 px — wider than the 1280 px arena) and

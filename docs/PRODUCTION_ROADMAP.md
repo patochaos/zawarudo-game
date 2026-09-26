@@ -30,7 +30,7 @@ event-driven presentation in Godot.
 
 The maintenance pass of 2026-08-21 — retired-feature removal, the online
 protocol 2 pin, the forfeit path and the CI hardening — is written up in
-[`HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md`](HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md),
+[`HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md`](archive/HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md),
 together with the open backlog and the acceptance commands. Read it before
 picking up new work.
 
@@ -233,4 +233,4 @@ the recoverable baseline is established.
 - Backend 3 files / 7 tests and TypeScript typecheck passed.
 - Web release export passed at 39.2 MiB total (37.7 MiB WASM); Windows release
   export and 180-frame headless startup passed.
-- See `docs/FIGHTER_VISUAL_GATE_1_HANDOFF.md` for scope and director decisions.
+- See `docs/archive/FIGHTER_VISUAL_GATE_1_HANDOFF.md` for scope and director decisions.
