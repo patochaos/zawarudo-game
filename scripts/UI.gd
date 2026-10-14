@@ -21,6 +21,7 @@ class FighterSeal:
 	var mirrored: bool = false
 	var portrait: Texture2D
 	var fighter_name: String = "DUELIST"
+	var opponent_name: String = ""
 	var points: int = 0
 	var points_to_win: int = 3
 	var show_super := true
@@ -39,11 +40,13 @@ class FighterSeal:
 		size = Vector2(430.0, 58.0)
 		queue_redraw()
 
-	func set_identity(name: String, texture: Texture2D) -> void:
-		if fighter_name == name and portrait == texture:
+	## `opponent` is a named ladder CPU; it sits under the kit name.
+	func set_identity(name: String, texture: Texture2D, opponent: String = "") -> void:
+		if fighter_name == name and portrait == texture and opponent_name == opponent:
 			return
 		fighter_name = name
 		portrait = texture
+		opponent_name = opponent
 		queue_redraw()
 
 	func set_state(score_value: int, win_score: int, meter: float, armed: bool,
@@ -91,6 +94,9 @@ class FighterSeal:
 		var name_align := HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT
 		draw_string(font, Vector2(name_x, 23.0), "P%d · %s" % [player_index + 1, fighter_name],
 			name_align, name_width, 11, accent.lightened(0.22))
+		if opponent_name != "" and lost_frames < 0:
+			draw_string(font, Vector2(name_x, 37.0), opponent_name,
+				name_align, name_width, 9, accent.lightened(0.42))
 		if lost_frames >= 0:
 			var debt_label_x := 52.0 if not mirrored else 270.0
 			var debt_pip_x := 91.0 if not mirrored else 315.0
@@ -219,7 +225,7 @@ var help_visible: bool = true
 var _lock_plan: Button
 var _review_turn: Button
 var _locked_status: Label
-var _harder_button: Button
+var _next_opponent_button: Button
 var _you_marker: Label
 var _help: Array[CanvasItem] = []
 var _tuning: Label
@@ -379,10 +385,8 @@ func build(manager) -> void:
 	_report_button = _result_button(Vector2(520.0, 510.0), Vector2(240.0, 42.0), "C  COPY MATCH REPORT")
 	_report_button.text = "SEND FEEDBACK"
 	_report_button.pressed.connect(func(): gm.open_feedback())
-	_harder_button = _result_button(Vector2(670, 510), Vector2(240, 42), "TRY STANDARD CPU")
-	_harder_button.pressed.connect(func():
-		gm._telemetry.note_rematch(gm.turn)
-		gm.start_demo_duel(gm.Difficulty.STANDARD))
+	_next_opponent_button = _result_button(Vector2(670, 510), Vector2(240, 42), "N  NEXT OPPONENT")
+	_next_opponent_button.pressed.connect(func(): gm.start_next_opponent())
 	_lock_plan = _result_button(Vector2(836, 74), Vector2(156, 32), "SHIFT  LOCK PLAN", true)
 	_lock_plan.pressed.connect(func(): gm._confirm(gm._keyboard_player()))
 	_review_turn = _result_button(Vector2(1136, 74), Vector2(128, 32), "V  REVIEW")
@@ -585,7 +589,12 @@ func refresh() -> void:
 				_hint_p1.text = \
 					"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
 			if gm.vs_ai:
-				_hint_p2.text = _HINT_AI_4P if gm.players.size() == 4 else _HINT_AI
+				if gm.players.size() == 4:
+					_hint_p2.text = _HINT_AI_4P
+				elif gm.player_opponent(1) >= 0:
+					_hint_p2.text = "P2  %s · PLAN HIDDEN" % gm.slot_display_name(1)
+				else:
+					_hint_p2.text = _HINT_AI
 			else:
 				if gm._pads[1] >= 0:
 					if gm.uses_dashblade(1):
@@ -619,7 +628,9 @@ func refresh() -> void:
 				2: portrait = ROOK_PORTRAIT
 				3: portrait = ECLIPSE_PORTRAIT
 				4: portrait = PULSE_PORTRAIT
-			seal.set_identity(gm.weapon_short_name(i), portrait)
+			seal.set_identity(gm.weapon_short_name(i), portrait,
+				Opponents.display_name(gm.player_opponent(i)) \
+				if gm.player_opponent(i) >= 0 and gm.is_ai(i) else "")
 			var seal_points: int = gm.fate_trial_windows_survived \
 				if gm.fate_trial_mode and i == 0 else gm.score[i]
 			seal.set_state(seal_points,
@@ -755,12 +766,17 @@ func refresh() -> void:
 	_over_arena.visible = ui_result
 	_over_controls.visible = ui_result
 	var desktop_result: bool = over and not bool(gm._touch_controls.enabled)
-	_report_button.position.x = 370.0 if gm.demo_match and gm.player_difficulty(1) == gm.Difficulty.NOVICE else 520.0
-	_harder_button.visible = desktop_result and gm.demo_match and gm.player_difficulty(1) == gm.Difficulty.NOVICE
-	_arena_previous_button.visible = desktop_result and not gm.demo_match and not gm.fate_trial_mode \
-		and not gm.close_camera_mode and not gm.interception_mode
-	_arena_next_button.visible = desktop_result and not gm.demo_match and not gm.fate_trial_mode \
-		and not gm.close_camera_mode and not gm.interception_mode
+	var next_opponent: bool = desktop_result and gm.next_opponent_available()
+	_report_button.position.x = 370.0 if next_opponent else 520.0
+	_next_opponent_button.visible = next_opponent
+	if next_opponent:
+		_next_opponent_button.text = "N  NEXT: %s" % Opponents.display_name(gm.demo_opponent + 1)
+	# A Start Duel result cycles opponents already reached instead of arenas.
+	var cycles: bool = desktop_result and not gm.fate_trial_mode \
+		and not gm.close_camera_mode and not gm.interception_mode \
+		and (not gm.demo_match or gm.ladder_progress() > 0)
+	_arena_previous_button.visible = cycles
+	_arena_next_button.visible = cycles
 	_replay_button.visible = desktop_result
 	_rematch_button.visible = desktop_result
 	_menu_button.visible = desktop_result
@@ -793,8 +809,14 @@ func refresh() -> void:
 			arena_line = "HOST ARENA — %d/%d — %s" % [
 				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		if gm.demo_match:
-			arena_line = "ENDLESS DESCENT · FIRST TO 3 HITS"
-			controls = "Try a new plan. Same arena, same rules. Can you read the next move?"
+			var shown: int = gm.rematch_opponent if gm.rematch_opponent >= 0 else maxi(gm.demo_opponent, 0)
+			arena_line = "%s   —   %s · FIRST TO 3 HITS" % [
+				Opponents.position_label(shown), Opponents.display_name(shown)]
+			controls = "ENTER REMATCH · R REPLAY · ESC MENU"
+			if gm.next_opponent_available():
+				controls = "N NEXT OPPONENT · " + controls
+			if gm.ladder_progress() > 0:
+				controls += " · ←/→ CHOOSE OPPONENT"
 		if gm.interception_mode:
 			arena_line = "INTERCEPTION COURT · FIRST TO 3 HITS"
 			controls = "R WATCH REPLAY · ENTER REMATCH · ESC MENU"
@@ -813,7 +835,8 @@ func refresh() -> void:
 			_over_label.text = "TEAM %s TAKES THE MATCH" % gm.TEAM_NAMES[gm.winning_team]
 			_over_label.add_theme_color_override("font_color", gm.TEAM_COLORS[gm.winning_team].lightened(0.18))
 		elif gm.winner >= 0:
-			_over_label.text = "PLAYER %d TAKES THE MATCH" % (gm.winner + 1)
+			_over_label.text = "%s TAKES THE MATCH" % (gm.slot_display_name(gm.winner) \
+				if gm.player_opponent(gm.winner) >= 0 else "PLAYER %d" % (gm.winner + 1))
 			_over_label.add_theme_color_override("font_color", gm.PLAYER_COLORS[gm.winner].lightened(0.2))
 		else:
 			_over_label.text = "DRAW"

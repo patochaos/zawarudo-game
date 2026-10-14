@@ -24,11 +24,14 @@ func run() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
+	# Ladder progress is saved on a demo win; keep it off the player's settings.
+	game.settings_path = "user://test-coredemotest-settings.cfg"
+	game._settings["ladder_progress"] = 0
 	check(game._menu._page_names() == ["START DUEL", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Interception and offline tuning alongside its primary destinations")
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")
 	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "Start Duel must use Endless Descent with four-way wrapping")
-	check(game.player_difficulty(1) == game.Difficulty.NOVICE and game.planning_time_left == 8.0, "first opponent must be Novice with eight-second turns")
+	check(game.player_difficulty(1) == game.Difficulty.NOVICE and game.demo_opponent == 0 and game.planning_time_left == 8.0, "first opponent must be the ladder's first rung, Novice skill, with eight-second turns")
 	game._physics_process(0.5)
 	check(game.planning_time_left == 8.0, "the opening wipe must not consume planning time")
 	game._transition.visible = false
@@ -139,15 +142,16 @@ func run() -> void:
 	lesson.advance()
 	check(not lesson.active and game.demo_match and game.hits_to_win == 3, "finishing onboarding must start the real demo duel")
 	game._ui.refresh()
-	check(not game._ui._harder_button.visible, "harder rematch must stay off the live match HUD")
+	check(not game._ui._next_opponent_button.visible, "next opponent must stay off the live match HUD")
 	game.state = Phase.GAME_OVER
 	game.winner = 0
 	game._finish_match_telemetry()
+	game._record_ladder_result(0)
 	game._ui.refresh()
-	check(game._ui._harder_button.visible and not game._ui._arena_next_button.visible, "demo results must offer difficulty progression while retaining the arena")
-	game._ui._harder_button.pressed.emit()
-	check(game.player_difficulty(1) == game.Difficulty.STANDARD and game.hits_to_win == 3, "harder rematch must change CPU skill, keeping demo rules")
-	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "harder rematch must retain Endless Descent and wrapping")
+	check(game._ui._next_opponent_button.visible and game._ui._arena_next_button.visible, "a won demo result must offer the next opponent and let the player revisit beaten ones")
+	game._ui._next_opponent_button.pressed.emit()
+	check(game.demo_opponent == 1 and game.hits_to_win == 3, "next opponent must advance one rung, keeping demo rules")
+	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "next opponent must retain Endless Descent and wrapping")
 	game._open_menu()
 	game.free()
 	await process_frame

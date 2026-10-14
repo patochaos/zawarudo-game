@@ -42,6 +42,9 @@ const VELOCITY_PARRY_FAILURE_SCORE := -350.0
 const VELOCITY_WITHHOLD_SCORE := -220.0
 
 var done: bool = false
+## Per-opponent weights (see Opponents.NEUTRAL_STYLE). Neutral unless the slot
+## is a named ladder opponent.
+var _style: Dictionary = Opponents.NEUTRAL_STYLE
 
 var _gm
 var _idx: int
@@ -80,6 +83,7 @@ func _hits_body(a: Vector2, b: Vector2, centre: Vector2) -> bool:
 
 
 func begin(gm, idx: int, foe_idx: int) -> void:
+	_style = gm.ai_style_for(idx) if gm.has_method("ai_style_for") else Opponents.neutral_style()
 	_gm = gm
 	_idx = idx
 	_me = gm.players[idx]
@@ -122,7 +126,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		var path := _walk(_me, m[0], m[1], ticks, m[3], drop)
 		var safety: float = 0.0
 		if not _me.is_invulnerable():
-			safety = -600.0 * _danger(path, threats)
+			safety = -600.0 * float(_style["safety_scale"]) * _danger(path, threats)
 			# A rival Rook is a potential body projectile even though its plan
 			# remains private. Test a small envelope of plausible release moments and
 			# reward routes which leave the committed line before it arrives.
@@ -143,9 +147,10 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		# INTERCEPTION gives the player a consistent intention to read. Its
 		# objective and visible threats decide the route without a random nudge.
 		var toss: float = 0.0 if _gm.interception_mode else _gm.rng.randf() * 10.0
+		var style_value: float = _style_route_value(path, m[1])
 		scored.append({"move": m, "ticks": ticks, "path": path, "drop": drop,
 			"danger": -safety,
-			"base": safety + core_value + variety + engage_value + toss})
+			"base": safety + core_value + variety + engage_value + toss + style_value})
 	if _gm.interception_mode:
 		# A promising shot must not buy a route through a visible projectile
 		# when the current world already offers a safe alternative.
@@ -160,6 +165,13 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		_best_cand = scored[0]
 		_best = {"score": VELOCITY_WITHHOLD_SCORE, "withheld_for_velocity": true}
 		_best_total = float(scored[0]["base"]) + VELOCITY_WITHHOLD_SCORE
+	# A patient opponent keeps the knife unless a throw clears its bar. The
+	# safest route is the plan it falls back to; apply() throws only when _best
+	# carries an elevation.
+	elif float(_style["withhold_score"]) > 0.0 and not scored.is_empty():
+		_best_cand = scored[0]
+		_best = {"score": float(_style["withhold_score"]), "withheld_by_style": true}
+		_best_total = float(scored[0]["base"]) + float(_style["withhold_score"])
 
 	# A body-dash kit has to search every route, since the route is the attack.
 	var searched: int = scored.size() if gm.uses_dashblade(idx) \
@@ -375,7 +387,7 @@ func _evaluate(item: Array) -> void:
 	var origin: Vector2 = path[clampi(ft, 0, path.size() - 1)]
 
 	var res := _fire(origin, side, elev, power, ft, cand)
-	var total: float = cand["base"] + res["score"]
+	var total: float = cand["base"] + res["score"] + _style_shot_value(res, ft, power, side)
 	if total > _best_total:
 		_best_total = total
 		_best = res
@@ -718,7 +730,38 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 		_gm.knife_launch_velocity(dir, power).length(), fire_tick, candidate)
 	if parry_risk > 0.0:
 		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
-	return {"score": score, "velocity_parry_risk": parry_risk}
+	return {"score": score, "velocity_parry_risk": parry_risk, "knife_hits": hits}
+
+
+## What a named opponent wants from a route beyond staying alive: a distance
+## to the rival, the high ground, or simply to be in the air.
+func _style_route_value(path: PackedVector2Array, jumps: bool) -> float:
+	var value := 0.0
+	var end: Vector2 = path[path.size() - 1]
+	var target: float = float(_style["range_target"])
+	if target >= 0.0:
+		var dist: float = _gm.wrap_delta(end, _foe.position).length()
+		value -= absf(dist - target) * float(_style["range_weight"])
+	var height_weight: float = float(_style["height_weight"])
+	if height_weight != 0.0:
+		value += clampf((_foe.position.y - end.y) / 120.0, -1.0, 1.0) * height_weight
+	if jumps:
+		value += float(_style["jump_bias"])
+	return value
+
+
+## Knife-only preferences layered over the shared hit score: throw timing,
+## draw strength and the seam shot. Kit attacks keep their own evaluators.
+func _style_shot_value(res: Dictionary, fire_tick: int, power: float, side: int) -> float:
+	if not res.has("knife_hits"):
+		return 0.0
+	var value := -(float(_style["fire_tick_cost"]) - 0.2) * float(fire_tick)
+	value += float(_style["power_bias"]) * (power - 0.7)
+	if _gm.wrap_x and float(_style["seam_bias"]) != 0.0:
+		var direct: int = 1 if _foe.position.x >= _me.position.x else -1
+		if side != direct:
+			value += float(_style["seam_bias"])
+	return value
 
 
 ## Eclipse cannot be evaluated as a reskinned dagger. DECREE is walked through

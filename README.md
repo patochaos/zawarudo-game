@@ -1,6 +1,6 @@
 # ZAWARUDO — Tactical Knife Duel
 
-**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate Novice CPU match in Endless Descent, first to three hits, with four-way screen wrapping. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match in Endless Descent against the opponent ladder, five named CPUs played in order, first to three hits, with four-way screen wrapping. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
 
 ### Interception test
 
@@ -284,7 +284,7 @@ The three modes are:
 **LEARN TO PLAY** teaches movement, interception and persistent threats through
 three playable exercises. Instructions appear before the timed attempt; every
 playable turn has eight seconds. Failed attempts can be retried. Completing the
-lessons starts the fixed Novice duel. The old illustrated briefing is retained
+lessons starts the ladder duel against the first opponent. The old illustrated briefing is retained
 as a developer reference, not the public onboarding route.
 **ONLINE** creates or joins a private six-character room; plans remain hidden
 until both players lock. **OPTIONS** has its own page for sound level, hit
@@ -396,6 +396,28 @@ many of them get a full shot search on top. Setting the preset writes
 `ai_aim_jitter`, `ai_moves_searched` and `ai_think_min` / `ai_think_max` on the
 `Main` node as the legacy/default tuning baseline. Live local matches resolve
 those values per CPU slot; `ai_slice_usec` remains the shared frame budget.
+
+### The opponent ladder
+
+Start Duel plays five named opponents in order. Each is a skill preset plus a
+style: a few weights the planner adds to its route and shot scores
+(`scripts/Opponents.gd`). The planner still ranks routes for safety and guesses
+the same three hypotheses; the style only changes what it wants beyond
+surviving. Beating the opponent the ladder points at unlocks the next one and
+saves `ladder_progress` in the options file. Rematch replays the same opponent,
+**N** starts the next after a win, and the result-screen arrows revisit any
+opponent already reached.
+
+| # | Opponent | Skill | Style |
+|---|---|---|---|
+| 1 | **THE APPRENTICE** | Novice | Neutral. Wide aim, one route searched. |
+| 2 | **THE HOUND** | Novice, tighter aim | Ends its route close to you, throws early, quick low draws, accepts more risk. |
+| 3 | **THE WARDEN** | Standard | Doubles its caution, keeps a mid distance and holds the knife unless a throw squarely covers a hypothesis. |
+| 4 | **THE SPIRE** | Standard, three routes | Climbs above you, keeps long range and prefers full draws late in the window. |
+| 5 | **THE PHANTOM** | Ruthless | Throws away from you so the knife arrives through the wrap seam, and favours airborne routes. |
+
+Named opponents only exist in Start Duel. Custom matches, Interception and the
+four-fighter launcher keep the plain presets above.
 
 ## The loop
 

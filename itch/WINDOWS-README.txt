@@ -4,7 +4,7 @@ ZAWARUDO - Tuning playtest 0.3.0-tuning.1
 Portable Windows build. No installation is required: run ZAWARUDO.exe.
 
 Choose LEARN TO PLAY for three playable lessons, or START DUEL to face a
-Novice CPU in Endless Descent. The first Duelist to score three hits wins.
+opponent ladder in Endless Descent: five named CPUs, played in order. The first Duelist to score three hits wins.
 Cross a side edge to return on the opposite side; shafts connect top and bottom.
 
 Choose INTERCEPTION for a compact court against a Standard CPU. This mode has

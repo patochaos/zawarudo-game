@@ -580,6 +580,11 @@ var _touch_controls: TouchControls
 var _tutorial
 var tutorial_mode: bool = false
 var demo_match: bool = false
+## Named ladder opponent per slot (-1 = plain difficulty preset), the rung the
+## current Start Duel plays, and the rung a rematch will play.
+var player_opponents: Array[int] = [-1, -1, -1, -1]
+var demo_opponent: int = -1
+var rematch_opponent: int = -1
 var _practice
 var _feedback
 var _telemetry
@@ -598,6 +603,8 @@ var _settings: Dictionary = {
 	"display": DISPLAY_MAXIMIZED,
 	"bindings": {},
 	"telemetry": true,
+	## Rungs of the Start Duel opponent ladder beaten so far.
+	"ladder_progress": 0,
 }
 ## Tests can point persistence at a disposable file without touching the
 ## player's actual preferences.
@@ -808,20 +815,99 @@ func player_difficulty(player_index: int) -> int:
 
 
 func ai_aim_jitter_for(player_index: int) -> float:
-	return float(_difficulty_tuning(player_difficulty(player_index))["aim_jitter"])
+	return float(_ai_tuning_for(player_index)["aim_jitter"])
 
 
 func ai_moves_searched_for(player_index: int) -> int:
-	return int(_difficulty_tuning(player_difficulty(player_index))["moves_searched"])
+	return int(_ai_tuning_for(player_index)["moves_searched"])
 
 
 func ai_think_range_for(player_index: int) -> Vector2:
-	var tuning := _difficulty_tuning(player_difficulty(player_index))
+	var tuning := _ai_tuning_for(player_index)
 	var out := Vector2(float(tuning["think_min"]), float(tuning["think_max"]))
 	if close_camera_mode:
 		out.x = minf(out.x, close_camera_planning_duration * 0.25)
 		out.y = minf(out.y, close_camera_planning_duration * 0.60)
 	return out
+
+
+## A named opponent carries its own preset; every other CPU slot reads the
+## difficulty ladder.
+func _ai_tuning_for(player_index: int) -> Dictionary:
+	var rung := player_opponent(player_index)
+	if rung >= 0:
+		return Opponents.tuning(rung)
+	return _difficulty_tuning(player_difficulty(player_index))
+
+
+func ai_style_for(player_index: int) -> Dictionary:
+	var rung := player_opponent(player_index)
+	return Opponents.style(rung) if rung >= 0 else Opponents.neutral_style()
+
+
+func player_opponent(player_index: int) -> int:
+	if player_index < 0 or player_index >= player_opponents.size():
+		return -1
+	return player_opponents[player_index]
+
+
+func set_player_opponent(player_index: int, rung: int) -> void:
+	if player_index < 0 or player_index >= player_opponents.size():
+		return
+	player_opponents[player_index] = rung if Opponents.valid(rung) else -1
+	if Opponents.valid(rung):
+		set_player_difficulty(player_index, Opponents.skill(rung))
+	if player_index == 1:
+		demo_opponent = player_opponents[1]
+		rematch_opponent = demo_opponent
+
+
+## The opponent's name where the HUD would otherwise show the fighter kit.
+func slot_display_name(player_index: int) -> String:
+	var rung := player_opponent(player_index)
+	if rung >= 0 and is_ai(player_index):
+		return Opponents.display_name(rung)
+	return weapon_short_name(player_index)
+
+
+func ladder_progress() -> int:
+	return clampi(int(_settings.get("ladder_progress", 0)), 0, Opponents.count())
+
+
+## Start Duel plays the first opponent not yet beaten; after the last one, it
+## stays on the last.
+func ladder_next_rung() -> int:
+	return mini(ladder_progress(), Opponents.count() - 1)
+
+
+func ladder_menu_line() -> String:
+	var next := ladder_next_rung()
+	if ladder_progress() >= Opponents.count():
+		return "Ladder complete. Start Duel replays %s." % Opponents.display_name(next)
+	return "Next: %s, %s." % [Opponents.display_name(next), Opponents.position_label(next).to_lower()]
+
+
+func next_opponent_available() -> bool:
+	return state == Phase.GAME_OVER and demo_match and winner == 0 and demo_opponent >= 0 \
+		and demo_opponent + 1 < Opponents.count() and demo_opponent + 1 <= ladder_progress()
+
+
+func start_next_opponent() -> void:
+	if not next_opponent_available():
+		return
+	if _telemetry != null:
+		_telemetry.note_rematch(turn)
+	start_demo_duel(demo_opponent + 1)
+
+
+## Beating the opponent the ladder currently points at unlocks the next one.
+## Replaying an earlier rung changes nothing.
+func _record_ladder_result(scorer: int) -> void:
+	if not demo_match or demo_opponent < 0 or scorer != 0:
+		return
+	if demo_opponent >= ladder_progress():
+		_settings["ladder_progress"] = demo_opponent + 1
+		_save_settings()
 
 
 func _difficulty_tuning(level: int) -> Dictionary:
@@ -893,6 +979,7 @@ func _open_menu() -> void:
 	if _setup != null:
 		_setup.close()
 		_menu.backdrop_level = _setup.level
+	_menu.ladder_line = ladder_menu_line()
 	_menu.open()
 	if _transition != null:
 		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
@@ -1259,6 +1346,13 @@ func _start_local_match(lvl: int, requested_players: int, weapons: Array,
 		var player_skill := int(configured_difficulties[i]) \
 			if i < configured_difficulties.size() else difficulty
 		set_player_difficulty(i, player_skill)
+	var configured_opponents: Array = setup.get("opponents", [])
+	for i in MAX_PLAYERS:
+		player_opponents[i] = -1
+		if i < configured_opponents.size():
+			set_player_opponent(i, int(configured_opponents[i]))
+	demo_opponent = player_opponents[1]
+	rematch_opponent = demo_opponent
 	vs_ai = player_roles.slice(0, requested_players).has("AI")
 	player_weapons.fill(Weapon.KNIVES)
 	for i in mini(requested_players, weapons.size()):
@@ -1281,7 +1375,7 @@ func _start_local_match(lvl: int, requested_players: int, weapons: Array,
 	if team_mode:
 		telemetry_mode = "local_team_%s" % team_shape
 	elif vs_ai:
-		telemetry_mode = "ai_wide"
+		telemetry_mode = _ai_telemetry_mode()
 	elif requested_players == 2:
 		telemetry_mode = "local_2p_%s_%s" % [
 			weapon_short_name(0).to_lower(), weapon_short_name(1).to_lower(),
@@ -3592,6 +3686,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		banner_color = PLAYER_COLORS[scorer]
 		_sfx.play("victory")
 		_finish_match_telemetry()
+		_record_ladder_result(scorer)
 	else:
 		banner_text = "P%d  →  HIT  →  P%d" % [scorer + 1, victim_idx + 1]
 		banner_color = PLAYER_COLORS[scorer]
@@ -4887,10 +4982,18 @@ func _request_rematch() -> void:
 		banner_color = Color(0.86, 0.68, 1.0)
 		banner_time = 2.0
 	else:
+		if demo_match and Opponents.valid(rematch_opponent):
+			set_player_opponent(1, rematch_opponent)
 		_load_level(rematch_level_index)
 		restart()
 		_begin_match_telemetry("tutorial" if tutorial_mode else \
-			("ai_wide" if vs_ai else "local_2p"))
+			(_ai_telemetry_mode() if vs_ai else "local_2p"))
+
+
+func _ai_telemetry_mode() -> String:
+	if demo_opponent >= 0:
+		return "ai_ladder_%s" % str(Opponents.rung(demo_opponent)["id"])
+	return "ai_wide"
 
 
 ## An opponent who reloads the page cannot rejoin: a match in progress cannot
@@ -4931,7 +5034,20 @@ func _finish_abandoned_match(claimed_by: int) -> void:
 		_sfx.play("victory")
 
 
+## On the result screen of a Start Duel match the arrows pick the opponent
+## among the rungs already reached, not the arena.
+func _cycle_rematch_opponent(direction: int) -> void:
+	if state != Phase.GAME_OVER or not demo_match or direction == 0:
+		return
+	var unlocked: int = mini(ladder_progress() + 1, Opponents.count())
+	var current: int = rematch_opponent if rematch_opponent >= 0 else maxi(demo_opponent, 0)
+	rematch_opponent = posmod(current + direction, unlocked)
+
+
 func _cycle_rematch_level(direction: int) -> void:
+	if demo_match:
+		_cycle_rematch_opponent(direction)
+		return
 	if state != Phase.GAME_OVER or direction == 0 or demo_match \
 			or fate_trial_mode or close_camera_mode or interception_mode \
 			or (online_mode and (online_player != 0 or _online_waiting_rematch)):
@@ -5091,6 +5207,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		if state == Phase.GAME_OVER:
 			if k.keycode in [KEY_ENTER, KEY_KP_ENTER]:
 				_request_rematch()
+			elif k.keycode == KEY_N:
+				start_next_opponent()
 			elif k.keycode == KEY_R:
 				_start_match_replay()
 			elif k.keycode == KEY_LEFT:
@@ -5837,8 +5955,12 @@ func _clamp_planning_timer() -> void:
 	planning_time_left = minf(planning_time_left, planning_window_duration)
 
 
-## A fixed, reproducible first match. Custom setups remain developer tools.
-func start_demo_duel(skill: int = Difficulty.NOVICE) -> void:
+## A fixed, reproducible match against one rung of the opponent ladder. With no
+## rung given it plays the first opponent not yet beaten. Custom setups remain
+## developer tools.
+func start_demo_duel(rung: int = -1) -> void:
+	if not Opponents.valid(rung):
+		rung = ladder_next_rung()
 	if _practice != null: _practice.stop()
 	_abandon_match("new_duel")
 	team_mode = false
@@ -5847,13 +5969,16 @@ func start_demo_duel(skill: int = Difficulty.NOVICE) -> void:
 	planning_shrink_per_round = 0.0
 	execution_duration = 0.75
 	movement_budget = 0.50
+	var skill := Opponents.skill(rung)
 	_start_local_match(1, 2, [Weapon.KNIVES, Weapon.KNIVES], {
 		"roles": ["HUMAN", "AI"], "devices": [KEYBOARD_DEVICE, NO_DEVICE],
 		"difficulties": [skill, skill], "difficulty": skill, "match_lives": 3,
+		"opponents": [-1, rung],
 	})
 	demo_match = true
 	_ui.show_controls(true)
-	_transition.play("FIRST TO 3 HITS", "%s CPU · %s SECONDS TO PLAN" % [_difficulty_label(skill), String.num(planning_duration, 1)], PLAYER_COLORS[0], reduced_flashes)
+	_transition.play("FIRST TO 3 HITS · %s" % Opponents.position_label(rung),
+		Opponents.display_name(rung), PLAYER_COLORS[1], reduced_flashes)
 
 
 func _abandon_match(reason: String) -> void:

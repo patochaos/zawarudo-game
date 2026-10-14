@@ -6,7 +6,12 @@ The public demo tests whether a player can read danger, author a plan, understan
 the simultaneous result, and choose to play again. It keeps the eight-second
 planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 
-- Start Duel: Endless Descent, two Duelists, Novice CPU, first to three hits.
+- Start Duel: Endless Descent, two Duelists, first to three hits, against the
+  opponent ladder. Five named CPUs play in order (The Apprentice, The Hound,
+  The Warden, The Spire, The Phantom); each has its own skill preset and a style
+  the planner reads: closing in and throwing early, keeping the knife until a
+  throw is sure, taking the high ground with full draws, throwing through the
+  wrap seam. Beating the current opponent unlocks the next and saves locally.
   Side edges wrap left/right; open shafts connect bottom/top.
 - Learn to Play: three real-physics timed exercises, retryable without penalty.
   Lesson 2 reveals a committed jump onto a low ledge, with a preparation pose
@@ -21,8 +26,9 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
   desktop and Web. Atkinson Hyperlegible is redistributed with its OFL license.
 - Visible Lock Plan, player identity, controls and last-turn review. UI clicks
   do not aim or charge an attack. Review supports mouse playback/stepping/return.
-- Rematches retain the selected demo arena and rules; a separate action increases
-  CPU difficulty to Standard.
+- Rematches retain the arena, rules and opponent. After a win, a separate action
+  starts the next opponent; the result-screen arrows revisit any opponent
+  already reached.
 - Experiments and local custom setups are available with `--dev-tools` only.
 - Online remains a separate existing private-room route. Do not pool CPU and
   online findings when assessing fun or opponent readability.
@@ -61,7 +67,9 @@ prove behavior, not fun.
 
 `CoreDemoTest` exercises the public entry point, actual movement/interception/
 survival outcomes, timer expiry, world persistence, direct graduation to a duel,
-feedback encoding, abandoned reports, and harder rematches. Existing menu,
+feedback encoding, abandoned reports, and the next-opponent flow. `OpponentLadderTest`
+covers rung order, style weights reaching the planner, saved progress and the
+result-screen controls. Existing menu,
 readiness, controls, replay, prediction and online suites cover shared behavior.
 `CoreDemoVisualTest` captures the public screens at 1280x720 and the live planner
 at 1024x576. Web export is smoke-tested locally with browser input.

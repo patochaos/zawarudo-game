@@ -11,14 +11,16 @@ clash fun enough to play again?
    knife across two turns. Every playable turn has an eight-second limit.
    Mistakes offer a fresh attempt; completion starts your first duel.
 3. **START DUEL** skips lessons and immediately starts two Duelists in Endless
-   Descent: you against a Novice CPU, first to three hits. Cross a side edge to
+   Descent: you against the first opponent of the ladder, first to three hits. Cross a side edge to
    return on the opposite side; the open shafts connect bottom and top.
 4. A/D records movement; Space jumps; mouse aims; hold/release left-click places
    a throw. R/right-click removes the throw; F resets the route. Left Shift or
    **LOCK PLAN** confirms. Your current plan executes when the timer expires.
 5. After a turn, **REVIEW** lets you replay slowly and step through the outcome.
    Review pauses offline planning; return to resume the remaining clock.
-6. Finish the match and choose **REMATCH**, **TRY STANDARD CPU**, or **SEND FEEDBACK**.
+6. Finish the match and choose **REMATCH**, **NEXT OPPONENT** after a win, or
+   **SEND FEEDBACK**. Five named opponents form a ladder; the arrows on the
+   result screen revisit any you have already reached.
    Escape during play returns to the title and saves an unfinished-match report.
 
 **CONTROLS** reads current bindings. **OPTIONS** adjusts sound, display, flashes,

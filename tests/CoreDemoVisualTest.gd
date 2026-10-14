@@ -25,6 +25,9 @@ func run() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
+	# Ladder progress is saved on a demo win; keep it off the player's settings.
+	game.settings_path = "user://test-coredemovisualtest-settings.cfg"
+	game._settings["ladder_progress"] = 0
 	await Capture.pin_window(self)
 	await snap("menu")
 	game.start_demo_duel()

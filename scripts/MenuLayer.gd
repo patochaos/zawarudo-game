@@ -351,6 +351,8 @@ var _controls_sheet: ControlsSheet
 var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
 var _page: int = MenuPage.MAIN
+## Start Duel's current ladder position, written by GameManager when the menu opens.
+var ladder_line: String = ""
 ## Which binding row is waiting for a key, or -1 when nothing is listening.
 var _binding_row: int = -1
 var _bindings: Dictionary = {}
@@ -722,7 +724,7 @@ func _page_description() -> String:
 	match _page:
 		MenuPage.MAIN:
 			return [
-				"Endless Descent. Wrap left/right or through the top/bottom shafts. Novice CPU, first to 3 hits. Uses your offline tuning.",
+				"Endless Descent. Wrap left/right or through the top/bottom shafts. Climb the opponent ladder, first to 3 hits. %s Uses your offline tuning." % ladder_line,
 				"Predict the next landing. One jump, committed air movement and quick ground stops. Contest the central core against a Standard CPU. First to 3 hits. Fixed test rules.",
 				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
 				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",
