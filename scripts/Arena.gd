@@ -24,6 +24,10 @@ const SOLID_TEXTURES := [
 	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
 	preload("res://assets/art/arenas/foundry/solid.png"),
 	preload("res://assets/art/arenas/collision-course/solid.png"),
+	# The twist arenas dress in existing material until they earn their own.
+	preload("res://assets/art/arenas/foundry/solid.png"),
+	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
+	preload("res://assets/art/arenas/crosshair-court/solid.png"),
 ]
 
 const HARD_INK := Color(0.72, 0.92, 1.0)
@@ -31,7 +35,17 @@ const HARD_ACCENTS := [
 	Color(0.95, 0.78, 0.28), Color(0.38, 0.80, 1.0), Color(0.72, 0.60, 1.0),
 	Color(0.30, 1.0, 0.92), Color(0.95, 0.58, 0.30), Color(1.0, 0.35, 0.22),
 	Color(0.92, 0.45, 1.0),
+	Color(0.40, 0.95, 0.75), Color(0.70, 0.52, 1.0), Color(1.0, 0.70, 0.30),
 ]
+
+## Shutters: a cool green gate that reads as "timed" next to permanent steel,
+## violet movers and orange breakables. Open gates keep a dim outline so the
+## route they will close is never a surprise.
+const GATE_TOP := Color(0.42, 0.96, 0.74)
+const GATE_OPEN := Color(0.42, 0.96, 0.74, 0.28)
+const STASIS_FILL := Color(0.52, 0.38, 0.92, 0.13)
+const STASIS_EDGE := Color(0.74, 0.62, 1.0, 0.55)
+const LODESTONE := Color(1.0, 0.76, 0.34)
 
 const MOVER_TOP := Color(0.66, 0.55, 0.95)
 const MOVER_MARK := Color(0.80, 0.72, 1.0, 0.75)
@@ -40,6 +54,8 @@ const BREAK_TOP := Color(1.0, 0.67, 0.16)
 const BREAK_TOP_BROKEN := Color(1.0, 0.20, 0.12)
 
 var platforms: Array = []
+var zones: Array = []
+var lodestones: Array = []
 var level_theme: int = 0
 var wrap_x: bool = false
 var wrap_y: bool = false
@@ -57,12 +73,24 @@ func setup(p: Array) -> void:
 	queue_redraw()
 
 
+func setup_fields(z: Array, stones: Array) -> void:
+	zones = z
+	lodestones = stones
+	queue_redraw()
+
+
 func _draw() -> void:
+	for zone in zones:
+		_draw_stasis(zone["rect"], float(zone["time_scale"]))
+	for stone in lodestones:
+		_draw_lodestone(stone["at"], float(stone["radius"]))
 	for pf in platforms:
 		var r: Rect2 = pf["rect"]
 		if r.position.x < -1.0 or r.position.x >= 1280.0:
 			continue  # walls stay invisible
-		if pf["hp"] == INDESTRUCTIBLE:
+		if pf.has("cycle"):
+			_draw_gate(r, bool(pf.get("present", true)), float(pf.get("cycle_fraction", 1.0)))
+		elif pf["hp"] == INDESTRUCTIBLE:
 			_draw_solid(r, pf.get("motion", {}))
 		else:
 			_draw_breakable(r, pf["hp"], pf.get("max_hp", pf["hp"]))
@@ -72,6 +100,61 @@ func _draw() -> void:
 		_draw_hard_side_boundaries()
 	if wrap_y:
 		_draw_vertical_portal()
+
+
+## A timed gate. Solid: gate-green lip plus a draining bar for the time it has
+## left. Open: the outline only, with the bar filling toward its return.
+func _draw_gate(r: Rect2, present: bool, fraction: float) -> void:
+	if present:
+		_draw_material_platform(r, OBSERVATORY_MOVING, GATE_TOP)
+	else:
+		draw_rect(r, Color(GATE_OPEN, 0.07))
+		var dash := 10.0
+		var x := r.position.x
+		while x < r.end.x:
+			var x2 := minf(x + dash, r.end.x)
+			draw_line(Vector2(x, r.position.y + 1.0), Vector2(x2, r.position.y + 1.0), GATE_OPEN, 2.0)
+			draw_line(Vector2(x, r.end.y - 1.0), Vector2(x2, r.end.y - 1.0), GATE_OPEN, 2.0)
+			x += dash * 2.0
+	# The clock bar sits above the lip so it survives the planning overlays.
+	var bar := Rect2(r.position.x + 6.0, r.position.y - 7.0, r.size.x - 12.0, 3.0)
+	draw_rect(bar, Color(0.05, 0.08, 0.08, 0.85))
+	var fill: float = fraction if present else 1.0 - fraction
+	draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(fill, 0.0, 1.0), bar.size.y)),
+		GATE_TOP if present else GATE_OPEN)
+	draw_rect(bar, Color(GATE_TOP, 0.5), false, 1.0)
+
+
+## A stasis field: a violet pane with slow diagonal hatching and its time
+## factor in one corner. It is read by position, so the pane is the rule.
+func _draw_stasis(r: Rect2, time_scale: float) -> void:
+	draw_rect(r, STASIS_FILL)
+	var step := 26.0
+	var x := r.position.x - r.size.y
+	while x < r.end.x:
+		var a := Vector2(maxf(x, r.position.x), r.position.y + maxf(0.0, r.position.x - x))
+		var b := Vector2(minf(x + r.size.y, r.end.x), r.end.y - maxf(0.0, x + r.size.y - r.end.x))
+		if a.x < b.x:
+			draw_line(a, b, Color(STASIS_EDGE, 0.16), 1.0)
+		x += step
+	draw_rect(r, STASIS_EDGE, false, 1.5)
+	draw_string(ThemeDB.fallback_font, r.position + Vector2(6.0, 14.0),
+		"TIME ×%s" % String.num(time_scale, 2), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, STASIS_EDGE)
+
+
+## A lodestone: the pylon core, its reach ring and inward ticks that say
+## "knives bend toward here".
+func _draw_lodestone(at: Vector2, radius: float) -> void:
+	draw_arc(at, radius, 0.0, TAU, 48, Color(LODESTONE, 0.22), 1.0)
+	for i in 12:
+		var d := Vector2.from_angle(TAU * float(i) / 12.0)
+		draw_line(at + d * radius, at + d * (radius - 9.0), Color(LODESTONE, 0.5), 1.5)
+	draw_arc(at, radius * 0.5, 0.0, TAU, 32, Color(LODESTONE, 0.14), 1.0)
+	draw_circle(at, 9.0, Color(0.08, 0.06, 0.03))
+	draw_colored_polygon(PackedVector2Array([
+		at + Vector2(0.0, -8.0), at + Vector2(7.0, 0.0), at + Vector2(0.0, 8.0), at + Vector2(-7.0, 0.0),
+	]), LODESTONE)
+	draw_arc(at, 12.0, 0.0, TAU, 20, Color(LODESTONE, 0.8), 1.5)
 
 
 func _draw_solid(r: Rect2, motion: Dictionary = {}) -> void:

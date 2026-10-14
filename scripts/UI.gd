@@ -810,8 +810,8 @@ func refresh() -> void:
 				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		if gm.demo_match:
 			var shown: int = gm.rematch_opponent if gm.rematch_opponent >= 0 else maxi(gm.demo_opponent, 0)
-			arena_line = "%s   —   %s · FIRST TO 3 HITS" % [
-				Opponents.position_label(shown), Opponents.display_name(shown)]
+			arena_line = "%s   —   %s · %s" % [Opponents.position_label(shown),
+				Opponents.display_name(shown), Opponents.arena_name(shown)]
 			controls = "ENTER REMATCH · R REPLAY · ESC MENU"
 			if gm.next_opponent_available():
 				controls = "N NEXT OPPONENT · " + controls

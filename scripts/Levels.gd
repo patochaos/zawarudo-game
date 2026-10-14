@@ -54,7 +54,7 @@ const WALL_R := {"rect": Rect2(1280, -1400, 60, 2100), "hp": -1}
 
 
 static func count() -> int:
-	return 7
+	return 10
 
 
 static func build(index: int, player_count: int = 4) -> Dictionary:
@@ -196,7 +196,10 @@ static func _layout(index: int) -> Dictionary:
 		3: return _pulse_chamber()
 		4: return _shattered_sanctum()
 		5: return _foundry()
-		_: return _collision_course()
+		6: return _collision_course()
+		7: return _clockwork_gallery()
+		8: return _stilled_hall()
+		_: return _lodestone_reach()
 
 
 static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
@@ -229,6 +232,15 @@ static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 		hazard.erase("min_players")
 		active_hazards.append(hazard)
 	lv["hazards"] = active_hazards
+	for key in ["zones", "lodestones"]:
+		var active: Array = []
+		for authored: Dictionary in lv.get(key, []):
+			if int(authored.get("min_players", 2)) > player_count:
+				continue
+			var field: Dictionary = authored.duplicate(true)
+			field.erase("min_players")
+			active.append(field)
+		lv[key] = active
 	lv["player_count"] = player_count
 	return lv
 
@@ -243,6 +255,147 @@ static func wrap_label(lv: Dictionary) -> String:
 	if lv["wrap_y"]:
 		return "WRAP ↕"
 	return "WALLED"
+
+
+# ------------------------------------------------------------ walled arenas --
+
+# ------------------------------------------------------------ twist arenas --
+#
+# Each of these introduces one rule the seven-arena set does not have. The rule
+# is read by position or by the absolute tick, so the ghost, the knife preview,
+# the AI and the lockstep digest all see it the same way.
+#
+# SHUTTERS   `cycle` on a platform: {period, solid, phase} in ticks. The piece
+#            exists only for the first `solid` ticks of each period. A body on
+#            it when it opens falls. Never a spawn or respawn support.
+# STASIS     `zones`: [{rect, time_scale}]. Bodies and knives inside integrate
+#            at `time_scale`; a knife thrown in hangs there for turns.
+# LODESTONE  `lodestones`: [{at, radius, pull}]. Knives inside the radius
+#            accelerate toward the pylon with linear falloff. Bodies ignore it.
+
+## Thesis: nothing here is safe for long. Three bridge gates and two low gates
+## open and close on staggered clocks, so every plan has to include where the
+## floor will be when time stops again. Side rooms stay permanent.
+static func _clockwork_gallery() -> Dictionary:
+	return {
+		"name": "CLOCKWORK GALLERY",
+		"feature": "SHUTTERS // every gate opens on a clock. Stand on one when it does and you fall.",
+		"wrap_x": true,
+		"spawns": [
+			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+		],
+		"respawn_points": [
+			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			Vector2(160.0, 476.0), Vector2(1120.0, 476.0),
+			Vector2(640.0, 196.0),
+		],
+		"core_spawns": [Vector2(640.0, 380.0), Vector2(200.0, 462.0), Vector2(1080.0, 462.0)],
+		"platforms": [
+			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
+			{"rect": Rect2(60, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(1020, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(560, 220, 160, 16), "hp": -1},
+			# The bridge: three gates on one clock, a third of a period apart.
+			{"rect": Rect2(300, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 0}},
+			{"rect": Rect2(550, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 70}},
+			{"rect": Rect2(800, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 140}},
+			# Low gates under the bridge ends: a landing that will not keep you.
+			{"rect": Rect2(380, 540, 140, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 105}},
+			{"rect": Rect2(760, 540, 140, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 35}},
+			{"rect": Rect2(120, 410, 120, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(1040, 410, 120, 14), "hp": 2, "min_players": 4},
+		],
+		"hazards": [],
+	}
+
+
+## Thesis: a knife is a trap if it takes long enough to arrive. Two stasis
+## columns flank the centre pillar; every arc across the hall passes through
+## one, and anything thrown into a field lingers there for several turns.
+static func _stilled_hall() -> Dictionary:
+	return {
+		"name": "STILLED HALL",
+		"feature": "STASIS // time crawls inside the fields. A knife thrown in stays a threat for turns.",
+		"spawns": [
+			Vector2(180.0, 596.0), Vector2(1100.0, 596.0),
+			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+		],
+		"respawn_points": [
+			Vector2(100.0, 596.0), Vector2(480.0, 596.0), Vector2(800.0, 596.0),
+			Vector2(1180.0, 596.0),
+			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+			Vector2(220.0, 476.0), Vector2(1060.0, 476.0),
+			Vector2(640.0, 216.0),
+		],
+		"core_spawns": [Vector2(640.0, 330.0), Vector2(250.0, 440.0), Vector2(1030.0, 440.0)],
+		"platforms": [
+			{"rect": Rect2(0, 330, 220, 16), "hp": -1},
+			{"rect": Rect2(1060, 330, 220, 16), "hp": -1},
+			{"rect": Rect2(120, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(960, 500, 200, 16), "hp": -1},
+			# The pillar closes the flat lane, so throws arc through the fields.
+			{"rect": Rect2(624, 380, 32, 240), "hp": -1},
+			{"rect": Rect2(520, 240, 240, 16), "hp": -1},
+			{"rect": Rect2(330, 420, 150, 16), "hp": 2},
+			{"rect": Rect2(800, 420, 150, 16), "hp": 2},
+			{"rect": Rect2(300, 560, 120, 14), "hp": -1, "min_players": 3},
+			{"rect": Rect2(860, 560, 120, 14), "hp": -1, "min_players": 4},
+		],
+		"zones": [
+			{"rect": Rect2(440, 250, 170, 330), "time_scale": 0.35},
+			{"rect": Rect2(670, 250, 170, 330), "time_scale": 0.35},
+		],
+		"hazards": [],
+	}
+
+
+## Thesis: cover is only cover from a straight line. Two pylons bend every
+## knife toward themselves, so a throw aimed past one curls in behind the post
+## beside it. The centre block kills the flat lane; the arcs do the work.
+static func _lodestone_reach() -> Dictionary:
+	return {
+		"name": "LODESTONE REACH",
+		"feature": "LODESTONES // the pylons bend every knife toward them. Curve a throw around cover.",
+		"spawns": [
+			Vector2(170.0, 596.0), Vector2(1110.0, 596.0),
+			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
+		],
+		"respawn_points": [
+			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(880.0, 596.0),
+			Vector2(1180.0, 596.0),
+			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
+			Vector2(180.0, 456.0), Vector2(1100.0, 456.0),
+			Vector2(640.0, 226.0),
+		],
+		"core_spawns": [Vector2(640.0, 430.0), Vector2(300.0, 420.0), Vector2(980.0, 420.0)],
+		"platforms": [
+			{"rect": Rect2(0, 300, 200, 16), "hp": -1},
+			{"rect": Rect2(1080, 300, 200, 16), "hp": -1},
+			{"rect": Rect2(90, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(1010, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(580, 470, 120, 150), "hp": -1},
+			{"rect": Rect2(540, 250, 200, 16), "hp": -1},
+			# Breakable posts beside each pylon: the thing a bent knife gets around.
+			{"rect": Rect2(380, 380, 20, 100), "hp": 2},
+			{"rect": Rect2(880, 380, 20, 100), "hp": 2},
+			{"rect": Rect2(260, 560, 110, 14), "hp": -1, "min_players": 3},
+			{"rect": Rect2(910, 560, 110, 14), "hp": -1, "min_players": 4},
+		],
+		"lodestones": [
+			{"at": Vector2(400.0, 330.0), "radius": 210.0, "pull": 1800.0},
+			{"at": Vector2(880.0, 330.0), "radius": 210.0, "pull": 1800.0},
+		],
+		"hazards": [],
+	}
 
 
 # ------------------------------------------------------------ walled arenas --

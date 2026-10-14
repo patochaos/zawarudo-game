@@ -39,6 +39,26 @@ static func offset(motion: Dictionary, abs_tick: int) -> Vector2:
 	return axis * (float(motion.get("travel", 0.0)) * u)
 
 
+## A shutter's state at `abs_tick`. `cycle` = {period, solid, phase}, all in
+## ticks: the piece is solid for the first `solid` ticks of every `period`,
+## shifted by `phase`. Integer arithmetic only, like `offset`.
+static func cycle_solid(cycle: Dictionary, abs_tick: int) -> bool:
+	var period: int = maxi(2, int(cycle.get("period", DEFAULT_PERIOD)))
+	var solid: int = clampi(int(cycle.get("solid", period / 2)), 1, period - 1)
+	return posmod(abs_tick + int(cycle.get("phase", 0)), period) < solid
+
+
+## Ticks until the shutter next changes state, and the length of its current
+## state, so a countdown can be drawn as a fraction.
+static func cycle_ticks_left(cycle: Dictionary, abs_tick: int) -> Array:
+	var period: int = maxi(2, int(cycle.get("period", DEFAULT_PERIOD)))
+	var solid: int = clampi(int(cycle.get("solid", period / 2)), 1, period - 1)
+	var t: int = posmod(abs_tick + int(cycle.get("phase", 0)), period)
+	if t < solid:
+		return [solid - t, solid]
+	return [period - t, period - solid]
+
+
 ## Both ends of the sweep, relative to home. Layout tests validate an arena at
 ## each of these, and the preview draws the rail between them.
 static func travel_ends(motion: Dictionary) -> Array:

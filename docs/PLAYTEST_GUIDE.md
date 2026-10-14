@@ -11,7 +11,8 @@ clash fun enough to play again?
    knife across two turns. Every playable turn has an eight-second limit.
    Mistakes offer a fresh attempt; completion starts your first duel.
 3. **START DUEL** skips lessons and immediately starts two Duelists in Endless
-   Descent: you against the first opponent of the ladder, first to three hits. Cross a side edge to
+   Descent: you against the first opponent of the ladder, first to three hits.
+   Later opponents move to arenas with timed gates, stasis fields and lodestones. Cross a side edge to
    return on the opposite side; the open shafts connect bottom and top.
 4. A/D records movement; Space jumps; mouse aims; hold/release left-click places
    a throw. R/right-click removes the throw; F resets the route. Left Shift or

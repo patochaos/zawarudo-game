@@ -894,6 +894,21 @@ func _draw_kinetics() -> void:
 			_dotted_polyline(PackedVector2Array([h.position, to]), col, 1.8, 6.0, 5.0)
 			draw_arc(to, Hazard.RADIUS, 0.0, TAU, 20, col, 1.6)
 
+	# A gate that changes state inside the coming window is announced the same
+	# way a lift is: its state when time stops again is public.
+	for pf in gm.platforms:
+		if not pf.has("cycle"):
+			continue
+		var now: bool = bool(pf.get("present", true))
+		var then: bool = gm.platform_present_at(pf, end_tick)
+		if now == then:
+			continue
+		var r: Rect2 = pf["rect"]
+		var col := Color(1.0, 0.45, 0.35, 0.85) if now else Color(0.42, 0.96, 0.74, 0.75)
+		draw_rect(r.grow(2.0), col, false, 2.0)
+		draw_string(ThemeDB.fallback_font, Vector2(r.position.x + 4.0, r.position.y - 10.0),
+			"OPENS" if now else "CLOSES", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
+
 
 func _arrow_between(from: Vector2, to: Vector2, col: Color) -> void:
 	var d: Vector2 = to - from

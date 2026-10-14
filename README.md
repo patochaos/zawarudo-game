@@ -1,6 +1,6 @@
 # ZAWARUDO — Tactical Knife Duel
 
-**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match in Endless Descent against the opponent ladder, five named CPUs played in order, first to three hits, with four-way screen wrapping. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
 
 ### Interception test
 
@@ -408,13 +408,13 @@ saves `ladder_progress` in the options file. Rematch replays the same opponent,
 **N** starts the next after a win, and the result-screen arrows revisit any
 opponent already reached.
 
-| # | Opponent | Skill | Style |
-|---|---|---|---|
-| 1 | **THE APPRENTICE** | Novice | Neutral. Wide aim, one route searched. |
-| 2 | **THE HOUND** | Novice, tighter aim | Ends its route close to you, throws early, quick low draws, accepts more risk. |
-| 3 | **THE WARDEN** | Standard | Doubles its caution, keeps a mid distance and holds the knife unless a throw squarely covers a hypothesis. |
-| 4 | **THE SPIRE** | Standard, three routes | Climbs above you, keeps long range and prefers full draws late in the window. |
-| 5 | **THE PHANTOM** | Ruthless | Throws away from you so the knife arrives through the wrap seam, and favours airborne routes. |
+| # | Opponent | Skill | Arena | Style |
+|---|---|---|---|---|
+| 1 | **THE APPRENTICE** | Novice | Endless Descent | Neutral. Wide aim, one route searched. |
+| 2 | **THE HOUND** | Novice, tighter aim | Clockwork Gallery | Ends its route close to you, throws early, quick low draws, accepts more risk. |
+| 3 | **THE WARDEN** | Standard | Stilled Hall | Doubles its caution, keeps a mid distance and holds the knife unless a throw squarely covers a hypothesis. |
+| 4 | **THE SPIRE** | Standard, three routes | Lodestone Reach | Climbs above you, keeps long range and prefers full draws late in the window. |
+| 5 | **THE PHANTOM** | Ruthless | Collision Course | Throws away from you so the knife arrives through the wrap seam, and favours airborne routes. |
 
 Named opponents only exist in Start Duel. Custom matches, Interception and the
 four-fighter launcher keep the plain presets above.
@@ -708,8 +708,9 @@ it is a deliberate human verb, and the search has no way to value it yet.
 
 ## Levels
 
-Seven arenas, selected in match setup. Layouts live in `scripts/Levels.gd`, and the HUD
-names the wrap mode next to the level.
+Ten arenas, selected in match setup. Layouts live in `scripts/Levels.gd`, and the HUD
+names the wrap mode next to the level. The last three each introduce one rule the
+first seven do not have; the opponent ladder visits them in order.
 
 | # | Name | Wrap | Character |
 |---|---|---|---|
@@ -720,6 +721,9 @@ names the wrap mode next to the level.
 | 5 | **Shattered Sanctum** | ↔ ↕ | Two vertical wrap chutes flank a destructible bridge whose collapse changes circulation. |
 | 6 | **Foundry** | ↔ | A full-height roaming guillotine creates routes above, below and around the side seam. |
 | 7 | **Collision Course** | ↔ ↕ | Sparse fixed islands, crossing ferries and a low pulse launcher feed a four-way void. |
+| 8 | **Clockwork Gallery** | ↔ | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. |
+| 9 | **Stilled Hall** | walled | Two stasis fields flank the centre pillar. Bodies and knives inside run at 35 percent speed, so a knife thrown in stays a threat for turns. |
+| 10 | **Lodestone Reach** | walled | Two pylons bend every knife toward themselves. Curve a throw around the breakable post beside each one. |
 
 The layouts borrow TowerFall's readable edge architecture. Each is authored in
 nested 2P, 3P and 4P variants: the trio adds one tactical shelf and the full
@@ -792,6 +796,34 @@ where collision is actually passable. Non-wrapping sides instead draw
 full-height striped steel bulkheads. A vertical portal is marked at both its
 ceiling and floor aperture; an unmarked open sky is not a portal, so knives
 simply rise and return under gravity.
+
+### Timed shutters
+
+A platform may carry a `cycle` block: a period, how many ticks of it the piece
+is solid, and a phase, all in ticks. Like a mover, the state is a **pure function
+of the absolute tick** (`Mover.cycle_solid`), so it is frozen during planning,
+projected by the ghost path, the knife preview and the AI, and identical in a
+lockstep room. An open gate leaves the collision set entirely: bodies fall
+through it and knives fly through it. Gates draw a green lip with a draining
+clock bar while solid, and a dashed outline with a filling bar while open; the
+planning overlay marks any gate that changes state inside the coming window
+with OPENS or CLOSES. Gates are never spawn or respawn supports.
+
+### Stasis fields
+
+A level may list `zones`, rectangles with a `time_scale`. Inside one, bodies and
+knives integrate their motion at that scale: the same recorded inputs cover
+less ground, a jump hangs, and a knife crawls. The rule is read by position
+inside the two shared step functions, so every prediction bends exactly where
+execution does. A knife thrown into a field is a trap that lands several turns
+later.
+
+### Lodestones
+
+A level may list `lodestones`, each a point, a radius and a pull. Knives inside
+the radius accelerate toward the pylon with linear falloff to the rim; bodies
+are unaffected. A throw aimed past a pylon curls in behind the cover beside it.
+The reticle arc and the known-path preview use the same pull.
 
 ### Destructible cover
 

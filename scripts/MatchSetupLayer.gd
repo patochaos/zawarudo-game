@@ -116,6 +116,15 @@ class ArenaPlan:
 				core + Vector2(0.0, -7.0), core + Vector2(7.0, 0.0),
 				core + Vector2(0.0, 7.0), core + Vector2(-7.0, 0.0),
 			]), Color(0.92, 0.86, 0.58, 0.75))
+		for zone: Dictionary in layout.get("zones", []):
+			var field := _to_plan(zone["rect"])
+			draw_rect(field, Color(0.52, 0.38, 0.92, 0.22))
+			draw_rect(field, Color(0.74, 0.62, 1.0, 0.6), false, 1.0)
+		for stone: Dictionary in layout.get("lodestones", []):
+			var core := _to_plan_point(stone["at"])
+			draw_arc(core, float(stone.get("radius", 200.0)) * PLAN_SCALE, 0.0, TAU, 40,
+				Color(1.0, 0.76, 0.34, 0.3), 1.0)
+			draw_circle(core, 4.0, Color(1.0, 0.76, 0.34, 0.95))
 		for hazard: Dictionary in layout.get("hazards", []):
 			var orb := _to_plan_point(hazard.get("home", Vector2.ZERO))
 			draw_arc(orb, float(hazard.get("blast_radius", 190.0)) * PLAN_SCALE,

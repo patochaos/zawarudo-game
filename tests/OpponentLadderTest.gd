@@ -33,6 +33,10 @@ func _test_ladder_shape() -> void:
 			check(Opponents.skill(i) >= Opponents.skill(i - 1), "skill must not drop climbing the ladder")
 			check(Opponents.tuning(i)["aim_jitter"] <= Opponents.tuning(i - 1)["aim_jitter"], "aim must not get looser climbing the ladder")
 	check(ids.size() == Opponents.count(), "opponent ids must be unique")
+	for i in Opponents.count():
+		check(Opponents.arena(i) >= 0 and Opponents.arena(i) < Levels.count()
+			and Levels.build(Opponents.arena(i), 2)["name"] == Opponents.arena_name(i),
+			"every rung must name a real arena")
 	check(Opponents.style(-1) == Opponents.NEUTRAL_STYLE, "an unnamed slot plans with neutral weights")
 
 
@@ -129,6 +133,7 @@ func _test_progress_and_result_flow() -> void:
 	game._request_rematch()
 	game._transition.visible = false
 	check(game.state == Phase.PLANNING and game.demo_opponent == 1 and game.player_opponent(1) == 1, "rematch plays the chosen opponent")
+	check(game.level_index == Opponents.arena(1), "rematch moves to the chosen opponent's arena")
 	check(game.ai_moves_searched_for(1) == int(Opponents.tuning(1)["moves_searched"]), "the chosen rung's preset drives the planner")
 
 	# Replaying an earlier rung does not move the ladder, and Start Duel resumes

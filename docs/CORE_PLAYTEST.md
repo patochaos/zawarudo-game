@@ -6,12 +6,14 @@ The public demo tests whether a player can read danger, author a plan, understan
 the simultaneous result, and choose to play again. It keeps the eight-second
 planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 
-- Start Duel: Endless Descent, two Duelists, first to three hits, against the
-  opponent ladder. Five named CPUs play in order (The Apprentice, The Hound,
-  The Warden, The Spire, The Phantom); each has its own skill preset and a style
-  the planner reads: closing in and throwing early, keeping the knife until a
-  throw is sure, taking the high ground with full draws, throwing through the
-  wrap seam. Beating the current opponent unlocks the next and saves locally.
+- Start Duel: two Duelists, first to three hits, against the opponent ladder.
+  Five named CPUs play in order (The Apprentice, The Hound, The Warden, The
+  Spire, The Phantom); each has its own skill preset and a style the planner
+  reads: closing in and throwing early, keeping the knife until a throw is sure,
+  taking the high ground with full draws, throwing through the wrap seam. Each
+  is fought in its own arena: Endless Descent, then the three twist arenas
+  (timed shutters, stasis fields, lodestones), then Collision Course. Beating
+  the current opponent unlocks the next and saves locally.
   Side edges wrap left/right; open shafts connect bottom/top.
 - Learn to Play: three real-physics timed exercises, retryable without penalty.
   Lesson 2 reveals a committed jump onto a low ledge, with a preparation pose

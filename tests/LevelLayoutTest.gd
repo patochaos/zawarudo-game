@@ -47,7 +47,8 @@ func _test_level(index: int) -> void:
 		_check(not _body_overlaps(respawn, rects),
 			"%s: respawn socket %s overlaps terrain" % [label, respawn])
 		var support := _spawn_support(level["platforms"], respawn)
-		_check(not support.is_empty() and int(support["hp"]) < 0 and not support.has("motion"),
+		_check(not support.is_empty() and int(support["hp"]) < 0 and not support.has("motion")
+			and not support.has("cycle"),
 			"%s: respawn socket %s must use permanent stationary support" % [label, respawn])
 	_check(_vertical_tier_count(level["platforms"]) >= 3,
 		"%s: four-player layout needs at least three useful vertical tiers" % label)
@@ -106,6 +107,23 @@ func _test_level_progression() -> void:
 	_check(finale["wrap_x"] and finale["wrap_y"]
 		and _mover_count(finale["platforms"]) >= 2 and not finale["hazards"].is_empty(),
 		"Level 7 must combine four-way wrap, ferries and a pulse launcher")
+	var gallery := Levels.build(7, 2)
+	var hall := Levels.build(8, 2)
+	var reach := Levels.build(9, 2)
+	_check(gallery["wrap_x"] and _cycle_count(gallery["platforms"]) >= 3,
+		"Level 8 must be built around timed shutters")
+	_check(not hall["wrap_x"] and hall["zones"].size() >= 2,
+		"Level 9 must be built around stasis fields")
+	_check(not reach["wrap_x"] and reach["lodestones"].size() >= 2,
+		"Level 10 must be built around lodestones")
+
+
+func _cycle_count(platforms: Array) -> int:
+	var n := 0
+	for platform: Dictionary in platforms:
+		if platform.has("cycle"):
+			n += 1
+	return n
 
 
 ## Every extra simultaneous plan gets extra landing space. The variants remain
@@ -246,7 +264,7 @@ func _validate_spawn_set(level: Dictionary) -> void:
 		max_y = maxf(max_y, spawn.y)
 		var support := _spawn_support(level["platforms"], spawn)
 		_check(not support.is_empty() and int(support.get("hp", 0)) == -1
-			and not support.has("motion"),
+			and not support.has("motion") and not support.has("cycle"),
 			"%s: every opening spawn needs permanent stationary support" % label)
 		if not support.is_empty():
 			supports[level["platforms"].find(support)] = true

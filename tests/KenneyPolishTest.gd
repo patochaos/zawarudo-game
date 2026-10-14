@@ -23,7 +23,7 @@ func _run() -> void:
 	_check(str(ProjectSettings.get_setting("gui/theme/custom_font", "")).ends_with(
 		"kenney-future.ttf"), "the project theme must use the selected display font")
 
-	_check(BACKDROP_SCRIPT.PATTERN_TEXTURES.size() == 7,
+	_check(BACKDROP_SCRIPT.PATTERN_TEXTURES.size() == Levels.count(),
 		"every arena must own a Kenney pattern motif")
 	for texture: Texture2D in BACKDROP_SCRIPT.PATTERN_TEXTURES:
 		_check(texture != null, "every arena pattern must resolve to an imported texture")

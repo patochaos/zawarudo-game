@@ -436,6 +436,10 @@ var world_bounds := Rect2(-160.0, -1600.0, 1600.0, 2600.0)
 ## instead of ambushing the player with them.
 var world_tick: int = 0
 var _has_movers: bool = false
+## Static arena fields read by position: stasis zones scale integration time
+## for bodies and knives, lodestones pull knives. Authored in Levels.gd.
+var zones: Array = []
+var lodestones: Array = []
 ## Projected collision sets, keyed by absolute tick. Dropped whenever the
 ## platform set itself changes (damage, level load, a mover being applied).
 var _solids_cache: Dictionary = {}
@@ -1955,17 +1959,62 @@ func _seam_copies(r: Rect2) -> Array[Rect2]:
 	return out
 
 
-func _rebuild_solids() -> void:
+## `abs_tick` is the tick the gates are evaluated at; it defaults to the live
+## world tick, which every caller except `_apply_movers` means.
+func _rebuild_solids(abs_tick: int = -1) -> void:
+	var at: int = world_tick if abs_tick < 0 else abs_tick
 	var r: Array[Rect2] = []
 	_has_movers = false
 	for pf in platforms:
-		if pf.has("motion"):
+		if pf.has("motion") or pf.has("cycle"):
 			_has_movers = true
+		if pf.has("cycle"):
+			pf["present"] = platform_present_at(pf, at)
+			var left: Array = Mover.cycle_ticks_left(pf["cycle"], at)
+			pf["cycle_fraction"] = float(left[0]) / float(maxi(int(left[1]), 1))
+			if not pf["present"]:
+				var none: Array[Rect2] = []
+				pf["rects"] = none
+				continue
 		var copies := _seam_copies(pf["rect"])
 		pf["rects"] = copies
 		r.append_array(copies)
 	solid_rects = r
 	_solids_cache.clear()
+
+
+## A shutter is part of the world only while its clock says so. Static pieces
+## are always present.
+func platform_present_at(pf: Dictionary, abs_tick: int) -> bool:
+	return not pf.has("cycle") or Mover.cycle_solid(pf["cycle"], abs_tick)
+
+
+## How fast time runs at a point: 1 outside every stasis field, the field's
+## scale inside. Bodies and knives integrate with this factor, so the ghost,
+## the knife preview and the AI all slow down exactly where execution does.
+func time_scale_at(p: Vector2) -> float:
+	if zones.is_empty():
+		return 1.0
+	var scale := 1.0
+	for zone in zones:
+		if zone["rect"].has_point(p):
+			scale = minf(scale, float(zone["time_scale"]))
+	return scale
+
+
+## Acceleration a knife feels at `p` from every lodestone in reach: linear
+## falloff to the rim, nothing beyond it, nothing at the exact centre.
+func knife_pull_at(p: Vector2) -> Vector2:
+	if lodestones.is_empty():
+		return Vector2.ZERO
+	var pull := Vector2.ZERO
+	for stone in lodestones:
+		var d: Vector2 = wrap_delta(p, stone["at"])
+		var radius: float = float(stone["radius"])
+		var dist := d.length()
+		if dist < radius and dist > 1.0:
+			pull += d / dist * float(stone["pull"]) * (1.0 - dist / radius)
+	return pull
 
 
 # ------------------------------------------------------- moving geometry -----
@@ -1994,6 +2043,8 @@ func solids_at(abs_tick: int) -> Array[Rect2]:
 		return _solids_cache[abs_tick]
 	var out: Array[Rect2] = []
 	for pf in platforms:
+		if not platform_present_at(pf, abs_tick):
+			continue
 		out.append_array(_seam_copies(platform_rect_at(pf, abs_tick)))
 	# The AI walks candidate plans in a scattered tick order, so a one-slot cache
 	# would thrash. Bound it instead of growing it forever.
@@ -2009,6 +2060,8 @@ func solids_at(abs_tick: int) -> Array[Rect2]:
 func platform_colliders_at(abs_tick: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for pf: Dictionary in platforms:
+		if not platform_present_at(pf, world_tick if abs_tick < 0 else abs_tick):
+			continue
 		var posed: Rect2 = pf["rect"] if abs_tick < 0 else platform_rect_at(pf, abs_tick)
 		for rect: Rect2 in _seam_copies(posed):
 			out.append({"rect": rect, "hp": int(pf.get("hp", -1))})
@@ -2056,7 +2109,7 @@ func _apply_movers(abs_tick: int) -> void:
 	for pf in platforms:
 		if pf.has("motion"):
 			pf["rect"] = platform_rect_at(pf, abs_tick)
-	_rebuild_solids()
+	_rebuild_solids(abs_tick)
 	_arena.setup(platforms)
 
 
@@ -2077,7 +2130,10 @@ func _load_level(index: int) -> void:
 	wrap_x = lv["wrap_x"]
 	wrap_y = lv["wrap_y"]
 	platforms = lv["platforms"]
+	zones = lv.get("zones", [])
+	lodestones = lv.get("lodestones", [])
 	_arena.configure_level(level_index, wrap_x, wrap_y)
+	_arena.setup_fields(zones, lodestones)
 	var sp: Array = lv["spawns"]
 	for i in MAX_PLAYERS:
 		spawns[i] = sp[i]
@@ -4984,6 +5040,7 @@ func _request_rematch() -> void:
 	else:
 		if demo_match and Opponents.valid(rematch_opponent):
 			set_player_opponent(1, rematch_opponent)
+			rematch_level_index = Opponents.arena(rematch_opponent)
 		_load_level(rematch_level_index)
 		restart()
 		_begin_match_telemetry("tutorial" if tutorial_mode else \
@@ -5970,7 +6027,7 @@ func start_demo_duel(rung: int = -1) -> void:
 	execution_duration = 0.75
 	movement_budget = 0.50
 	var skill := Opponents.skill(rung)
-	_start_local_match(1, 2, [Weapon.KNIVES, Weapon.KNIVES], {
+	_start_local_match(Opponents.arena(rung), 2, [Weapon.KNIVES, Weapon.KNIVES], {
 		"roles": ["HUMAN", "AI"], "devices": [KEYBOARD_DEVICE, NO_DEVICE],
 		"difficulties": [skill, skill], "difficulty": skill, "match_lives": 3,
 		"opponents": [-1, rung],

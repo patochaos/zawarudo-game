@@ -17,18 +17,24 @@ const BACKDROPS := [
 	preload("res://assets/art/arenas/shattered-sanctum/backdrop.png"),
 	preload("res://assets/art/arenas/foundry/backdrop.png"),
 	preload("res://assets/art/arenas/collision-course/backdrop.png"),
+	# Twist arenas reuse existing backdrops with their own grade.
+	preload("res://assets/art/arenas/foundry/backdrop.png"),
+	preload("res://assets/art/arenas/shattered-sanctum/backdrop.png"),
+	preload("res://assets/art/arenas/crosshair-court/backdrop.png"),
 ]
 const GRADES := [
 	Color(0.39, 0.38, 0.45), Color(0.31, 0.42, 0.53),
 	Color(0.38, 0.40, 0.51), Color(0.29, 0.44, 0.49),
 	Color(0.39, 0.34, 0.47), Color(0.44, 0.34, 0.33),
 	Color(0.38, 0.32, 0.48),
+	Color(0.30, 0.44, 0.40), Color(0.34, 0.30, 0.50), Color(0.44, 0.38, 0.30),
 ]
 const AIR_COLORS := [
 	Color(0.80, 0.72, 0.48), Color(0.42, 0.62, 0.80),
 	Color(0.80, 0.72, 0.48), Color(0.30, 0.72, 0.77),
 	Color(0.65, 0.58, 0.77), Color(0.95, 0.40, 0.16),
 	Color(0.67, 0.47, 0.77),
+	Color(0.40, 0.90, 0.70), Color(0.70, 0.55, 0.95), Color(0.95, 0.72, 0.36),
 ]
 const PATTERN_TEXTURES := [
 	preload("res://assets/kenney/patterns/crosshair-court.png"),
@@ -38,6 +44,9 @@ const PATTERN_TEXTURES := [
 	preload("res://assets/kenney/patterns/shattered-sanctum.png"),
 	preload("res://assets/kenney/patterns/foundry.png"),
 	preload("res://assets/kenney/patterns/collision-course.png"),
+	preload("res://assets/kenney/patterns/foundry.png"),
+	preload("res://assets/kenney/patterns/shattered-sanctum.png"),
+	preload("res://assets/kenney/patterns/crosshair-court.png"),
 ]
 
 var level_theme: int = 0

@@ -151,7 +151,7 @@ func run() -> void:
 	check(game._ui._next_opponent_button.visible and game._ui._arena_next_button.visible, "a won demo result must offer the next opponent and let the player revisit beaten ones")
 	game._ui._next_opponent_button.pressed.emit()
 	check(game.demo_opponent == 1 and game.hits_to_win == 3, "next opponent must advance one rung, keeping demo rules")
-	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "next opponent must retain Endless Descent and wrapping")
+	check(game.level_index == Opponents.arena(1) and game.level_name == Opponents.arena_name(1), "next opponent must be fought in its own arena")
 	game._open_menu()
 	game.free()
 	await process_frame

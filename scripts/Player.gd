@@ -301,14 +301,17 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	if apply_input and vel.y < 0.0 and not jump_held:
 		vel.y = maxf(vel.y, -effective_jump_impulse * cfg.jump_cut)
 
+	# Inside a stasis field the body's clock runs slow: the same inputs cover
+	# less ground and a jump hangs. Impulses stay whole; only integration scales.
+	var sdt: float = dt * cfg.time_scale_at(pos)
 	var target: float = float(dir) * cfg.player_move_speed * move_speed_scale
 	var accel: float = cfg.player_acceleration if on_ground else cfg.player_air_acceleration
 	if apply_input:
-		vel.x = move_toward(vel.x, target, accel * dt)
+		vel.x = move_toward(vel.x, target, accel * sdt)
 	elif on_ground:
-		vel.x = move_toward(vel.x, 0.0, accel * dt)
+		vel.x = move_toward(vel.x, 0.0, accel * sdt)
 	var effective_fall_speed: float = cfg.max_fall_speed if fall_speed < 0.0 else fall_speed
-	vel.y = minf(vel.y + cfg.movement_gravity() * dt, effective_fall_speed)
+	vel.y = minf(vel.y + cfg.movement_gravity() * sdt, effective_fall_speed)
 
 	# A drop-through makes thin ledges transparent on BOTH axes for its duration.
 	# Skipping only the vertical pass would let the horizontal one snap the body
@@ -316,7 +319,7 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 	var passing: bool = drop_ticks > 0
 
 	# --- horizontal ---
-	pos.x += vel.x * dt
+	pos.x += vel.x * sdt
 	for r in rects:
 		if passing and _is_open_ledge(r, drop_from_y):
 			continue
@@ -328,7 +331,7 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 			vel.x = 0.0
 
 	# --- vertical ---
-	pos.y += vel.y * dt
+	pos.y += vel.y * sdt
 	on_ground = false
 	for r in rects:
 		if passing and _is_open_ledge(r, drop_from_y):
