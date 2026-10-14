@@ -1,11 +1,19 @@
-ZAWARUDO — Core playtest 0.3.0-core-playtest.1
-===========================================
+ZAWARUDO - Tuning playtest 0.3.0-tuning.1
+=======================================
 
 Portable Windows build. No installation is required: run ZAWARUDO.exe.
 
 Choose LEARN TO PLAY for three playable lessons, or START DUEL to face a
 Novice CPU in Endless Descent. The first Duelist to score three hits wins.
 Cross a side edge to return on the opposite side; shafts connect top and bottom.
+
+Choose INTERCEPTION for a compact court against a Standard CPU. This mode has
+one jump, reduced air steering, an early contested core, and firm ground braking.
+Use the walls and central shelf to put knives across your opponent's route.
+
+Choose GAME TUNING in the main menu to adjust 75 offline settings, or apply a
+preset: Tactical duel, Clear read, Crossfire, or Quick verdict. Changes are saved
+on this device. Online matches, tutorials, and INTERCEPTION keep their own rules.
 
 KEYBOARD + MOUSE
   Move: A / D        Jump: Space / W / Up
@@ -23,7 +31,8 @@ GAMEPAD
 GLOBAL
   M: mute        H: hide help        F10: next level        Esc: menu
 
-Plan while time is frozen, then choose LOCK PLAN or let the eight-second timer
-expire. Both plans execute together. Knives can persist between turns.
+Plan while time is frozen, then choose LOCK PLAN or let the planning timer
+expire (eight seconds with standard rules). Both plans execute together.
+Knives can persist between turns.
 REVIEW lets you replay the outcome slowly. CONTROLS shows current bindings.
 Use SEND FEEDBACK on the title or result screen to share your experience.

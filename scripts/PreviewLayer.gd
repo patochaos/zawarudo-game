@@ -30,6 +30,9 @@ func _draw() -> void:
 					Color(me.color, 0.38), 1.5, true)
 				if gm.charging[0]:
 					_draw_power_bar(me.position, me, true)
+			for p in gm.players:
+				if p.alive and gm.throw_cooldown_left[p.index] > 0.0:
+					_draw_throw_cooldown(p)
 			return
 		if me.alive:
 			_draw_shot_preview(me, me.position)
@@ -449,11 +452,11 @@ func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2]
 
 ## Opening known-world flight for a newly aimed dagger. PredictionSystem shares
 ## the live Arrow integrator and applies the same moving terrain and ricochet
-## rules, but disclosure is deliberately capped at one tenth of the normal
-## trajectory window.
+## rules. The local preview duration can be tuned independently of knife life.
+## The guide stops when that knife would expire.
 func _dagger_trajectory_path(start: Vector2, launch: Vector2,
 		start_tick: int = -1) -> PackedVector2Array:
-	var preview_time: float = gm.trajectory_preview_time * AIM_PREDICTION_FRACTION
+	var preview_time: float = minf(gm.aim_preview_duration, gm.arrow_max_ticks * gm.tick_dt())
 	var flight: Dictionary = PredictionSystem.predict_arrow(
 		start, launch, gm, preview_time, start_tick)
 	return flight["path"]
@@ -520,8 +523,7 @@ func _chakram_trajectory_path(start: Vector2, launch: Vector2) -> PackedVector2A
 
 
 func _aim_preview_steps() -> int:
-	return maxi(1, int(round(gm.trajectory_preview_time * AIM_PREDICTION_FRACTION \
-		/ gm.tick_dt())))
+	return maxi(1, int(round(gm.aim_preview_duration / gm.tick_dt())))
 
 
 ## Finds a useful final heading without mistaking an arena wrap for motion.
@@ -827,6 +829,19 @@ func _draw_power_bar(origin: Vector2, p: Player, charging: bool) -> void:
 	var fill: Color = Color(1.0, 0.85, 0.3) if charging else Color(base.r, base.g, base.b, 0.7)
 	draw_rect(Rect2(at, Vector2(w * clampf(p.plan.power, 0.0, 1.0), h)), fill)
 	draw_rect(Rect2(at, Vector2(w, h)), Color(1, 1, 1, 0.35 if charging else 0.18), false, 1.0)
+
+
+## Real Time reload, drained over the fighter's head so an opponent's opening
+## is as readable as your own.
+func _draw_throw_cooldown(p: Player) -> void:
+	var w := 54.0
+	var h := 4.0
+	var frac: float = clampf(gm.throw_cooldown_left[p.index]
+		/ maxf(gm.real_time_throw_cooldown, 0.001), 0.0, 1.0)
+	var at: Vector2 = p.position + Vector2(-w * 0.5, -Player.HALF.y - 22.0)
+	draw_rect(Rect2(at, Vector2(w, h)), Color(0.10, 0.11, 0.14, 0.6))
+	draw_rect(Rect2(at, Vector2(w * (1.0 - frac), h)), Color(p.color, 0.75))
+	draw_rect(Rect2(at, Vector2(w, h)), Color(1, 1, 1, 0.18), false, 1.0)
 
 
 ## Movement budget left, drawn on the ghost head so the player watches it drain

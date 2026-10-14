@@ -100,6 +100,16 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		if move[3] >= 0 and gm.air_jumps_for(idx) <= 0:
 			continue
 		move_options.append(move)
+	if _gm.interception_mode:
+		# Airborne motion coasts without a recording. Neutral input lets the CPU
+		# brake in the air to hold the crossing or dodge a projectile.
+		move_options.append([0, false, -1, -1])
+		if _me.on_ground and not _gm.core_spawn_points.is_empty():
+			var to_core: Vector2 = _gm.wrap_delta(_me.position, _gm.core_spawn_points[0])
+			if to_core.y > Player.SIZE.y and absf(to_core.x) <= Player.HALF.x + _gm.core_collect_radius:
+				# The core is directly below the upper crossing. A deliberate drop
+				# avoids waiting on the shelf because both exits first move away.
+				move_options.append([0, false, -1, -1, true])
 
 	var threats := _threat_paths()
 	_futures = _foe_futures()
@@ -108,7 +118,8 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	var scored: Array = []
 	for m in move_options:
 		var ticks: int = budget if m[2] < 0 else mini(m[2], budget)
-		var path := _walk(_me, m[0], m[1], ticks, m[3])
+		var drop: bool = m.size() > 4 and m[4]
+		var path := _walk(_me, m[0], m[1], ticks, m[3], drop)
 		var safety: float = 0.0
 		if not _me.is_invulnerable():
 			safety = -600.0 * _danger(path, threats)
@@ -118,7 +129,7 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 			if _gm.uses_dashblade(_foe.index):
 				safety -= VELOCITY_DASH_DANGER_WEIGHT * _velocity_dash_danger(path)
 		var core_value: float = _core_value(path)
-		var variety: float = 12.0 if ticks > 0 else 0.0
+		var variety: float = 12.0 if ticks > 0 and not _gm.interception_mode else 0.0
 		# A body-dash kit cannot create pressure from the opposite side of the
 		# arena. Prefer safe paths that close the gap instead of letting the generic
 		# projectile planner wander on a random tiebreak.
@@ -129,9 +140,18 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		# search — without a tiebreak the list order alone decides, so the jump
 		# options were never even considered. The jitter also makes the AI
 		# harder to read, which matters in a game about prediction.
-		var toss: float = _gm.rng.randf() * 10.0
-		scored.append({"move": m, "ticks": ticks, "path": path,
+		# INTERCEPTION gives the player a consistent intention to read. Its
+		# objective and visible threats decide the route without a random nudge.
+		var toss: float = 0.0 if _gm.interception_mode else _gm.rng.randf() * 10.0
+		scored.append({"move": m, "ticks": ticks, "path": path, "drop": drop,
+			"danger": -safety,
 			"base": safety + core_value + variety + engage_value + toss})
+	if _gm.interception_mode:
+		# A promising shot must not buy a route through a visible projectile
+		# when the current world already offers a safe alternative.
+		var safe: Array = scored.filter(func(c): return c["danger"] <= 0.0)
+		if not safe.is_empty():
+			scored = safe
 	scored.sort_custom(func(a, b): return a["base"] > b["base"])
 	# Not attacking is a legal tactical answer. Seed the search with the safest
 	# movement-only plan against The Rook; a projectile plan must beat this after
@@ -187,6 +207,7 @@ func apply() -> void:
 	var dir: int = _best_cand["move"][0]
 	var jump: bool = _best_cand["move"][1]
 	var air_jump_tick: int = _best_cand["move"][3]
+	var drop: bool = _best_cand.get("drop", false)
 	var ticks: int = _best_cand["ticks"]
 	var fire_at: int = _best.get("tick", -1) if _best.has("elev") else -1
 
@@ -194,7 +215,7 @@ func apply() -> void:
 		if fire_at == t:
 			_arm()
 		var jump_now: bool = (t == 0 and jump) or t == air_jump_tick
-		_gm._pilot_step(_idx, dir, jump_now, jump)
+		_gm._pilot_step(_idx, dir, jump_now, jump, drop and t == 0)
 	if fire_at >= ticks:
 		_arm()
 
@@ -370,28 +391,34 @@ func _evaluate(item: Array) -> void:
 ## One movement candidate, played out over a whole window: driven for `ticks`,
 ## then coasting like the real thing.
 func _walk(who: Player, dir: int, jump: bool, ticks: int,
-		air_jump_tick: int = -1) -> PackedVector2Array:
+		air_jump_tick: int = -1, drop: bool = false) -> PackedVector2Array:
 	var pos: Vector2 = who.position
 	var vel: Vector2 = who.vel
 	var og: bool = who.on_ground
 	var air_jumps: int = who.air_jumps_left
+	var drop_ticks: int = who.drop_ticks if _gm.interception_mode else 0
+	var drop_from_y: float = who.drop_from_y if _gm.interception_mode else 0.0
 	var path := PackedVector2Array()
 	path.append(pos)
 	for t in _gm.exec_ticks():
 		var d: int = dir if t < ticks else 0
 		var jump_now: bool = t < ticks and ((t == 0 and jump) or t == air_jump_tick)
+		if _gm.interception_mode:
+			var drop_result := Player.apply_drop(pos.y, vel, og, drop_ticks, drop_from_y,
+				drop and t == 0 and t < ticks)
+			vel = drop_result[0]
+			og = drop_result[1]
+			drop_ticks = drop_result[2]
+			drop_from_y = drop_result[3]
 		var jump_result := Player.apply_jump(vel, og, air_jumps, jump_now,
 			_gm.jump_impulse_for(who.index), _gm.air_jump_impulse_for(who.index),
 			_gm.air_jumps_for(who.index))
 		vel = jump_result[0]
 		og = jump_result[1]
 		air_jumps = jump_result[2]
-		# The search never drops through a ledge: it is a deliberate human verb,
-		# and adding it would multiply the candidate space for a move the AI has
-		# no way to value yet.
 		var st := Player.step_state(pos, vel, og, d, jump and t < ticks, _dt, _gm,
-			_gm.world_tick + t, 0, 0.0, _gm.movement_speed_scale(who.index),
-			_gm.jump_impulse_for(who.index), _gm.max_fall_speed_for(who.index))
+			_gm.world_tick + t, drop_ticks, drop_from_y, _gm.movement_speed_scale(who.index),
+			_gm.jump_impulse_for(who.index), _gm.max_fall_speed_for(who.index), t < ticks)
 		pos = st[0]
 		vel = st[1]
 		og = st[2]
@@ -571,8 +598,9 @@ func _velocity_front_parry_risk(origin: Vector2, projectile_direction: Vector2,
 ## penalty. While telegraphed, the AI starts closing distance; once tangible,
 ## a route that actually touches it receives the larger collection value.
 func _core_value(path: PackedVector2Array) -> float:
+	var territory_value: float = _interception_position_value(path) if _gm.interception_mode else 0.0
 	if (not _gm.core_active and not _gm.core_announced) or _gm.super_meter[_idx] >= 1.0:
-		return 0.0
+		return territory_value
 	var start_distance: float = _gm.wrap_delta(_me.position, _gm.core_position).length()
 	var closest: float = start_distance
 	for point in path:
@@ -582,14 +610,30 @@ func _core_value(path: PackedVector2Array) -> float:
 	var value: float = _gm.ai_core_approach_value * approach_scale * progress
 	if _gm.core_active and _gm.path_touches_core(path):
 		value += _gm.ai_core_collect_value
-	return value
+	return value + territory_value
+
+
+## Stay near the authored crossing between cores and after collecting one.
+## End position matters: passing through then drifting away is less useful
+## than arriving where the next core can be contested. This only reads the
+## public arena and the CPU's simulated route.
+func _interception_position_value(path: PackedVector2Array) -> float:
+	if path.is_empty() or _gm.core_spawn_points.is_empty():
+		return 0.0
+	var target: Vector2 = _gm.core_spawn_points[0]
+	var start_distance: float = _gm.wrap_delta(path[0], target).length()
+	var end_distance: float = _gm.wrap_delta(path[path.size() - 1], target).length()
+	var progress: float = clampf((start_distance - end_distance) / 200.0, -1.0, 1.0)
+	var nearby: float = clampf(1.0 - end_distance / 160.0, 0.0, 1.0)
+	return 120.0 * progress + 60.0 * nearby
 
 
 ## Three guesses at what the opponent's feet will do this window.
 func _foe_futures() -> Array:
 	var out: Array = []
+	var controlled_ticks: int = _gm.movement_tick_budget() if _gm.interception_mode else _gm.exec_ticks()
 	for d in HYPOTHESES:
-		out.append(_walk(_foe, d, false, _gm.exec_ticks()))
+		out.append(_walk(_foe, d, false, controlled_ticks))
 	return out
 
 

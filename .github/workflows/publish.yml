@@ -134,7 +134,7 @@ jobs:
       - name: Publish to itch.io
         run: >-
           butler push "${{ matrix.directory }}"
-          "patochaos/za-warudo:${{ matrix.channel }}"
+          "patochaos/zawarudo:${{ matrix.channel }}"
           --userversion "${{ github.sha }}"
           --if-changed
         env:

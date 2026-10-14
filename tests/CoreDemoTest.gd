@@ -24,7 +24,7 @@ func run() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
-	check(game._menu._page_names() == ["START DUEL", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "SEND FEEDBACK", "QUIT"], "public demo must have no experiment or setup destinations")
+	check(game._menu._page_names() == ["START DUEL", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Interception and offline tuning alongside its primary destinations")
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")
 	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "Start Duel must use Endless Descent with four-way wrapping")
@@ -66,13 +66,35 @@ func run() -> void:
 	check(lesson.completed, "real recorded movement must reach the lesson target")
 	lesson.advance()
 	lesson.advance()
-	check(lesson.lesson == 1 and game.players[1].plan.recorded_ticks() == 30, "interception lesson must author a moving target")
+	check(lesson.lesson == 1 and game.players[1].plan.jump_at(lesson.JUMP_WINDUP_TICKS), "landing lesson must author a committed jump after its windup")
+	check(lesson.target_landing_tick > lesson.JUMP_WINDUP_TICKS and lesson.target_landing_tick < game.exec_ticks(), "the target must land before the execution window ends")
+	var jump_path: PackedVector2Array = game.ghost_path[1].duplicate()
+	var jump_start: Vector2 = game.players[1].position
+	var jump_visual = game.players[1].get_node("FighterVisual")
+	check(jump_visual.scale.y < 1.0 and game.players[1].on_ground, "jump preparation must pose the visual while the real body stays grounded")
 	game.players[0].plan.shot_tick = 0
-	game.players[0].plan.power = 0.55
-	game.players[0].plan.set_aim_from_vector(Vector2(1, 0.15), game.aim_min_angle, game.aim_max_angle)
+	game.players[0].plan.power = 0.75
+	game.players[0].plan.set_aim_from_vector(game.players[1].shoulder() - game.players[0].shoulder(), game.aim_min_angle, game.aim_max_angle)
+	game._begin_execution()
+	var path_matches := true
+	while game.exec_tick < game.exec_ticks_total:
+		game._sim_tick(game.tick_dt())
+		path_matches = path_matches and game.players[1].position.distance_to(jump_path[game.exec_tick + 1]) < 0.001
+		game.exec_tick += 1
+	lesson._process(0.0)
+	check(path_matches and game.players[1].on_ground and game.players[1].position.y < jump_start.y - 80, "the revealed jump must execute accurately and land on the raised ledge")
+	check(game.players[0].position == Vector2(320, 476) and game.players[0].on_ground, "the shooter must remain supported by the starting ledge while aiming without movement")
+	check(jump_visual.scale == Vector2.ONE, "the windup pose must release when the jump executes")
+	game._end_execution()
+	check(not lesson.completed and game.players[1].alive, "aiming at the starting body must miss at the recommended charge and offer a retry")
+	lesson.advance()
+	check(game.ghost_path[1] == jump_path and game.players[1].position == jump_start, "retry must restore the same jump and landing cue")
+	game.players[0].plan.shot_tick = 0
+	game.players[0].plan.power = 0.75
+	game.players[0].plan.set_aim_from_vector(lesson.landing_aim_point() - game.players[0].shoulder(), game.aim_min_angle, game.aim_max_angle)
 	game._rebuild_ghost_paths()
 	execute(game)
-	check(lesson.completed, "interception lesson must be solvable through a real projectile hit")
+	check(lesson.completed, "pre-aiming at the landing must complete the lesson through a real projectile hit")
 	if not lesson.completed:
 		game.free()
 		await process_frame
@@ -80,19 +102,36 @@ func run() -> void:
 		return
 	lesson.advance()
 	lesson.advance()
-	check(lesson.lesson == 2 and game.arrows.size() == 1, "persistence exercise must start with an earlier knife")
-	var old_id: int = game.arrows[0].network_id
+	check(lesson.lesson == 2 and game.arrows.size() == 2, "persistence exercise must reveal both the low knife and the landing threat from the start")
+	execute(game)
+	check(not game.players[0].alive and not lesson.completed and not lesson.between_turns, "standing still must fail the first dodge window")
+	lesson.advance()
 	for tick in 30: game._pilot_step(0, 0, tick == 0, true)
 	execute(game)
-	check(lesson.between_turns, "surviving the first knife must lead to another timed window")
+	check(lesson.between_turns, "jumping the low knife must lead to another timed window")
 	var pos: Vector2 = game.players[0].position
-	var count: int = game.arrows.size()
-	check(count > 0, "the earlier knife must still exist at the second freeze")
+	var threats: Array = []
+	for knife in game.arrows:
+		threats.append([knife.network_id, knife.position, knife.vel, knife.age_ticks])
+	check(threats.size() == 2, "both knives must remain in flight at the second freeze")
 	lesson.advance()
-	check(game.players[0].position == pos and game.arrows.size() == count, "the second window must preserve fighter and projectile state")
-	if count > 0: check(game.arrows[0].network_id == old_id, "the earlier projectile must keep its identity")
+	check(game.players[0].position == pos and game.arrows.size() == threats.size(), "the second window must preserve fighter and projectile state")
+	for i in mini(game.arrows.size(), threats.size()):
+		var knife = game.arrows[i]
+		check([knife.network_id, knife.position, knife.vel, knife.age_ticks] == threats[i], "the freeze must preserve knife identity, momentum and age without retargeting")
 	execute(game)
-	check(lesson.completed, "a correctly recorded escape must survive the persistence exercise")
+	check(not game.players[0].alive and not lesson.completed and not lesson.between_turns, "coasting straight down must be caught by the landing knife and offer a full retry")
+	lesson.advance()
+	check(lesson.survival_windows == 0 and game.players[0].position == Vector2(400, 596) and game.arrows.size() == 2, "a failed landing must restart the complete two-window exercise")
+	for tick in 30: game._pilot_step(0, 0, tick == 0, true)
+	execute(game)
+	for i in mini(game.arrows.size(), threats.size()):
+		var knife = game.arrows[i]
+		check([knife.network_id, knife.position, knife.vel, knife.age_ticks] == threats[i], "retrying the same jump must reproduce the same threats at the next freeze")
+	lesson.advance()
+	for tick in 30: game._pilot_step(0, -1, false, false)
+	execute(game)
+	check(lesson.completed and game.players[0].alive, "jumping first and steering left at the next freeze must escape both knives")
 	var lesson_results := 0
 	for event in game._telemetry._events:
 		if event["event"] == "lesson_result": lesson_results += 1

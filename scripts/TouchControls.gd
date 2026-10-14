@@ -203,7 +203,7 @@ func _action_at(position: Vector2) -> String:
 			return "replay"
 		if REMATCH_RECT.has_point(position):
 			return "rematch"
-		if _gm != null and (not _gm.online_mode \
+		if _gm != null and not _gm.interception_mode and (not _gm.online_mode \
 				or (_gm.online_player == 0 and not _gm._online_waiting_rematch)):
 			if LEVEL_PREV_RECT.has_point(position):
 				return "level_previous"
@@ -377,6 +377,8 @@ func _draw_touch_result_card() -> void:
 	_surface.draw_string(HUD_FONT, Vector2(390.0, 344.0), _gm._score_text(),
 		HORIZONTAL_ALIGNMENT_CENTER, 500.0, 34, Color(0.94, 0.95, 1.0))
 	var prompt := "CHOOSE THE NEXT ARENA, WATCH THE FIGHT, OR RUN IT BACK"
+	if _gm.interception_mode:
+		prompt = "INTERCEPTION · WATCH THE FIGHT OR RUN IT BACK"
 	if _gm.online_mode and _gm.online_player != 0:
 		prompt = "THE HOST CHOOSES THE ARENA — WATCH THE FIGHT OR RUN IT BACK"
 	_surface.draw_string(HUD_FONT, Vector2(330.0, 417.0), prompt,
@@ -422,7 +424,7 @@ func _draw_virtual_stick() -> void:
 
 
 func _draw_result_level_selector() -> void:
-	if _gm == null:
+	if _gm == null or _gm.interception_mode:
 		return
 	if not _gm.online_mode \
 			or (_gm.online_player == 0 and not _gm._online_waiting_rematch):

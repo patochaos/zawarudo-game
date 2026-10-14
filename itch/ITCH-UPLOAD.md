@@ -1,6 +1,16 @@
-# ZAWARUDO 0.2.0-playtest.2 — itch.io upload
+# ZAWARUDO itch.io upload
 
-The ready-to-upload files are generated in `build/itch/`:
+Project: https://patochaos.itch.io/zawarudo
+
+Current release: **0.3.0-tuning.1**. Web and Windows use the existing
+`html5` and `windows` channels. The release adds 75 offline tuning settings and
+four presets: Tactical duel, Clear read, Crossfire, and Quick verdict.
+Online matches, tutorials, and INTERCEPTION keep their own rules.
+
+Published exports and their file hashes are in `build/itch/0.3.0-tuning.1/`.
+
+`Build.bat` creates unpacked exports in `build/itch/web` and `build/itch/windows`.
+When ZIPs are requested, package each directory's contents as:
 
 - `ZAWARUDO-web.zip` — browser build. `index.html` is at the ZIP root.
 - `ZAWARUDO-windows.zip` — portable Windows download.
@@ -21,8 +31,8 @@ The ready-to-upload files are generated in `build/itch/`:
 After creating the itch.io project page and installing/authenticating butler:
 
 ```powershell
-butler push "build/itch/web" patochaos/zawarudo:html5 --userversion 0.2.0-playtest.2
-butler push "build/itch/windows" patochaos/zawarudo:windows --userversion 0.2.0-playtest.2
+butler push "build/itch/0.3.0-tuning.1/web" patochaos/zawarudo:html5 --userversion 0.3.0-tuning.1
+butler push "build/itch/0.3.0-tuning.1/windows" patochaos/zawarudo:windows --userversion 0.3.0-tuning.1
 ```
 
 On the itch.io edit page, mark the `html5` channel as playable in the browser.

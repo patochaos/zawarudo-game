@@ -61,6 +61,37 @@ static func build(index: int, player_count: int = 4) -> Dictionary:
 	return _finish(_layout(index), clampi(player_count, 2, 4))
 
 
+## A compact crossing for the Interception experiment, outside the arena rotation.
+## The central shelf gives the core a low approach with limited jumping room;
+## its exposed upper landing remains reachable with one ordinary ground jump.
+static func build_interception() -> Dictionary:
+	return _finish({
+		"name": "INTERCEPTION COURT",
+		"feature": "INTERCEPTION // threaten the crossing or catch the upper landing.",
+		"spawns": [
+			Vector2(370.0, 596.0), Vector2(910.0, 596.0),
+			Vector2(260.0, 466.0), Vector2(1020.0, 466.0),
+		],
+		"respawn_points": [
+			Vector2(350.0, 596.0), Vector2(430.0, 596.0),
+			Vector2(850.0, 596.0), Vector2(930.0, 596.0),
+			Vector2(260.0, 466.0), Vector2(1020.0, 466.0),
+		],
+		"core_spawns": [Vector2(640.0, 584.0)],
+		"hazards": [],
+		"platforms": [
+			# Visible side walls keep this encounter inside an 864px chamber.
+			{"rect": Rect2(0, STAGE_TOP, 208, 562), "hp": -1},
+			{"rect": Rect2(1072, STAGE_TOP, 208, 562), "hp": -1},
+			# Rear steps offer raised firing positions without roofing the spawns.
+			{"rect": Rect2(208, 490, 102, 130), "hp": -1},
+			{"rect": Rect2(970, 490, 102, 130), "hp": -1},
+			# 100px below, 120px up: a tight low route and a single-jump landing.
+			{"rect": Rect2(500, 500, 280, 20), "hp": -1},
+		],
+	}, 2)
+
+
 ## The compact arena authored for Close Camera. It is deliberately outside the
 ## normal seven-arena rotation: only the dedicated mode can load it.
 static func build_close_camera() -> Dictionary:

@@ -20,6 +20,8 @@ const TIME_STOP_SCRIPT := preload("res://scripts/TimeStopLayer.gd")
 const SUPER_FREEZE_SCRIPT := preload("res://scripts/SuperFreezeFrame.gd")
 const MENU_SCRIPT := preload("res://scripts/MenuLayer.gd")
 const TUNING_SCRIPT := preload("res://scripts/TuningLayer.gd")
+const OFFLINE_TUNING_SCRIPT := preload("res://scripts/OfflineTuning.gd")
+const OFFLINE_TUNING_LAYER_SCRIPT := preload("res://scripts/OfflineTuningLayer.gd")
 const TEMPORAL_CORE_SCRIPT := preload("res://scripts/TemporalCore.gd")
 const ONLINE_CLIENT_SCRIPT := preload("res://scripts/OnlineClient.gd")
 const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
@@ -184,6 +186,9 @@ var simplified_fighter_proto_enabled: bool = true
 @export var player_acceleration: float = 1800.0
 @export var player_air_acceleration: float = 900.0
 @export var jump_impulse: float = 780.0
+## Local tuning uses the same scaled jump integration for ghosts and fighters.
+@export var double_jump_enabled: bool = true
+@export var jump_duration_scale: float = 1.0
 ## Releasing the jump key mid-climb caps the rise at this fraction of the
 ## impulse. 1.0 disables variable jump height entirely.
 @export_range(0.1, 1.0, 0.05) var jump_cut: float = 0.40
@@ -204,6 +209,9 @@ var simplified_fighter_proto_enabled: bool = true
 ## not a shot, and should leave the board rather than float for its full age cap.
 @export_range(1.0, 6.0, 0.1) var arrow_clashed_gravity_scale: float = 2.2
 @export var charge_time: float = 1.1          # seconds to go from 0% to 100%
+## Real Time mode only. Time never stops there, so the pacing a turn gave a
+## throw is replaced by a per-fighter cooldown that starts when an attack leaves.
+@export_range(0.0, 5.0, 0.05) var real_time_throw_cooldown: float = 1.2
 ## On a fully wrapping arena a knife has no edge to leave through, so it is
 ## aged out instead. 900 ticks is 15s — twenty execution phases.
 @export var arrow_max_ticks: int = 900
@@ -319,6 +327,8 @@ var simplified_fighter_proto_enabled: bool = true
 
 @export_group("Preview")
 @export var trajectory_preview_time: float = 4.5
+## Visible opening of a newly aimed projectile's path, in moving seconds.
+@export var aim_preview_duration: float = 0.45
 
 @export_group("Close Camera Mode")
 ## These values belong only to the dedicated prototype mode. Normal Play never
@@ -361,6 +371,7 @@ var team_mode: bool = false
 ## its arena, camera, and tuning and is never selected by ordinary Play.
 var class_lab := false
 var real_time_mode: bool = false
+var interception_mode: bool = false
 var real_time_aim_guide: bool = true
 var close_camera_mode: bool = false
 ## Trial 01 replaces score with one asymmetric objective: survive a short,
@@ -541,6 +552,8 @@ var _pads: Array[int] = [-1, -1, -1, -1]
 var _pad_btn_prev: Array[Dictionary] = [{}, {}, {}, {}]
 var _jump_prev: Array[bool] = [false, false, false, false]
 var _charge_t: Array[float] = [0.0, 0.0, 0.0, 0.0]
+## Seconds until each fighter may attack again in Real Time mode.
+var throw_cooldown_left: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _pilot_accum: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var _prev_mouse := Vector2.ZERO
 
@@ -589,6 +602,9 @@ var _settings: Dictionary = {
 ## Tests can point persistence at a disposable file without touching the
 ## player's actual preferences.
 var settings_path: String = "user://settings.cfg"
+var offline_tuning_path: String = "user://offline_tuning.cfg"
+var offline_tuning
+var _offline_tuning_layer
 
 
 func _exit_tree() -> void:
@@ -683,12 +699,14 @@ func _ready() -> void:
 	_menu = MENU_SCRIPT.new()
 	add_child(_menu)
 	_menu.duel_requested.connect(start_demo_duel)
+	_menu.interception_requested.connect(start_interception)
 	_menu.feedback_requested.connect(open_feedback)
 	_menu.quit_requested.connect(quit_demo)
 	_menu.roster_requested.connect(_open_roster)
 	_menu.fate_trial_requested.connect(start_fate_trial)
 	_menu.close_camera_requested.connect(start_close_camera)
 	_menu.sandbox_requested.connect(start_sandbox)
+	_menu.tuning_requested.connect(_open_offline_tuning)
 	_menu.real_time_requested.connect(start_real_time)
 	_menu.class_lab_requested.connect(func(): ClassLab.start(self))
 	var live_hud = preload("res://scripts/RealTimeHud.gd").new()
@@ -743,6 +761,12 @@ func _ready() -> void:
 	_tuning.build(self)
 	_tuning.visible = false
 	_load_settings()
+	offline_tuning = OFFLINE_TUNING_SCRIPT.new()
+	offline_tuning.initialize(self, offline_tuning_path)
+	_offline_tuning_layer = OFFLINE_TUNING_LAYER_SCRIPT.new()
+	add_child(_offline_tuning_layer)
+	_offline_tuning_layer.build(self)
+	_offline_tuning_layer.closed.connect(_close_offline_tuning)
 	_menu.configure_options(_settings)
 	_assign_pads()
 	Input.joy_connection_changed.connect(func(_d, _c):
@@ -752,6 +776,8 @@ func _ready() -> void:
 	_prev_mouse = get_viewport().get_mouse_position()
 	_begin_planning(true)
 	_open_menu()
+	if "--vs-3-cpu" in user_args:
+		start_vs_three_cpu()
 
 
 ## One knob for three, so a preset cannot be half-applied. NOVICE searches a
@@ -853,6 +879,10 @@ func _open_menu() -> void:
 		_tutorial.stop()
 	tutorial_mode = false
 	state = Phase.MENU
+	if offline_tuning != null:
+		offline_tuning.apply_offline()
+	if _offline_tuning_layer != null:
+		_offline_tuning_layer.close()
 	banner_time = 0.0
 	_ui.visible = false     # the arena stays as a backdrop; the HUD would be noise
 	_tuning.visible = false
@@ -866,6 +896,19 @@ func _open_menu() -> void:
 	_menu.open()
 	if _transition != null:
 		_transition.play("ZAWARUDO", "TIME AWAITS", PLAYER_COLORS[0], reduced_flashes)
+
+
+func _open_offline_tuning() -> void:
+	if online_mode or state != Phase.MENU:
+		return
+	_menu.close()
+	_transition.visible = false
+	_offline_tuning_layer.open()
+
+
+func _close_offline_tuning() -> void:
+	_menu.open()
+	_menu._select(_menu.ROW_TUNING)
 
 
 ## One screen owns every local-match decision, so there is exactly one way in
@@ -950,6 +993,14 @@ func start_quick_match(ai: bool, lvl: int, requested_players: int = 2,
 	_on_roster_confirmed(_setup.build_config())
 
 
+## Playtest shortcut for `Play-1v3-CPU.bat`: keyboard Player 1 against three
+## STANDARD CPUs on the first arena, skipping the menu, roster and setup.
+func start_vs_three_cpu() -> void:
+	for i in MAX_PLAYERS:
+		_roster.difficulties[i] = Difficulty.STANDARD
+	start_quick_match(true, 0, MAX_PLAYERS)
+
+
 ## Test and capture seam, as above, for the tuning sandbox.
 func start_quick_freeplay(lvl: int) -> void:
 	team_mode = false
@@ -1011,7 +1062,54 @@ func start_close_camera() -> void:
 		"PLAN CLOSE · WATCH IT WHOLE", PLAYER_COLORS[0], reduced_flashes)
 
 
+## Fixed local experiment. Saved offline tuning is restored when this mode exits.
+func start_interception() -> void:
+	_set_close_camera_mode(false)
+	if _practice != null:
+		_practice.stop()
+	interception_mode = true
+	team_mode = false
+	fate_trial_mode = false
+	tutorial_mode = false
+	online_mode = false
+	online_player = -1
+	if offline_tuning != null:
+		offline_tuning.apply_standard()
+	double_jump_enabled = false
+	player_air_acceleration = 450.0
+	core_hitless_turns_to_announce = 1
+	winning_team = -1
+	team_score = [0, 0]
+	for i in MAX_PLAYERS:
+		player_teams[i] = -1
+		player_roles[i] = "HUMAN" if i == 0 else "AI"
+		player_devices[i] = KEYBOARD_DEVICE if i == 0 else NO_DEVICE
+		set_player_difficulty(i, Difficulty.STANDARD)
+	player_weapons.fill(Weapon.KNIVES)
+	local_weapon_choices[0] = Weapon.KNIVES
+	local_weapon_choices[1] = Weapon.KNIVES
+	vs_ai = true
+	hits_to_win = 3
+	_set_player_count(2)
+	_ui.visible = true
+	_ui.show_controls(true)
+	_tuning.visible = false
+	_menu.close()
+	_roster.close()
+	_setup.close()
+	_load_level(0)
+	restart()
+	_sfx.play("match_start")
+	_begin_match_telemetry("ai_interception")
+	_transition.play("INTERCEPTION", "ONE JUMP · COMMIT IN AIR · CONTEST THE CORE",
+		PLAYER_COLORS[0], reduced_flashes)
+
+
 func _set_close_camera_mode(enabled: bool) -> void:
+	if interception_mode:
+		interception_mode = false
+		if offline_tuning != null:
+			offline_tuning.apply_offline()
 	demo_match = false
 	class_lab = false
 	real_time_mode = false
@@ -1139,6 +1237,11 @@ func _start_local_match(lvl: int, requested_players: int, weapons: Array,
 	tutorial_mode = false
 	online_mode = false
 	online_player = -1
+	if offline_tuning != null:
+		if _practice != null and _practice.active:
+			offline_tuning.apply_standard()
+		else:
+			offline_tuning.apply_offline(false)
 	hits_to_win = clampi(int(setup.get("match_lives", DEFAULT_HITS_TO_WIN)), 3, MAX_HITS_TO_WIN)
 	set_difficulty(int(setup.get("difficulty", difficulty)))
 	var configured_roles: Array = setup.get("roles", [])
@@ -1201,6 +1304,8 @@ func _start_local_match(lvl: int, requested_players: int, weapons: Array,
 
 
 func _on_menu_tutorial() -> void:
+	if offline_tuning != null:
+		offline_tuning.apply_standard()
 	_practice.start()
 
 
@@ -1224,6 +1329,8 @@ func _on_menu_online() -> void:
 	team_mode = false
 	fate_trial_mode = false
 	tutorial_mode = false
+	if offline_tuning != null:
+		offline_tuning.apply_standard()
 	_menu.close()
 	_ui.visible = false
 	_tuning.visible = false
@@ -1399,8 +1506,10 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	team_mode = false
 	player_teams.fill(-1)
 	player_roles.fill("HUMAN")
-	# Sandbox tuning is machine-local and must never change the online simulation.
-	_tuning.handle_key(KEY_BACKSPACE, false)
+	# Restore every exposed property, including values changed in the sandbox.
+	# The saved offline profile is kept intact for the next local match.
+	if offline_tuning != null:
+		offline_tuning.apply_standard()
 	planning_duration = 8.0
 	planning_shrink_per_round = 0.0
 	execution_duration = 0.75
@@ -1506,6 +1615,8 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 	online_mode = false
 	online_player = -1
 	vs_ai = false
+	if offline_tuning != null:
+		offline_tuning.apply_offline(false)
 	player_weapons.fill(Weapon.KNIVES)
 	for i in mini(requested_players, weapons.size()):
 		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
@@ -1683,6 +1794,7 @@ func _reset_freeplay() -> void:
 	_jump_prev[0] = _jump_input_held(0)
 	_reset_temporal_core()
 	banner_time = 0.0
+	throw_cooldown_left.fill(0.0)
 	_reset_sandbox_ai_cycle()
 	if _tuning != null:
 		_tuning.refresh()
@@ -1859,6 +1971,8 @@ func _load_level(index: int) -> void:
 	var lv := Levels.build_close_camera() if close_camera_mode else \
 		(Levels.build_fate_trial_crossfire() if fate_trial_mode else \
 		(Levels.build_tutorial() if tutorial_mode else Levels.build(level_index, player_count)))
+	if interception_mode:
+		lv = Levels.build_interception()
 	if _practice != null and _practice.active:
 		lv = Levels.build_tutorial()
 	level_name = lv["name"]
@@ -2040,6 +2154,10 @@ func can_pilot_move(i: int) -> bool:
 
 
 func movement_speed_scale(i: int) -> float:
+	return _weapon_move_speed_scale(i)
+
+
+func _weapon_move_speed_scale(i: int) -> float:
 	if class_lab:
 		return dagger_move_speed_scale
 	if i < 0 or i >= player_weapons.size():
@@ -2057,15 +2175,17 @@ func movement_speed_scale(i: int) -> float:
 
 func jump_impulse_for(i: int) -> float:
 	var base := close_camera_jump_impulse if close_camera_mode else jump_impulse
-	return base * _class_movement_scale(i, "jump")
+	return base * _class_movement_scale(i, "jump") / jump_duration_scale
 
 
 func air_jump_impulse_for(i: int) -> float:
 	var base := close_camera_jump_impulse if close_camera_mode else jump_impulse
-	return base * _class_movement_scale(i, "air_jump")
+	return base * _class_movement_scale(i, "air_jump") / jump_duration_scale if double_jump_enabled else 0.0
 
 
 func air_jumps_for(i: int) -> int:
+	if not double_jump_enabled:
+		return 0
 	if class_lab:
 		return dagger_air_jumps
 	if i < 0 or i >= player_weapons.size():
@@ -2078,7 +2198,11 @@ func air_jumps_for(i: int) -> int:
 
 
 func max_fall_speed_for(i: int) -> float:
-	return max_fall_speed * _class_movement_scale(i, "fall")
+	return max_fall_speed * _class_movement_scale(i, "fall") / jump_duration_scale
+
+
+func movement_gravity() -> float:
+	return gravity / (jump_duration_scale * jump_duration_scale)
 
 
 func _class_movement_scale(i: int, stat: String) -> float:
@@ -2466,6 +2590,8 @@ func _sim_tick(dt: float) -> void:
 ## targets; a sandbox CPU runs plans authored by the same Ai.gd used in matches.
 func _freeplay_tick(delta: float) -> void:
 	var p: Player = players[0]
+	for i in throw_cooldown_left.size():
+		throw_cooldown_left[i] = maxf(0.0, throw_cooldown_left[i] - delta)
 
 	var dir := 0
 	if _held(key_bindings["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
@@ -2517,7 +2643,8 @@ func _freeplay_tick(delta: float) -> void:
 			and Input.get_joy_axis(_pads[0], JOY_AXIS_TRIGGER_LEFT) > trigger_threshold:
 		secondary_held = true
 	var held: bool = secondary_held or primary_held
-	if held:
+	# Holding through the cooldown starts the draw the moment it ends.
+	if held and throw_ready(0):
 		if not charging[0]:
 			charging[0] = true
 			_charge_t[0] = 0.0
@@ -2530,6 +2657,7 @@ func _freeplay_tick(delta: float) -> void:
 	elif charging[0]:
 		charging[0] = false
 		_spawn_player_attack(p)
+		_start_throw_cooldown(0)
 
 	_step_arrows(delta)
 
@@ -2545,10 +2673,21 @@ func _freeplay_tick(delta: float) -> void:
 		players[i].alive = true
 		players[i].plan = PlayerPlan.new()
 		players[i].queue_redraw()
+		throw_cooldown_left[i] = 0.0
 		_sandbox_banner("%s HIT" % ("P1" if i == 0 else "CPU"),
 			PLAYER_COLORS[i])
 		if i == 1 and is_ai(i):
 			_reset_sandbox_ai_cycle()
+
+
+## Free play outside Real Time mode keeps its unrestricted tuning throws.
+func throw_ready(i: int) -> bool:
+	return not real_time_mode or throw_cooldown_left[i] <= 0.0
+
+
+func _start_throw_cooldown(i: int) -> void:
+	if real_time_mode:
+		throw_cooldown_left[i] = real_time_throw_cooldown
 
 
 ## Search while the sandbox keeps running, then replay the authored plan as one
@@ -2575,8 +2714,10 @@ func _sandbox_ai_tick(delta: float, player_index: int) -> void:
 	var dt := tick_dt()
 	while _sandbox_ai_accum >= dt and _sandbox_ai_exec_tick >= 0:
 		_sandbox_ai_accum -= dt
-		if cpu.plan.has_shot() and cpu.plan.shot_tick == _sandbox_ai_exec_tick:
+		if cpu.plan.has_shot() and cpu.plan.shot_tick == _sandbox_ai_exec_tick \
+				and throw_ready(player_index):
 			_spawn_player_attack(cpu)
+			_start_throw_cooldown(player_index)
 		if not _player_is_dashing(player_index):
 			cpu.sim_step(dt, _sandbox_ai_exec_tick)
 		_sandbox_ai_exec_tick += 1
@@ -3357,6 +3498,10 @@ func _reset_temporal_core() -> void:
 	hitless_execution_streak = 0
 	_hit_this_execution = false
 	_core_collected_this_execution = false
+	if interception_mode and not core_spawn_points.is_empty():
+		core_position = core_spawn_points[0]
+		core_announced = true
+		_sync_temporal_core_visual()
 
 
 func _sync_temporal_core_visual() -> void:
@@ -4573,7 +4718,7 @@ func _rebuild_ghost_path(i: int) -> void:
 		air_jumps = jump_result[2]
 		var st := Player.step_state(pos, vel, og, pl.dir_at(t), pl.hold_at(t), tick_dt(),
 			self, world_tick + t, drop, drop_from, movement_speed_scale(i),
-			jump_impulse_for(i), max_fall_speed_for(i))
+			jump_impulse_for(i), max_fall_speed_for(i), t < pl.recorded_ticks())
 		pos = st[0]
 		vel = st[1]
 		og = st[2]
@@ -4716,6 +4861,12 @@ func _request_rematch() -> void:
 		_telemetry.note_rematch(turn)
 	if state != Phase.GAME_OVER:
 		return
+	if interception_mode:
+		restart()
+		_begin_match_telemetry("ai_interception")
+		_transition.play("INTERCEPTION", "READ THE NEXT LANDING",
+			PLAYER_COLORS[0], reduced_flashes)
+		return
 	if close_camera_mode:
 		restart()
 		_begin_match_telemetry("ai_close_camera")
@@ -4782,7 +4933,7 @@ func _finish_abandoned_match(claimed_by: int) -> void:
 
 func _cycle_rematch_level(direction: int) -> void:
 	if state != Phase.GAME_OVER or direction == 0 or demo_match \
-			or fate_trial_mode or close_camera_mode \
+			or fate_trial_mode or close_camera_mode or interception_mode \
 			or (online_mode and (online_player != 0 or _online_waiting_rematch)):
 		return
 	rematch_level_index = posmod(rematch_level_index + direction, Levels.count())
@@ -4792,6 +4943,11 @@ func _cycle_rematch_level(direction: int) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _feedback != null and _feedback.visible: return
+	if _offline_tuning_layer != null and _offline_tuning_layer.visible:
+		if event.is_action_pressed("ui_cancel"):
+			_offline_tuning_layer.handle_key(KEY_ESCAPE)
+			get_viewport().set_input_as_handled()
+		return
 	if state == Phase.ROSTER or state == Phase.MATCH_SETUP:
 		var joy := event as InputEventJoypadButton
 		if joy != null and joy.pressed:
@@ -4857,7 +5013,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 
 	if state == Phase.MENU:
-		_menu.handle_key(k.keycode)
+		if _offline_tuning_layer != null and _offline_tuning_layer.visible:
+			_offline_tuning_layer.handle_key(k.keycode)
+		else:
+			_menu.handle_key(k.keycode)
 		return
 	if state == Phase.ONLINE_LOBBY:
 		_online_lobby.handle_key(k.keycode)
@@ -5694,7 +5853,7 @@ func start_demo_duel(skill: int = Difficulty.NOVICE) -> void:
 	})
 	demo_match = true
 	_ui.show_controls(true)
-	_transition.play("FIRST TO 3 HITS", "%s CPU · 8 SECONDS TO PLAN" % _difficulty_label(skill), PLAYER_COLORS[0], reduced_flashes)
+	_transition.play("FIRST TO 3 HITS", "%s CPU · %s SECONDS TO PLAN" % [_difficulty_label(skill), String.num(planning_duration, 1)], PLAYER_COLORS[0], reduced_flashes)
 
 
 func _abandon_match(reason: String) -> void:

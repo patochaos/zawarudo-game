@@ -198,8 +198,29 @@ func _draw_sprite_body() -> void:
 	var cell := Vector2(skin.sprite_cell_size)
 	var source := Rect2(Vector2(float(body_frame) * cell.x, 0.0), cell)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(_fighter.facing), 1.0))
+	_draw_identity_aura(source)
 	draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, skin.sprite_tint)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_identity_aura(source: Rect2) -> void:
+	if not _fighter.alive:
+		return
+	var silhouette: Texture2D = skin.ghost_atlases.get(body_state)
+	if silhouette == null:
+		return
+	# Matching alpha masks keep the edge attached to the current pose. Draw
+	# behind the opaque costume so ownership never washes out its palette.
+	# Constant opacity avoids competing with charge and invulnerability cues.
+	var identity := _fighter.color
+	for i in 8:
+		var direction := Vector2.from_angle(TAU * float(i) / 8.0)
+		draw_texture_rect_region(silhouette,
+			Rect2(skin.sprite_draw_rect.position + direction * 2.5, skin.sprite_draw_rect.size),
+			source, Color(identity.r, identity.g, identity.b, 0.035))
+		draw_texture_rect_region(silhouette,
+			Rect2(skin.sprite_draw_rect.position + direction * 1.25, skin.sprite_draw_rect.size),
+			source, Color(identity.r, identity.g, identity.b, 0.16))
 
 
 func _draw_world_markers() -> void:

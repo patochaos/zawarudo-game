@@ -38,4 +38,4 @@ func _process(_delta: float) -> void:
 		return
 	title.text = "REAL TIME // DUELIST VS CPU"
 	if visible:
-		hint.text = "A/D MOVE · SPACE JUMP · HOLD/RELEASE LMB THROW · H GUIDE %s · R RESET · ESC MENU" % ("ON" if gm.real_time_aim_guide else "OFF")
+		hint.text = "A/D MOVE · SPACE JUMP · HOLD/RELEASE LMB THROW (%.1fS RELOAD) · H GUIDE %s · R RESET · ESC MENU" % [gm.real_time_throw_cooldown, "ON" if gm.real_time_aim_guide else "OFF"]

@@ -1,6 +1,75 @@
 # ZAWARUDO — Tactical Knife Duel
 
-**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate Novice CPU match in Endless Descent, first to three hits, with four-way screen wrapping. Every playable turn retains its eight-second limit. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate Novice CPU match in Endless Descent, first to three hits, with four-way screen wrapping. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+
+### Interception test
+
+Choose **INTERCEPTION** from the main menu for a Duelist match against a Standard
+CPU, first to three hits. The compact Interception Court has a low passage under
+a central platform and an exposed upper route. The core is announced immediately
+and can become active for turn two.
+
+This mode uses one jump, 450 px/s² air acceleration, and airborne momentum that
+continues after recorded input ends. Walking brakes automatically; landing also
+restores ground braking. Record **WAIT** (S by default) to brake in the air.
+The CPU contests the crossing and responds to visible projectile threats. Planning
+lasts eight seconds, execution 0.75 seconds, and movement control 0.5 seconds.
+The knife pair and ground jump retain their authored settings. Interception uses
+fixed test rules; leaving it restores your saved offline tuning.
+
+### Offline game tuning
+
+Choose **GAME TUNING** from the main menu to adjust 75 settings across timing,
+movement, projectiles, knife physics, supers, and character abilities. Drag a
+slider, type a number and press Enter, or use the On/Off switches. Each control
+shows its unit, explanation, and default. Reset a single value, category, or the
+whole profile at any time.
+
+Changes save automatically on this device and apply to ordinary offline matches. Online
+matches and teaching lessons always use standard rules; your saved choices return
+when you play offline again. Jump duration stretches air time while preserving
+jump height. Projectile lifetime controls how long knives survive in moving time;
+path preview duration controls how much future flight the aiming guide reveals.
+
+#### Tuning presets
+
+Open **GAME TUNING > Presets**, choose **Apply preset**, then return to **START
+DUEL**. Applying a preset replaces all 75 tuning values with authored defaults
+plus that preset's changes. Individual edits then show **Custom tuning**. Presets
+save on this device; online, lessons, and the fixed Interception test keep their
+own rules.
+
+| Preset | Design intent | Freeze / action | Knives | Double jump | Knife lifetime |
+|---|---|---|---|---|---|
+| **Tactical duel** (recommended) | Predict committed jumps and intercept landings | 10 / 0.75 s | 2 | Off | 9 s |
+| **Clear read** | Learn trajectories with fewer simultaneous threats | 14 / 0.65 s | 1 | Off | 6 s |
+| **Crossfire** | Read several intersecting threats across successive freezes | 10 / 0.75 s | 3 | On | 6 s |
+| **Quick verdict** | Make practiced reads in shorter planning turns | 6 / 0.60 s | 2 | Off | 6 s |
+
+Knife lifetimes count moving time; freezes do not consume them.
+
+- **Tactical duel:** 600 px/s² air acceleration lets a fighter brake from the
+  260 px/s run speed in about 0.43 s, inside the 0.50 s movement budget. A full
+  reversal needs about 0.87 s. Knives travel at 280 to 680 px/s, with the normal
+  0.45 s opening guide. The goal is readable commitment and meaningful landing
+  threats while keeping the two-knife charge tradeoff.
+- **Clear read:** slower ghost piloting and a 0.60 s guide give more room to
+  understand the attempt. One knife removes the usual low-charge fan coverage,
+  so this is a trajectory-learning preset rather than an easier way to hit.
+  Supers use three waves of two knives, and knives can bounce from a wall once.
+- **Crossfire:** slower, wider three-knife fans encourage area denial and
+  collisions. The six-second lifetime limits accumulation on wrapping arenas;
+  stronger debris gravity changes how deflected knives fall. One wall bounce,
+  three super waves, and lower super gain per clash contain the extra volume.
+- **Quick verdict:** 0.80 s charging, 0.65x ghost speed, and a 0.15 s commit delay
+  leave more of the six-second freeze for deciding where to shoot. Its 0.40 s
+  movement budget and 0.60 s action window keep a committed tail. Faster knives
+  do not imply longer travel per turn because each action window is shorter.
+
+These are starting points for playtesting the documented design goals. Compare
+whether players can explain a hit or miss, exploit an earlier knife, and finish
+their plan before the clock expires. Automated checks verify the preset values
+and rules; they do not establish which preset feels best.
 
 > Diseño de juego: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — visión,
 > pilares, contratos de experiencia y marco para futuras decisiones.
@@ -54,6 +123,7 @@ Godot 4.7. Double-click one of these:
 | File | What it does |
 |---|---|
 | **`Play.bat`** | Canonical local launcher. Runs the latest working tree with the authored Duelist arena sprite, without an export step. |
+| **`Play-1v3-CPU.bat`** | Skips the menus into a four-fighter free-for-all: you (keyboard) against three STANDARD CPUs. Same as `Play.bat -- --vs-3-cpu`. |
 | **`Play-Source.bat`** | Source-launch implementation used by `Play.bat`. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
 | **`Build.bat`** | Exports unpacked Windows + Web folders. It never creates ZIP archives. |
 

@@ -1,8 +1,7 @@
 extends SceneTree
 
 ## The title screen only chooses a destination. Everything about a local match
-## is decided on the roster screen, so this suite pins that the title stays a
-## short list of destinations and never grows a configuration page again.
+## is decided on separate screens, so this suite pins the title's destinations.
 
 const MENU_SCRIPT := preload("res://scripts/MenuLayer.gd")
 const GAME_MANAGER := preload("res://scripts/GameManager.gd")
@@ -26,7 +25,7 @@ func _run() -> void:
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
-		"START DUEL", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "SEND FEEDBACK", "QUIT",
+		"START DUEL", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT",
 	], "the main menu must retain its primary destinations")
 	for slot in menu.ROWS:
 		_check(menu._rows[slot].visible == (slot < menu._page_names().size()),
@@ -57,7 +56,17 @@ func _run() -> void:
 	menu._row_buttons[menu.ROW_PLAY].pressed.emit()
 	_check(opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
 		"Play must request the roster screen instead of opening a setup page")
+	var tuning_opened := [0]
+	menu.tuning_requested.connect(func(): tuning_opened[0] += 1)
+	menu._row_buttons[menu.ROW_TUNING].pressed.emit()
+	_check(tuning_opened[0] == 1 and menu._page == menu.MenuPage.MAIN,
+		"Game Tuning must be an ordinary main-menu destination")
+	_check("offline" in menu._footer.text and "Online" in menu._footer.text,
+		"Game Tuning must state its offline scope before opening")
 	menu.developer_mode = true
+	_check(menu._page_names()[menu.ROW_TUNING] == "GAME TUNING" \
+		and menu._page_names()[menu.ROW_CUSTOM] == "CUSTOM MATCH",
+		"developer tools must retain Game Tuning and Custom Match as separate destinations")
 	menu._activate(menu.ROW_EXPERIMENTS)
 	_check(menu._page_names().size() == 6, "experiments must have five modes and Back")
 	var trial_opened := [0]

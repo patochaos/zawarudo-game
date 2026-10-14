@@ -13,6 +13,12 @@ func snap(name: String) -> void:
 	await Capture.settle(self, 3)
 	error = Capture.save(self, "res://previews/demo-" + name + ".png", "Core demo")
 	if error != OK: quit(error)
+func execute_window() -> void:
+	game._begin_execution()
+	while game.exec_tick < game.exec_ticks_total:
+		game._sim_tick(game.tick_dt())
+		game.exec_tick += 1
+	game._end_execution()
 func run() -> void:
 	game = MAIN.instantiate()
 	root.add_child(game)
@@ -54,11 +60,54 @@ func run() -> void:
 	game._practice.advance()
 	await snap("lesson-move")
 	game._practice.lesson = 1
+	game._practice.show_briefing()
+	await snap("lesson-jump-briefing")
 	game._practice.begin_attempt()
 	await snap("lesson-intercept")
-	game._practice.lesson = 2
-	game._practice.begin_attempt()
+	await Capture.pin_window(self, Vector2i(1024, 576))
+	await snap("lesson-intercept-small")
+	await Capture.pin_window(self)
+	game.players[0].plan.shot_tick = 0
+	game.players[0].plan.power = 0.75
+	game.players[0].plan.set_aim_from_vector(game._practice.landing_aim_point() - game.players[0].shoulder(), game.aim_min_angle, game.aim_max_angle)
+	game._rebuild_ghost_paths()
+	await snap("lesson-jump-aim")
+	game._begin_execution()
+	while game.exec_tick < game._practice.target_landing_tick:
+		game._sim_tick(game.tick_dt())
+		game.exec_tick += 1
+	await snap("lesson-jump-landing")
+	while game.exec_tick < game.exec_ticks_total:
+		game._sim_tick(game.tick_dt())
+		game.exec_tick += 1
+	game._end_execution()
+	await snap("lesson-jump-result")
+	game._practice.advance()
+	await snap("lesson-dodge-briefing")
+	game._practice.advance()
 	await snap("lesson-persistence")
+	await Capture.pin_window(self, Vector2i(1024, 576))
+	await snap("lesson-persistence-small")
+	await Capture.pin_window(self)
+	for tick in 30: game._pilot_step(0, 0, tick == 0, true)
+	execute_window()
+	await snap("lesson-dodge-next-briefing")
+	game._practice.advance()
+	await snap("lesson-landing-threat")
+	await Capture.pin_window(self, Vector2i(1024, 576))
+	await snap("lesson-landing-threat-small")
+	await Capture.pin_window(self)
+	execute_window()
+	await snap("lesson-dodge-retry")
+	game._practice.advance()
+	for tick in 30: game._pilot_step(0, 0, tick == 0, true)
+	execute_window()
+	game._practice.advance()
+	for tick in 30: game._pilot_step(0, -1, false, false)
+	game._rebuild_ghost_paths()
+	await snap("lesson-safe-landing")
+	execute_window()
+	await snap("lesson-dodge-result")
 	game.start_demo_duel()
 	game.state = Phase.GAME_OVER
 	game.winner = 0

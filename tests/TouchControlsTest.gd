@@ -20,6 +20,7 @@ class MockManager:
 	extends Node
 	var state: int = Phase.PLANNING
 	var online_mode: bool = false
+	var interception_mode: bool = false
 	var online_player: int = -1
 	var rematch_level_index: int = 0
 	var rematch_level_name: String = "SACRED DUEL"

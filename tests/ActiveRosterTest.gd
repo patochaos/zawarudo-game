@@ -28,6 +28,8 @@ func _run() -> void:
 		_check(game.player_weapons == [0, 0, 0, 0], "Free play entry rejects benched kits")
 		game._open_menu()
 		game._online_lobby.open(0)
+		# Room assignment precedes match_start in the real online flow.
+		game.online_player = 0
 		game._start_online_match(0, 42, 1, [0, weapon])
 		_check(not game.online_mode and game._online_lobby.visible,
 			"An older online lineup must not begin a mismatched simulation")

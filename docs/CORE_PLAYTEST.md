@@ -9,8 +9,14 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 - Start Duel: Endless Descent, two Duelists, Novice CPU, first to three hits.
   Side edges wrap left/right; open shafts connect bottom/top.
 - Learn to Play: three real-physics timed exercises, retryable without penalty.
-  Lesson 2 deliberately reveals the target route; normal CPU plans stay hidden.
-  Lesson 3 retains the same world and projectile identity across two windows.
+  Lesson 2 reveals a committed jump onto a low ledge, with a preparation pose
+  and a gold landing aim cue. A roughly three-quarter charge can catch the
+  landing through normal projectile physics; retries restore the same jump.
+  Normal CPU plans stay hidden.
+  Lesson 3 sends a low knife from the left and a second knife from the right
+  across the straight-jump landing. Both are visible from the start and retain
+  their identity and momentum across two windows. Jumping then steering left
+  escapes; jumping then coasting straight down is caught by the second knife.
 - Readable embedded font for instructions, timeline and feedback, consistent on
   desktop and Web. Atkinson Hyperlegible is redistributed with its OFL license.
 - Visible Lock Plan, player identity, controls and last-turn review. UI clicks

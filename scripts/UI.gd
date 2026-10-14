@@ -525,6 +525,8 @@ func refresh() -> void:
 		_level_label.text = "FATE TRIAL 01 — %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.close_camera_mode:
 		_level_label.text = "CLOSE CAMERA — %s   ·   %s" % [gm.level_name, gm.level_wrap]
+	elif gm.interception_mode:
+		_level_label.text = "INTERCEPTION · ONE JUMP · AIR MOMENTUM"
 	_hint_p1.add_theme_color_override("font_color", gm.PLAYER_COLORS[0])
 	if gm.online_mode:
 		_level_label.text += "   ·   ROOM %s" % gm.online_room
@@ -558,6 +560,9 @@ func refresh() -> void:
 	elif gm.close_camera_mode:
 		_hint_p1.text = "P1 DUELIST  ·  THROW, THEN RELEASE INPUT TO AUTO-LOCK"
 		_hint_p2.text = "CPU DUELIST  ·  PLANNING PUSHES IN · EXECUTION PULLS OUT"
+	elif gm.interception_mode:
+		_hint_p1.text = "ONE JUMP · COAST IN AIR · STOP ON GROUND · SHIFT LOCK"
+		_hint_p2.text = "INTERCEPTION · STANDARD CPU · CONTEST THE CORE"
 	else:
 		if gm.team_mode:
 			_level_label.text += "   ·   2V2 TEAM BATTLE"
@@ -753,9 +758,9 @@ func refresh() -> void:
 	_report_button.position.x = 370.0 if gm.demo_match and gm.player_difficulty(1) == gm.Difficulty.NOVICE else 520.0
 	_harder_button.visible = desktop_result and gm.demo_match and gm.player_difficulty(1) == gm.Difficulty.NOVICE
 	_arena_previous_button.visible = desktop_result and not gm.demo_match and not gm.fate_trial_mode \
-		and not gm.close_camera_mode
+		and not gm.close_camera_mode and not gm.interception_mode
 	_arena_next_button.visible = desktop_result and not gm.demo_match and not gm.fate_trial_mode \
-		and not gm.close_camera_mode
+		and not gm.close_camera_mode and not gm.interception_mode
 	_replay_button.visible = desktop_result
 	_rematch_button.visible = desktop_result
 	_menu_button.visible = desktop_result
@@ -790,6 +795,9 @@ func refresh() -> void:
 		if gm.demo_match:
 			arena_line = "ENDLESS DESCENT · FIRST TO 3 HITS"
 			controls = "Try a new plan. Same arena, same rules. Can you read the next move?"
+		if gm.interception_mode:
+			arena_line = "INTERCEPTION COURT · FIRST TO 3 HITS"
+			controls = "R WATCH REPLAY · ENTER REMATCH · ESC MENU"
 		_over_score.text = gm._score_text()
 		_over_arena.text = arena_line
 		_over_controls.text = controls

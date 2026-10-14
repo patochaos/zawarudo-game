@@ -8,6 +8,7 @@ extends CanvasLayer
 ## destination to open.
 
 signal duel_requested
+signal interception_requested
 signal feedback_requested
 signal quit_requested
 signal roster_requested
@@ -20,18 +21,21 @@ signal binding_changed(action: String, codes: Array)
 signal bindings_reset
 signal online_requested
 signal tutorial_requested
+signal tuning_requested
 signal option_changed(key: String, value: Variant)
 signal ui_navigated
 signal ui_accepted
 
 const ROW_PLAY := 0
-const ROW_TUTORIAL := 1
-const ROW_ONLINE := 2
-const ROW_CONTROLS := 3
-const ROW_OPTIONS := 4
-const ROW_EXPERIMENTS := 5
-const ROW_QUIT := 6
-const ROW_CUSTOM := 7
+const ROW_INTERCEPTION := 1
+const ROW_TUTORIAL := 2
+const ROW_ONLINE := 3
+const ROW_CONTROLS := 4
+const ROW_OPTIONS := 5
+const ROW_TUNING := 6
+const ROW_EXPERIMENTS := 7
+const ROW_QUIT := 8
+const ROW_CUSTOM := 9
 var developer_mode: bool = "--dev-tools" in OS.get_cmdline_user_args()
 ## Rows on the separate experiments page.
 const ROW_REAL_TIME := 0
@@ -641,6 +645,8 @@ func _activate(row: int) -> void:
 	match row:
 		ROW_PLAY:
 			duel_requested.emit()
+		ROW_INTERCEPTION:
+			interception_requested.emit()
 		ROW_TUTORIAL:
 			tutorial_requested.emit()
 		ROW_ONLINE:
@@ -655,6 +661,8 @@ func _activate(row: int) -> void:
 			_refresh()
 		ROW_CUSTOM:
 			if developer_mode: roster_requested.emit()
+		ROW_TUNING:
+			tuning_requested.emit()
 		ROW_EXPERIMENTS:
 			if not developer_mode:
 				feedback_requested.emit()
@@ -693,10 +701,12 @@ func _page_names() -> Array[String]:
 		return ["REAL TIME", "FATE TRIAL", "CLOSE CAMERA", "SANDBOX", "CLASS LAB", "‹  BACK"]
 	var main_rows: Array[String] = [
 		"START DUEL",
+		"INTERCEPTION",
 		"LEARN TO PLAY",
 		"ONLINE",
 		"CONTROLS",
 		"OPTIONS",
+		"GAME TUNING",
 		"EXPERIMENTS" if developer_mode else "SEND FEEDBACK",
 		"RELOAD DEMO" if OS.has_feature("web") else "QUIT",
 	]
@@ -712,11 +722,13 @@ func _page_description() -> String:
 	match _page:
 		MenuPage.MAIN:
 			return [
-				"Endless Descent. Wrap left/right or through the top/bottom shafts. Novice CPU, first to 3 hits. Eight seconds to plan.",
+				"Endless Descent. Wrap left/right or through the top/bottom shafts. Novice CPU, first to 3 hits. Uses your offline tuning.",
+				"Predict the next landing. One jump, committed air movement and quick ground stops. Contest the central core against a Standard CPU. First to 3 hits. Fixed test rules.",
 				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
 				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",
 				"Keyboard, mouse and gamepad controls. Rebind Player 1 keys here.",
 				"Adjust display, sound, flashes and preview contrast. Match reports are stored locally for feedback.",
+				"Fine-tune freeze time, jumps, projectiles and more for offline play. Changes save automatically. Online uses standard rules.",
 				"Unfinished modes and tuning tools." if developer_mode else "Tell us what you tried, what surprised you, and whether you want another match. Email feedback with an optional match report.",
 				"Reload this browser demo." if OS.has_feature("web") else "Close ZAWARUDO.",
 				"Configure local players, arenas and experimental match formats.",
