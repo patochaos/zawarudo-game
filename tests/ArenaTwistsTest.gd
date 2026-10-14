@@ -1,13 +1,12 @@
 extends SceneTree
 
-## The three twist rules: timed shutters (a pure function of the tick), stasis
-## fields and lodestones (pure functions of position). Each must behave the
-## same for execution and for the predictions a plan is built on.
+## The twist rules: timed shutters (a pure function of the tick) and stasis
+## fields (a pure function of position). Each must behave the same for
+## execution and for the predictions a plan is built on.
 
 const MAIN := preload("res://scenes/Main.tscn")
-const GALLERY := 7
-const HALL := 8
-const REACH := 9
+const GALLERY := 1
+const HALL := 2
 var failures := 0
 
 
@@ -19,7 +18,6 @@ func _run() -> void:
 	_test_shutter_clock()
 	await _test_shutters_in_world()
 	await _test_stasis()
-	await _test_lodestone()
 	print("Arena twists: %d failures" % failures)
 	quit(failures)
 
@@ -97,40 +95,6 @@ func _test_stasis() -> void:
 	root.remove_child(game)
 	game.free()
 	await process_frame
-
-
-func _test_lodestone() -> void:
-	var game = await _boot(REACH)
-	var pylon: Vector2 = game.lodestones[0]["at"]
-	var pull: Vector2 = game.knife_pull_at(pylon + Vector2(100.0, 0.0))
-	check(pull.x < 0.0 and is_zero_approx(pull.y) and is_equal_approx(pull.length(), 1800.0 * (1.0 - 100.0 / 210.0)),
-		"the pull points at the pylon with linear falloff")
-	check(game.knife_pull_at(pylon + Vector2(0.0, -300.0)) == Vector2.ZERO, "nothing beyond the rim")
-
-	var dt: float = game.tick_dt()
-	var start := Vector2(150.0, 200.0)
-	var launch := Vector2(620.0, 0.0)
-	var bent := _closest_approach(game, start, launch, 40, dt, pylon)
-	var stones: Array = game.lodestones
-	game.lodestones = []
-	var straight := _closest_approach(game, start, launch, 40, dt, pylon)
-	game.lodestones = stones
-	check(bent < straight - 10.0, "a knife passing the pylon curls toward it (%0.0f vs %0.0f)" % [bent, straight])
-
-	await _check_prediction_matches_runtime(game, start, launch, "lodestone", 40)
-	root.remove_child(game)
-	game.free()
-	await process_frame
-
-
-func _closest_approach(game, pos: Vector2, vel: Vector2, ticks: int, dt: float, to: Vector2) -> float:
-	var nearest := INF
-	for t in ticks:
-		var st: Array = Arrow.step_state(pos, vel, dt, game)
-		pos = st[2]
-		vel = st[1]
-		nearest = minf(nearest, pos.distance_to(to))
-	return nearest
 
 
 ## The known-path preview and a live knife must agree tick for tick, or a

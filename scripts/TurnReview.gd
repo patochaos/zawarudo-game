@@ -64,9 +64,6 @@ func _draw() -> void:
 	for zone in gm.zones:
 		draw_rect(zone["rect"], Color(0.52, 0.38, 0.92, 0.12))
 		draw_rect(zone["rect"], Color(0.74, 0.62, 1.0, 0.4), false, 1.0)
-	for stone in gm.lodestones:
-		draw_arc(stone["at"], float(stone["radius"]), 0.0, TAU, 40, Color(1.0, 0.76, 0.34, 0.25), 1.0)
-		draw_circle(stone["at"], 6.0, Color(1.0, 0.76, 0.34, 0.9))
 	for pf in frame["platforms"]:
 		var rect: Rect2 = pf["rect"]
 		if not bool(pf.get("present", true)):

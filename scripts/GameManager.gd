@@ -437,9 +437,10 @@ var world_bounds := Rect2(-160.0, -1600.0, 1600.0, 2600.0)
 var world_tick: int = 0
 var _has_movers: bool = false
 ## Static arena fields read by position: stasis zones scale integration time
-## for bodies and knives, lodestones pull knives. Authored in Levels.gd.
+## for bodies and knives. Authored in Levels.gd.
 var zones: Array = []
-var lodestones: Array = []
+## Tests can load a layout outside the rotation (see Levels.build_kinetic_proof).
+var level_override: Dictionary = {}
 ## Projected collision sets, keyed by absolute tick. Dropped whenever the
 ## platform set itself changes (damage, level load, a mover being applied).
 var _solids_cache: Dictionary = {}
@@ -2014,21 +2015,6 @@ func time_scale_at(p: Vector2) -> float:
 	return scale
 
 
-## Acceleration a knife feels at `p` from every lodestone in reach: linear
-## falloff to the rim, nothing beyond it, nothing at the exact centre.
-func knife_pull_at(p: Vector2) -> Vector2:
-	if lodestones.is_empty():
-		return Vector2.ZERO
-	var pull := Vector2.ZERO
-	for stone in lodestones:
-		var d: Vector2 = wrap_delta(p, stone["at"])
-		var radius: float = float(stone["radius"])
-		var dist := d.length()
-		if dist < radius and dist > 1.0:
-			pull += d / dist * float(stone["pull"]) * (1.0 - dist / radius)
-	return pull
-
-
 # ------------------------------------------------------- moving geometry -----
 #
 # Everything below answers one question — "where is the world at tick N?" — and
@@ -2134,6 +2120,8 @@ func _load_level(index: int) -> void:
 		lv = Levels.build_interception()
 	if _practice != null and _practice.active:
 		lv = Levels.build_tutorial()
+	if not level_override.is_empty():
+		lv = level_override.duplicate(true)
 	level_name = lv["name"]
 	_backdrop.show_level(level_index)
 	level_wrap = Levels.wrap_label(lv)
@@ -2143,9 +2131,8 @@ func _load_level(index: int) -> void:
 	wrap_y = lv["wrap_y"]
 	platforms = lv["platforms"]
 	zones = lv.get("zones", [])
-	lodestones = lv.get("lodestones", [])
 	_arena.configure_level(level_index, wrap_x, wrap_y)
-	_arena.setup_fields(zones, lodestones)
+	_arena.setup_fields(zones)
 	var sp: Array = lv["spawns"]
 	for i in MAX_PLAYERS:
 		spawns[i] = sp[i]

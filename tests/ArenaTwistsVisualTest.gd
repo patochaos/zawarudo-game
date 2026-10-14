@@ -1,6 +1,6 @@
 extends SceneTree
-## Captures the three twist arenas during planning so gate clocks, stasis
-## fields and lodestone rings can be judged at match scale. Run windowed:
+## Captures the twist arenas during planning so gate clocks and stasis fields
+## can be judged at match scale. Run windowed:
 ##   godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ArenaTwistsVisualTest.gd --quit-after 600
 const MAIN := preload("res://scenes/Main.tscn")
 const Capture := preload("res://tests/VisualCaptureHelper.gd")
@@ -56,7 +56,7 @@ func run() -> void:
 	game.settings_path = "user://test-arenatwistsvisual-settings.cfg"
 	await Capture.pin_window(self)
 
-	start(7)
+	start(1)
 	for tick in 20:
 		game._pilot_step(0, 1, tick == 0, true)
 	aim(Vector2(1.0, -0.6), 0.7, 10)
@@ -65,7 +65,7 @@ func run() -> void:
 		execute_window()
 	await snap("gallery-later")
 
-	start(8)
+	start(2)
 	var knife := Arrow.new()
 	knife.cfg = game
 	knife.position = Vector2(520.0, 390.0)
@@ -76,9 +76,5 @@ func run() -> void:
 	game.arrows.append(knife)
 	aim(Vector2(1.0, -0.55), 0.85)
 	await snap("hall-planning")
-
-	start(9)
-	aim(Vector2(1.0, -0.3), 0.9)
-	await snap("reach-planning")
 
 	quit(0)

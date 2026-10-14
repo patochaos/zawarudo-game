@@ -9,7 +9,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
-	game.start_quick_match(false, 1, 2)
+	game.start_quick_match(false, 4, 2)
 	game.set_physics_process(false)
 	var report := {}
 	var failures := 0

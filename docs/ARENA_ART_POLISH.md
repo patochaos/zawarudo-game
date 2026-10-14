@@ -1,5 +1,11 @@
 # Arena art polish
 
+**October 14, 2026:** the rotation is now five arenas. Pendulum, Shattered
+Sanctum, Foundry and Collision Course were retired; Clockwork Gallery reuses the
+Foundry scenery and Stilled Hall the Sanctum scenery. The Pendulum solid, moving
+and breakable platform faces remain the shared platform material. The notes
+below describe the original seven-arena pass.
+
 The six remaining arenas now use original Blender scenery and platform faces,
 following the Pendulum prototype. The current seven arena layouts are preserved,
 including the recent Endless Descent and Pulse Chamber layout changes.

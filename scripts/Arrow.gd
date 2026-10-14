@@ -252,8 +252,8 @@ func lockstep_digest_fragment() -> String:
 ## more, so it should behave like debris and leave the board, rather than drift
 ## for the fifteen seconds its age cap allows.
 static func step_state(pos: Vector2, vel: Vector2, dt: float, cfg, clashed: bool = false) -> Array:
-	# Arena fields are read by position, so every caller (execution, the known
-	# path preview, the reticle arc, the AI) bends and slows identically.
+	# Stasis fields are read by position, so every caller (execution, the known
+	# path preview, the reticle arc, the AI) slows identically.
 	dt *= cfg.time_scale_at(pos)
 	var drag: float = cfg.arrow_drag
 	if drag > 0.0:
@@ -262,7 +262,6 @@ static func step_state(pos: Vector2, vel: Vector2, dt: float, cfg, clashed: bool
 	if clashed:
 		gravity *= cfg.arrow_clashed_gravity_scale
 	vel.y += gravity * dt
-	vel += cfg.knife_pull_at(pos) * dt
 	var raw: Vector2 = pos + vel * dt
 	return [cfg.wrap_point(raw), vel, raw]
 

@@ -127,20 +127,10 @@ Godot 4.7. Double-click one of these:
 | **`Play-Source.bat`** | Source-launch implementation used by `Play.bat`. Set `GODOT_DIR` at the top if Godot isn't in `D:\Godot`. |
 | **`Build.bat`** | Exports unpacked Windows + Web folders. It never creates ZIP archives. |
 
-### Featured 1v1 arenas
+### Arenas in a duel
 
-Launch `Play.bat -- --dev-tools`, choose **Custom Match**, keep two fighters, then select an arena in
-match setup. These two are marked **FEATURED 1v1**:
-
-- **Endless Descent (2 of 7):** top/bottom wrapping through the central shaft,
-  with left/right passages upstairs. Lower side walls close the ground shortcut.
-  Permanent stairs keep the upper route available after cover breaks.
-- **Pulse Chamber (4 of 7):** equal approaches to two knife-triggered pulse orbs.
-  Taking the inner platforms puts fighters near the blast zones; the ground
-  offers a safer approach. Shoot an orb to push fighters and redirect knives.
-  Its visible ring shows the range, and a dark orb is recharging.
-
-These use screen-edge wrapping within the fixed arena, rather than camera scrolling.
+Choose **Custom Match**, keep two fighters, then select an arena. A duel plays
+the same five arenas as a crowd, with the crowd shelves cut (see Levels).
 | **`Build-Web.bat`** | Generates and validates the browser build in `build/web`. |
 | **`Deploy-Web.bat`** | Generates the browser build and publishes it to Vercel production. |
 
@@ -410,11 +400,11 @@ opponent already reached.
 
 | # | Opponent | Skill | Arena | Style |
 |---|---|---|---|---|
-| 1 | **THE APPRENTICE** | Novice | Endless Descent | Neutral. Wide aim, one route searched. |
+| 1 | **THE APPRENTICE** | Novice | Crosshair Court | Neutral. Wide aim, one route searched. |
 | 2 | **THE HOUND** | Novice, tighter aim | Clockwork Gallery | Ends its route close to you, throws early, quick low draws, accepts more risk. |
 | 3 | **THE WARDEN** | Standard | Stilled Hall | Doubles its caution, keeps a mid distance and holds the knife unless a throw squarely covers a hypothesis. |
-| 4 | **THE SPIRE** | Standard, three routes | Lodestone Reach | Climbs above you, keeps long range and prefers full draws late in the window. |
-| 5 | **THE PHANTOM** | Ruthless | Collision Course | Throws away from you so the knife arrives through the wrap seam, and favours airborne routes. |
+| 4 | **THE SPIRE** | Standard, three routes | Pulse Chamber | Climbs above you, keeps long range and prefers full draws late in the window. |
+| 5 | **THE PHANTOM** | Ruthless | Endless Descent | Throws away from you so the knife arrives through the wrap seam, and favours airborne routes. |
 
 Named opponents only exist in Start Duel. Custom matches, Interception and the
 four-fighter launcher keep the plain presets above.
@@ -737,27 +727,31 @@ it is a deliberate human verb, and the search has no way to value it yet.
 
 ## Levels
 
-Ten arenas, selected in match setup. Layouts live in `scripts/Levels.gd`, and the HUD
-names the wrap mode next to the level. The last three each introduce one rule the
-first seven do not have; the opponent ladder visits them in order.
+Five arenas, one rule each, selected in match setup or visited in order by the
+opponent ladder. Layouts live in `scripts/Levels.gd`, and the HUD names the wrap
+mode next to the level. Following TowerFall's towers, every arena is authored
+for four fighters and the duel is that board cut down: pieces tagged
+`min_players` leave when fewer play, spawn sockets stay on permanent geometry
+in every count, and the first arena is the deliberately readable one.
 
 | # | Name | Wrap | Character |
 |---|---|---|---|
 | 1 | **Crosshair Court** | walled | Static permanent cover: the clean baseline for reading knife collisions and delayed danger. |
-| 2 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
-| 3 | **Pendulum** | ↕ | One central lift competes with the faster top/bottom portal route through a vertical-only shaft. |
+| 2 | **Clockwork Gallery** | ↔ | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. |
+| 3 | **Stilled Hall** | walled | Two stasis fields flank the centre pillar. Bodies and knives inside run at 35 percent speed, so a knife thrown in stays a threat for turns. |
 | 4 | **Pulse Chamber** | ↔ | Staggered islands and paired triggerable orbs turn the side seam into a slingshot loop. |
-| 5 | **Shattered Sanctum** | ↔ ↕ | Two vertical wrap chutes flank a destructible bridge whose collapse changes circulation. |
-| 6 | **Foundry** | ↔ | A full-height roaming guillotine creates routes above, below and around the side seam. |
-| 7 | **Collision Course** | ↔ ↕ | Sparse fixed islands, crossing ferries and a low pulse launcher feed a four-way void. |
-| 8 | **Clockwork Gallery** | ↔ | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. |
-| 9 | **Stilled Hall** | walled | Two stasis fields flank the centre pillar. Bodies and knives inside run at 35 percent speed, so a knife thrown in stays a threat for turns. |
-| 10 | **Lodestone Reach** | walled | Two pylons bend every knife toward themselves. Curve a throw around the breakable post beside each one. |
+| 5 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
 
-The layouts borrow TowerFall's readable edge architecture. Each is authored in
-nested 2P, 3P and 4P variants: the trio adds one tactical shelf and the full
-crowd adds another, preserving the arena's thesis while increasing safe landing
-choices as simultaneous threats increase. Opening spawns use permanent,
+Moving platforms and breakable cover remain supported rules (the kinetic
+contract tests run on a lift fixture outside the rotation), but no arena is
+built around them any more. Pendulum, Shattered Sanctum, Foundry, Collision
+Course and Lodestone Reach were retired in October 2026; their layouts live in
+git history.
+
+The layouts borrow TowerFall's readable edge architecture. Each is authored as
+the four-fighter board; the trio and the duel are that board with its crowd
+shelves cut, preserving the arena's thesis while matching the landing choices
+to the number of simultaneous threats. Opening spawns use permanent,
 stationary supports at meaningfully different elevations, but they are not
 forced into one four-corner template. Obstacles shape player routes while broad
 air chambers let persistent knives accumulate. Tests verify separated spawns,
@@ -846,13 +840,6 @@ less ground, a jump hangs, and a knife crawls. The rule is read by position
 inside the two shared step functions, so every prediction bends exactly where
 execution does. A knife thrown into a field is a trap that lands several turns
 later.
-
-### Lodestones
-
-A level may list `lodestones`, each a point, a radius and a pull. Knives inside
-the radius accelerate toward the pylon with linear falloff to the rim; bodies
-are unaffected. A throw aimed past a pylon curls in behind the cover beside it.
-The reticle arc and the known-path preview use the same pull.
 
 ### Destructible cover
 
@@ -1040,7 +1027,7 @@ the thing this prototype exists to test.
 | `scripts/Mover.gd` | Tick-indexed motion for moving geometry and orbs. A pure triangle wave: position is a function of the absolute tick, never an accumulated velocity. |
 | `scripts/Hazard.gd` | The pulse orb — drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
 | `scripts/Arena.gd` | Platform rendering: gold caps for permanent, warm and cracked for breakable, violet caps and travel chevrons for moving. |
-| `scripts/Backdrop.gd` | Low-contrast procedural scenery families assigned across all seven arenas: ruins, descent shafts, clockwork observatory, pulse cyan and foundry heat stacks. |
+| `scripts/Backdrop.gd` | Low-contrast procedural scenery families assigned across the five arenas: ruins, foundry heat stacks, sanctum stone, pulse cyan and descent shafts. |
 | `scripts/Effects.gd` | Impact sparks, platform shatters, hit bursts. Cosmetic only; runs on real time so it never consumes execution ticks. |
 | `scripts/Sfx.gd` | Procedurally synthesised 8-bit sound effects and the voice pool, on separate volume channels. |
 | `scripts/TimeStopLayer.gd` | Violet/gold frozen-world grade, clock motif, suspended motes, and freeze/release pulses. |

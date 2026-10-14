@@ -16,26 +16,20 @@ const STAGE_TOP := Levels.STAGE_TOP
 const OBSERVATORY_SOLID := preload("res://assets/art/arenas/pendulum/solid.png")
 const OBSERVATORY_MOVING := preload("res://assets/art/arenas/pendulum/moving.png")
 const OBSERVATORY_BREAKABLE := preload("res://assets/art/arenas/pendulum/breakable.png")
+## Indexed by arena: Crosshair Court, Clockwork Gallery (foundry iron), Stilled
+## Hall (sanctum limestone), Pulse Chamber, Endless Descent.
 const SOLID_TEXTURES := [
 	preload("res://assets/art/arenas/crosshair-court/solid.png"),
-	preload("res://assets/art/arenas/endless-descent/solid.png"),
-	OBSERVATORY_SOLID,
+	preload("res://assets/art/arenas/foundry/solid.png"),
+	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
 	preload("res://assets/art/arenas/pulse-chamber/solid.png"),
-	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
-	preload("res://assets/art/arenas/foundry/solid.png"),
-	preload("res://assets/art/arenas/collision-course/solid.png"),
-	# The twist arenas dress in existing material until they earn their own.
-	preload("res://assets/art/arenas/foundry/solid.png"),
-	preload("res://assets/art/arenas/shattered-sanctum/solid.png"),
-	preload("res://assets/art/arenas/crosshair-court/solid.png"),
+	preload("res://assets/art/arenas/endless-descent/solid.png"),
 ]
 
 const HARD_INK := Color(0.72, 0.92, 1.0)
 const HARD_ACCENTS := [
-	Color(0.95, 0.78, 0.28), Color(0.38, 0.80, 1.0), Color(0.72, 0.60, 1.0),
-	Color(0.30, 1.0, 0.92), Color(0.95, 0.58, 0.30), Color(1.0, 0.35, 0.22),
-	Color(0.92, 0.45, 1.0),
-	Color(0.40, 0.95, 0.75), Color(0.70, 0.52, 1.0), Color(1.0, 0.70, 0.30),
+	Color(0.95, 0.78, 0.28), Color(0.40, 0.95, 0.75), Color(0.70, 0.52, 1.0),
+	Color(0.30, 1.0, 0.92), Color(0.38, 0.80, 1.0),
 ]
 
 ## Shutters: a cool green gate that reads as "timed" next to permanent steel,
@@ -45,7 +39,6 @@ const GATE_TOP := Color(0.42, 0.96, 0.74)
 const GATE_OPEN := Color(0.42, 0.96, 0.74, 0.28)
 const STASIS_FILL := Color(0.52, 0.38, 0.92, 0.13)
 const STASIS_EDGE := Color(0.74, 0.62, 1.0, 0.55)
-const LODESTONE := Color(1.0, 0.76, 0.34)
 
 const MOVER_TOP := Color(0.66, 0.55, 0.95)
 const MOVER_MARK := Color(0.80, 0.72, 1.0, 0.75)
@@ -55,7 +48,6 @@ const BREAK_TOP_BROKEN := Color(1.0, 0.20, 0.12)
 
 var platforms: Array = []
 var zones: Array = []
-var lodestones: Array = []
 var level_theme: int = 0
 var wrap_x: bool = false
 var wrap_y: bool = false
@@ -73,17 +65,14 @@ func setup(p: Array) -> void:
 	queue_redraw()
 
 
-func setup_fields(z: Array, stones: Array) -> void:
+func setup_fields(z: Array) -> void:
 	zones = z
-	lodestones = stones
 	queue_redraw()
 
 
 func _draw() -> void:
 	for zone in zones:
 		_draw_stasis(zone["rect"], float(zone["time_scale"]))
-	for stone in lodestones:
-		_draw_lodestone(stone["at"], float(stone["radius"]))
 	for pf in platforms:
 		var r: Rect2 = pf["rect"]
 		if r.position.x < -1.0 or r.position.x >= 1280.0:
@@ -140,21 +129,6 @@ func _draw_stasis(r: Rect2, time_scale: float) -> void:
 	draw_rect(r, STASIS_EDGE, false, 1.5)
 	draw_string(ThemeDB.fallback_font, r.position + Vector2(6.0, 14.0),
 		"TIME ×%s" % String.num(time_scale, 2), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, STASIS_EDGE)
-
-
-## A lodestone: the pylon core, its reach ring and inward ticks that say
-## "knives bend toward here".
-func _draw_lodestone(at: Vector2, radius: float) -> void:
-	draw_arc(at, radius, 0.0, TAU, 48, Color(LODESTONE, 0.22), 1.0)
-	for i in 12:
-		var d := Vector2.from_angle(TAU * float(i) / 12.0)
-		draw_line(at + d * radius, at + d * (radius - 9.0), Color(LODESTONE, 0.5), 1.5)
-	draw_arc(at, radius * 0.5, 0.0, TAU, 32, Color(LODESTONE, 0.14), 1.0)
-	draw_circle(at, 9.0, Color(0.08, 0.06, 0.03))
-	draw_colored_polygon(PackedVector2Array([
-		at + Vector2(0.0, -8.0), at + Vector2(7.0, 0.0), at + Vector2(0.0, 8.0), at + Vector2(-7.0, 0.0),
-	]), LODESTONE)
-	draw_arc(at, 12.0, 0.0, TAU, 20, Color(LODESTONE, 0.8), 1.5)
 
 
 func _draw_solid(r: Rect2, motion: Dictionary = {}) -> void:
@@ -234,7 +208,7 @@ func _draw_material_platform(r: Rect2, texture: Texture2D, lip: Color,
 		for y in range(int(r.position.y) + 22, int(r.end.y) - 2, 22):
 			draw_line(Vector2(r.position.x + 6, y), Vector2(r.end.x - 6, y),
 				Color("293047"), 2.0)
-	elif r.size.y > 20.0 and level_theme == 1:
+	elif r.size.y > 20.0 and level_theme == 4:
 		# Descent bulkheads use riveted steel cassettes, not masonry courses.
 		for x in range(int(r.position.x) + 6, int(r.end.x) - 4, 46):
 			var panel_width := minf(40.0, r.end.x - float(x) - 4.0)

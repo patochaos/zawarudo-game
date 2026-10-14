@@ -141,8 +141,8 @@ func _test_tutorial_launch() -> void:
 		"an incomplete room code must fail locally with an actionable message")
 	game.online_player = 0
 	game.online_room = "TEST24"
-	game._start_online_match(6, 1234, 1, [game.Weapon.KNIVES, game.Weapon.KNIVES])
-	_check(game.online_mode and game.level_index == 6 \
+	game._start_online_match(4, 1234, 1, [game.Weapon.KNIVES, game.Weapon.KNIVES])
+	_check(game.online_mode and game.level_index == 4 \
 		and game.player_weapons[0] == game.Weapon.KNIVES \
 		and game.player_weapons[1] == game.Weapon.KNIVES,
 		"a server match start must install both selected fighters on the selected arena")

@@ -9,20 +9,20 @@ func _init() -> void:
 
 
 func _run() -> void:
-	for index in [1, 3]:
+	for index in [4, 3]:
 		var gm = GAME_MANAGER.new()
 		root.add_child(gm)
 		await process_frame
 		gm._sfx.muted = true
 		gm.start_quick_match(false, index, 2)
 		gm.set_physics_process(false)
-		if index == 1:
+		if index == 4:
 			_check(_jump_reaches(gm, Vector2(275, 446), Vector2(195, 276)), "Descent intact left climb is clear")
 			_check(_jump_reaches(gm, Vector2(1005, 446), Vector2(1085, 276)), "Descent intact right climb is clear")
 		# Every required climb must survive destruction of all fragile cover.
 		gm.platforms = gm.platforms.filter(func(pf): return int(pf["hp"]) < 0)
 		gm._rebuild_solids()
-		if index == 1:
+		if index == 4:
 			for side in [-1, 1]:
 				var x := 100.0 if side == -1 else 1180.0
 				var state: Array = [Vector2(x, 596), Vector2.ZERO, true]

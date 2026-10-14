@@ -109,7 +109,7 @@ func run() -> void:
 		"leaving Interception must restore the saved offline profile")
 	game.offline_tuning.reset_all()
 	game.start_demo_duel()
-	check(not game.interception_mode and game.level_name == "ENDLESS DESCENT"
+	check(not game.interception_mode and game.level_name == "CROSSHAIR COURT"
 		and game.air_jumps_for(0) == 1 and game.player_air_acceleration == 900.0,
 		"Start Duel must still use its ordinary arena and movement")
 	for tick in game.movement_tick_budget():

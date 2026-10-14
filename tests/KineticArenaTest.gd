@@ -6,7 +6,8 @@ extends SceneTree
 ## the player's real intent rather than a snapshot that execution then betrays.
 
 const GAME_MANAGER := preload("res://scripts/GameManager.gd")
-const PENDULUM := 2
+## The lift fixture lives outside the rotation (Levels.build_kinetic_proof).
+const PENDULUM := -1
 const PULSE_CHAMBER := 3
 
 var _failures: int = 0
@@ -248,7 +249,11 @@ func _fresh_game(level: int):
 	# Muting before restart avoids leaving backend-specific playback handles alive
 	# when the short-lived manager is freed (Linux reports those as resource leaks).
 	gm._sfx.muted = true
-	gm._load_level(level)
+	if level < 0:
+		gm.level_override = Levels.build_kinetic_proof(2)
+		gm._load_level(0)
+	else:
+		gm._load_level(level)
 	gm.restart()
 	return gm
 

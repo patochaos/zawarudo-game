@@ -36,6 +36,11 @@ class_name Levels
 ##   interesting — over a gap, beside a seam, under the crown — not where a push
 ##   simply ends the round.
 ##
+## Player counts: every arena is authored for four fighters. Pieces tagged
+## `min_players` leave when fewer play, so a duel is the four-player board cut
+## down, never a separate map. Spawn and respawn sockets stay on permanent
+## geometry in every count.
+##
 ## Design constraints for a new level:
 ##   * playable band is roughly y 262..620 on non-wrapping levels
 ##   * a jump clears 211px, so a step is reachable from a surface 211px below
@@ -52,14 +57,11 @@ const GROUND := {"rect": Rect2(0, 620, 1280, 100), "hp": -1}
 const WALL_L := {"rect": Rect2(-60, -1400, 60, 2100), "hp": -1}
 const WALL_R := {"rect": Rect2(1280, -1400, 60, 2100), "hp": -1}
 
-
 static func count() -> int:
-	return 10
-
+	return 5
 
 static func build(index: int, player_count: int = 4) -> Dictionary:
 	return _finish(_layout(index), clampi(player_count, 2, 4))
-
 
 ## A compact crossing for the Interception experiment, outside the arena rotation.
 ## The central shelf gives the core a low approach with limited jumping room;
@@ -90,7 +92,6 @@ static func build_interception() -> Dictionary:
 			{"rect": Rect2(500, 500, 280, 20), "hp": -1},
 		],
 	}, 2)
-
 
 ## The compact arena authored for Close Camera. It is deliberately outside the
 ## normal seven-arena rotation: only the dedicated mode can load it.
@@ -129,7 +130,6 @@ static func build_close_camera() -> Dictionary:
 		],
 	}, 2)
 
-
 ## A quiet room for learning the three basic verbs. The open horizontal seam
 ## lets the player test wrapping in either direction without enemies, hazards,
 ## moving pieces, or breakable geometry competing for attention.
@@ -154,7 +154,6 @@ static func build_tutorial() -> Dictionary:
 			{"rect": Rect2(950, 500, 250, 16), "hp": -1},
 		],
 	}, 2)
-
 
 ## The first single-player prototype is deliberately authored as a situation,
 ## not a fair versus arena. A hostile echo stands to the right while one of its
@@ -187,20 +186,21 @@ static func build_fate_trial_crossfire() -> Dictionary:
 		],
 	}, 2)
 
-
+## The rotation. One rule per arena, in the order the opponent ladder visits
+## them: the readable baseline first, the wrap finale last.
 static func _layout(index: int) -> Dictionary:
 	match posmod(index, count()):
 		0: return _crosshair_court()
-		1: return _endless_descent()
-		2: return _pendulum()
+		1: return _clockwork_gallery()
+		2: return _stilled_hall()
 		3: return _pulse_chamber()
-		4: return _shattered_sanctum()
-		5: return _foundry()
-		6: return _collision_course()
-		7: return _clockwork_gallery()
-		8: return _stilled_hall()
-		_: return _lodestone_reach()
+		_: return _endless_descent()
 
+
+## A moving-platform fixture outside the rotation, kept for the kinetic
+## contract tests (ghost/execution parity on a lift, riders, pulse orbs).
+static func build_kinetic_proof(player_count: int = 2) -> Dictionary:
+	return _finish(_pendulum(), clampi(player_count, 2, 4))
 
 static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 	var plats: Array = []
@@ -232,18 +232,16 @@ static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 		hazard.erase("min_players")
 		active_hazards.append(hazard)
 	lv["hazards"] = active_hazards
-	for key in ["zones", "lodestones"]:
-		var active: Array = []
-		for authored: Dictionary in lv.get(key, []):
-			if int(authored.get("min_players", 2)) > player_count:
-				continue
-			var field: Dictionary = authored.duplicate(true)
-			field.erase("min_players")
-			active.append(field)
-		lv[key] = active
+	var active_zones: Array = []
+	for authored: Dictionary in lv.get("zones", []):
+		if int(authored.get("min_players", 2)) > player_count:
+			continue
+		var field: Dictionary = authored.duplicate(true)
+		field.erase("min_players")
+		active_zones.append(field)
+	lv["zones"] = active_zones
 	lv["player_count"] = player_count
 	return lv
-
 
 static func wrap_label(lv: Dictionary) -> String:
 	if lv.get("upper_side_passages", false):
@@ -256,152 +254,8 @@ static func wrap_label(lv: Dictionary) -> String:
 		return "WRAP ↕"
 	return "WALLED"
 
+# ----------------------------------------------------------- the rotation --
 
-# ------------------------------------------------------------ walled arenas --
-
-# ------------------------------------------------------------ twist arenas --
-#
-# Each of these introduces one rule the seven-arena set does not have. The rule
-# is read by position or by the absolute tick, so the ghost, the knife preview,
-# the AI and the lockstep digest all see it the same way.
-#
-# SHUTTERS   `cycle` on a platform: {period, solid, phase} in ticks. The piece
-#            exists only for the first `solid` ticks of each period. A body on
-#            it when it opens falls. Never a spawn or respawn support.
-# STASIS     `zones`: [{rect, time_scale}]. Bodies and knives inside integrate
-#            at `time_scale`; a knife thrown in hangs there for turns.
-# LODESTONE  `lodestones`: [{at, radius, pull}]. Knives inside the radius
-#            accelerate toward the pylon with linear falloff. Bodies ignore it.
-
-## Thesis: nothing here is safe for long. Three bridge gates and two low gates
-## open and close on staggered clocks, so every plan has to include where the
-## floor will be when time stops again. Side rooms stay permanent.
-static func _clockwork_gallery() -> Dictionary:
-	return {
-		"name": "CLOCKWORK GALLERY",
-		"feature": "SHUTTERS // every gate opens on a clock. Stand on one when it does and you fall.",
-		"wrap_x": true,
-		"spawns": [
-			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
-		],
-		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
-			Vector2(160.0, 476.0), Vector2(1120.0, 476.0),
-			Vector2(640.0, 196.0),
-		],
-		"core_spawns": [Vector2(640.0, 380.0), Vector2(200.0, 462.0), Vector2(1080.0, 462.0)],
-		"platforms": [
-			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
-			{"rect": Rect2(60, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(1020, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(560, 220, 160, 16), "hp": -1},
-			# The bridge: three gates on one clock, a third of a period apart.
-			{"rect": Rect2(300, 420, 180, 16), "hp": -1,
-				"cycle": {"period": 210, "solid": 105, "phase": 0}},
-			{"rect": Rect2(550, 420, 180, 16), "hp": -1,
-				"cycle": {"period": 210, "solid": 105, "phase": 70}},
-			{"rect": Rect2(800, 420, 180, 16), "hp": -1,
-				"cycle": {"period": 210, "solid": 105, "phase": 140}},
-			# Low gates under the bridge ends: a landing that will not keep you.
-			{"rect": Rect2(380, 540, 140, 16), "hp": -1,
-				"cycle": {"period": 210, "solid": 105, "phase": 105}},
-			{"rect": Rect2(760, 540, 140, 16), "hp": -1,
-				"cycle": {"period": 210, "solid": 105, "phase": 35}},
-			{"rect": Rect2(120, 410, 120, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(1040, 410, 120, 14), "hp": 2, "min_players": 4},
-		],
-		"hazards": [],
-	}
-
-
-## Thesis: a knife is a trap if it takes long enough to arrive. Two stasis
-## columns flank the centre pillar; every arc across the hall passes through
-## one, and anything thrown into a field lingers there for several turns.
-static func _stilled_hall() -> Dictionary:
-	return {
-		"name": "STILLED HALL",
-		"feature": "STASIS // time crawls inside the fields. A knife thrown in stays a threat for turns.",
-		"spawns": [
-			Vector2(180.0, 596.0), Vector2(1100.0, 596.0),
-			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
-		],
-		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(480.0, 596.0), Vector2(800.0, 596.0),
-			Vector2(1180.0, 596.0),
-			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
-			Vector2(220.0, 476.0), Vector2(1060.0, 476.0),
-			Vector2(640.0, 216.0),
-		],
-		"core_spawns": [Vector2(640.0, 330.0), Vector2(250.0, 440.0), Vector2(1030.0, 440.0)],
-		"platforms": [
-			{"rect": Rect2(0, 330, 220, 16), "hp": -1},
-			{"rect": Rect2(1060, 330, 220, 16), "hp": -1},
-			{"rect": Rect2(120, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(960, 500, 200, 16), "hp": -1},
-			# The pillar closes the flat lane, so throws arc through the fields.
-			{"rect": Rect2(624, 380, 32, 240), "hp": -1},
-			{"rect": Rect2(520, 240, 240, 16), "hp": -1},
-			{"rect": Rect2(330, 420, 150, 16), "hp": 2},
-			{"rect": Rect2(800, 420, 150, 16), "hp": 2},
-			{"rect": Rect2(300, 560, 120, 14), "hp": -1, "min_players": 3},
-			{"rect": Rect2(860, 560, 120, 14), "hp": -1, "min_players": 4},
-		],
-		"zones": [
-			{"rect": Rect2(440, 250, 170, 330), "time_scale": 0.35},
-			{"rect": Rect2(670, 250, 170, 330), "time_scale": 0.35},
-		],
-		"hazards": [],
-	}
-
-
-## Thesis: cover is only cover from a straight line. Two pylons bend every
-## knife toward themselves, so a throw aimed past one curls in behind the post
-## beside it. The centre block kills the flat lane; the arcs do the work.
-static func _lodestone_reach() -> Dictionary:
-	return {
-		"name": "LODESTONE REACH",
-		"feature": "LODESTONES // the pylons bend every knife toward them. Curve a throw around cover.",
-		"spawns": [
-			Vector2(170.0, 596.0), Vector2(1110.0, 596.0),
-			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
-		],
-		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(880.0, 596.0),
-			Vector2(1180.0, 596.0),
-			Vector2(100.0, 276.0), Vector2(1180.0, 276.0),
-			Vector2(180.0, 456.0), Vector2(1100.0, 456.0),
-			Vector2(640.0, 226.0),
-		],
-		"core_spawns": [Vector2(640.0, 430.0), Vector2(300.0, 420.0), Vector2(980.0, 420.0)],
-		"platforms": [
-			{"rect": Rect2(0, 300, 200, 16), "hp": -1},
-			{"rect": Rect2(1080, 300, 200, 16), "hp": -1},
-			{"rect": Rect2(90, 480, 180, 16), "hp": -1},
-			{"rect": Rect2(1010, 480, 180, 16), "hp": -1},
-			{"rect": Rect2(580, 470, 120, 150), "hp": -1},
-			{"rect": Rect2(540, 250, 200, 16), "hp": -1},
-			# Breakable posts beside each pylon: the thing a bent knife gets around.
-			{"rect": Rect2(380, 380, 20, 100), "hp": 2},
-			{"rect": Rect2(880, 380, 20, 100), "hp": 2},
-			{"rect": Rect2(260, 560, 110, 14), "hp": -1, "min_players": 3},
-			{"rect": Rect2(910, 560, 110, 14), "hp": -1, "min_players": 4},
-		],
-		"lodestones": [
-			{"at": Vector2(400.0, 330.0), "radius": 210.0, "pull": 1800.0},
-			{"at": Vector2(880.0, 330.0), "radius": 210.0, "pull": 1800.0},
-		],
-		"hazards": [],
-	}
-
-
-# ------------------------------------------------------------ walled arenas --
-
-## Thesis: learn the collision game before the arena starts moving.
-##
 ## Every surface is permanent and every important firing lane has a simple,
 ## visible answer: shoot flat through the middle, arc over the centre mast, or
 ## use a side stair to change height. Extra fighters add small staging ledges,
@@ -443,50 +297,144 @@ static func _crosshair_court() -> Dictionary:
 		"hazards": [],
 	}
 
-## Two vertical wrap chutes flank a bridge that can be dismantled piece by
-## piece. Early turns happen across the bridge; later turns spill through the
-## holes it leaves and return from the opposite screen edge.
-static func _shattered_sanctum() -> Dictionary:
+## Thesis: nothing here is safe for long. Three bridge gates and two low gates
+## open and close on staggered clocks, so every plan has to include where the
+## floor will be when time stops again. Side rooms stay permanent.
+## Authored for four: the breakable side shelves are crowd landings; a duel
+## cuts them so the gates are the only middle ground.
+static func _clockwork_gallery() -> Dictionary:
 	return {
-		"name": "SHATTERED SANCTUM",
-		"feature": "COVER PRACTICE // break the bridge, then threaten the crossing through the new gap.",
+		"name": "CLOCKWORK GALLERY",
+		"feature": "SHUTTERS // every gate opens on a clock. Stand on one when it does and you fall.",
 		"wrap_x": true,
-		"wrap_y": true,
-		"skip_ground": true,
 		"spawns": [
-			Vector2(140.0, 596.0), Vector2(1140.0, 596.0),
-			Vector2(390.0, 296.0), Vector2(890.0, 296.0),
+			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
 		],
 		"respawn_points": [
-			Vector2(120.0, 596.0), Vector2(640.0, 596.0), Vector2(1160.0, 596.0),
-			Vector2(390.0, 296.0), Vector2(890.0, 296.0),
-			Vector2(120.0, 430.0), Vector2(1160.0, 390.0), Vector2(640.0, 476.0),
+			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(880.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			Vector2(160.0, 476.0), Vector2(1120.0, 476.0),
+			Vector2(640.0, 196.0),
 		],
-		"core_spawns": [Vector2(390.0, 250.0), Vector2(640.0, 450.0), Vector2(1100.0, 350.0)],
+		"core_spawns": [Vector2(640.0, 380.0), Vector2(200.0, 462.0), Vector2(1080.0, 462.0)],
 		"platforms": [
-			# Two paired top/floor apertures make separate vertical circuits.
-			{"rect": Rect2(0, STAGE_TOP, 250, 16), "hp": -1},
-			{"rect": Rect2(530, STAGE_TOP, 220, 16), "hp": -1},
-			{"rect": Rect2(1030, STAGE_TOP, 250, 16), "hp": -1},
-			{"rect": Rect2(0, 620, 300, 70), "hp": -1},
-			{"rect": Rect2(500, 620, 280, 70), "hp": -1},
-			{"rect": Rect2(980, 620, 300, 70), "hp": -1},
-			# Permanent islands remain after every destructible piece is gone.
-			{"rect": Rect2(280, 320, 220, 16), "hp": -1},
-			{"rect": Rect2(780, 320, 220, 16), "hp": -1},
-			{"rect": Rect2(0, 454, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 414, 240, 16), "hp": -1},
-			{"rect": Rect2(560, 500, 160, 16), "hp": -1},
-			# The bridge is the arena's temporary starting state, not its final one.
-			{"rect": Rect2(380, 400, 160, 16), "hp": 2},
-			{"rect": Rect2(560, 400, 160, 16), "hp": 3},
-			{"rect": Rect2(740, 400, 160, 16), "hp": 2},
-			{"rect": Rect2(250, 510, 110, 16), "hp": 2},
-			{"rect": Rect2(920, 470, 110, 16), "hp": 2},
-			{"rect": Rect2(380, 535, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(790, 535, 110, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
+			{"rect": Rect2(60, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(1020, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(560, 220, 160, 16), "hp": -1},
+			# The bridge: three gates on one clock, a third of a period apart.
+			{"rect": Rect2(300, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 0}},
+			{"rect": Rect2(550, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 70}},
+			{"rect": Rect2(800, 420, 180, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 140}},
+			# Low gates under the bridge ends: a landing that will not keep you.
+			{"rect": Rect2(380, 540, 140, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 105}},
+			{"rect": Rect2(760, 540, 140, 16), "hp": -1,
+				"cycle": {"period": 210, "solid": 105, "phase": 35}},
+			{"rect": Rect2(120, 410, 120, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(1040, 410, 120, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [],
+	}
+
+## Thesis: a knife is a trap if it takes long enough to arrive. Two stasis
+## columns flank the centre pillar; every arc across the hall passes through
+## one, and anything thrown into a field lingers there for several turns.
+## Authored for four: the low outer shelves seat the crowd; a duel cuts them.
+static func _stilled_hall() -> Dictionary:
+	return {
+		"name": "STILLED HALL",
+		"feature": "STASIS // time crawls inside the fields. A knife thrown in stays a threat for turns.",
+		"spawns": [
+			Vector2(180.0, 596.0), Vector2(1100.0, 596.0),
+			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+		],
+		"respawn_points": [
+			Vector2(100.0, 596.0), Vector2(480.0, 596.0), Vector2(800.0, 596.0),
+			Vector2(1180.0, 596.0),
+			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+			Vector2(220.0, 476.0), Vector2(1060.0, 476.0),
+			Vector2(640.0, 216.0),
+		],
+		"core_spawns": [Vector2(640.0, 330.0), Vector2(250.0, 440.0), Vector2(1030.0, 440.0)],
+		"platforms": [
+			{"rect": Rect2(0, 330, 220, 16), "hp": -1},
+			{"rect": Rect2(1060, 330, 220, 16), "hp": -1},
+			{"rect": Rect2(120, 500, 200, 16), "hp": -1},
+			{"rect": Rect2(960, 500, 200, 16), "hp": -1},
+			# The pillar closes the flat lane, so throws arc through the fields.
+			{"rect": Rect2(624, 380, 32, 240), "hp": -1},
+			{"rect": Rect2(520, 240, 240, 16), "hp": -1},
+			{"rect": Rect2(330, 420, 150, 16), "hp": 2},
+			{"rect": Rect2(800, 420, 150, 16), "hp": 2},
+			{"rect": Rect2(300, 560, 120, 14), "hp": -1, "min_players": 3},
+			{"rect": Rect2(860, 560, 120, 14), "hp": -1, "min_players": 4},
+		],
+		"zones": [
+			{"rect": Rect2(440, 250, 170, 330), "time_scale": 0.35},
+			{"rect": Rect2(670, 250, 170, 330), "time_scale": 0.35},
+		],
+		"hazards": [],
+	}
+
+## A fair opening with two contested pulse orbs. Both fighters have permanent
+## stairs, an exposed inner perch and fragile cover below the blast footprint.
+## The ground lane offers a quiet approach; taking height brings the orbs into play.
+static func _pulse_chamber() -> Dictionary:
+	return {
+		"name": "PULSE CHAMBER",
+		"feature": "1v1 HAZARDS // hit an orb with a knife to push fighters and redirect knives. Dark = recharging.",
+		"wrap_x": true,
+		"spawns": [
+			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
+			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
+		],
+		"respawn_points": [
+			Vector2(100.0, 596.0), Vector2(500.0, 596.0),
+			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(190.0, 476.0), Vector2(1090.0, 476.0), Vector2(640.0, 446.0),
+			Vector2(420.0, 316.0), Vector2(860.0, 316.0),
+			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
+		],
+		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
+		"platforms": [
+			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
+			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
+			{"rect": Rect2(330, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(770, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(0, 290, 240, 16), "hp": -1},
+			{"rect": Rect2(1040, 290, 240, 16), "hp": -1},
+			# Central high ground is exposed to either player's loaded orb.
+			{"rect": Rect2(550, 470, 180, 16), "hp": -1},
+			{"rect": Rect2(440, 555, 120, 16), "hp": 2},
+			{"rect": Rect2(720, 555, 120, 16), "hp": 2},
+			{"rect": Rect2(250, 415, 110, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(920, 415, 110, 14), "hp": 2, "min_players": 4},
+		],
+		"hazards": [
+			{
+				"home": Vector2(430.0, 425.0),
+				"blast_radius": 180.0,
+				"recharge_windows": 2,
+			},
+			{
+				"home": Vector2(850.0, 425.0),
+				"blast_radius": 180.0,
+				"recharge_windows": 2,
+			},
+			{
+				"home": Vector2(640.0, 255.0),
+				"motion": {"axis": Vector2.DOWN, "travel": 90.0, "period": 300, "phase": 0.0},
+				"blast_radius": 140.0,
+				"min_players": 4,
+			},
+		],
 	}
 
 ## A four-corner vertical loop over a hole in the world. P1/P2 start on the
@@ -546,11 +494,10 @@ static func _endless_descent() -> Dictionary:
 		],
 	}
 
+# -------------------------------------------------------------- fixtures --
 
-# ----------------------------------------------------------- kinetic arenas --
-
-## A single lift joins a vertical-only loop. It is useful, but never mandatory:
-## the fastest route may be to jump through the bottom and return from above.
+## Former rotation arena, now only the kinetic test fixture: a single lift
+## joining a vertical-only loop. See `build_kinetic_proof`.
 static func _pendulum() -> Dictionary:
 	return {
 		"name": "PENDULUM",
@@ -587,159 +534,4 @@ static func _pendulum() -> Dictionary:
 			{"rect": Rect2(780, 535, 110, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [],
-	}
-
-
-## A fair opening with two contested pulse orbs. Both fighters have permanent
-## stairs, an exposed inner perch and fragile cover below the blast footprint.
-## The ground lane offers a quiet approach; taking height brings the orbs into play.
-static func _pulse_chamber() -> Dictionary:
-	return {
-		"name": "PULSE CHAMBER",
-		"feature": "1v1 HAZARDS // hit an orb with a knife to push fighters and redirect knives. Dark = recharging.",
-		"wrap_x": true,
-		"spawns": [
-			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
-			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
-		],
-		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(500.0, 596.0),
-			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(190.0, 476.0), Vector2(1090.0, 476.0), Vector2(640.0, 446.0),
-			Vector2(420.0, 316.0), Vector2(860.0, 316.0),
-			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
-		],
-		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
-		"platforms": [
-			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
-			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
-			{"rect": Rect2(330, 340, 180, 16), "hp": -1},
-			{"rect": Rect2(770, 340, 180, 16), "hp": -1},
-			{"rect": Rect2(0, 290, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 290, 240, 16), "hp": -1},
-			# Central high ground is exposed to either player's loaded orb.
-			{"rect": Rect2(550, 470, 180, 16), "hp": -1},
-			{"rect": Rect2(440, 555, 120, 16), "hp": 2},
-			{"rect": Rect2(720, 555, 120, 16), "hp": 2},
-			{"rect": Rect2(250, 415, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(920, 415, 110, 14), "hp": 2, "min_players": 4},
-		],
-		"hazards": [
-			{
-				"home": Vector2(430.0, 425.0),
-				"blast_radius": 180.0,
-				"recharge_windows": 2,
-			},
-			{
-				"home": Vector2(850.0, 425.0),
-				"blast_radius": 180.0,
-				"recharge_windows": 2,
-			},
-			{
-				"home": Vector2(640.0, 255.0),
-				"motion": {"axis": Vector2.DOWN, "travel": 90.0, "period": 300, "phase": 0.0},
-				"blast_radius": 140.0,
-				"min_players": 4,
-			},
-		],
-	}
-
-
-## A full-height shutter patrols the open middle. It creates two honest routes—
-## over and under—and horizontal wrap adds a third route around the outside.
-static func _foundry() -> Dictionary:
-	return {
-		"name": "FOUNDRY",
-		"feature": "GUILLOTINE // route above, below or around one roaming wall.",
-		"wrap_x": true,
-		"spawns": [
-			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
-		],
-		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(420.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(860.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(150.0, 296.0), Vector2(1130.0, 296.0),
-			Vector2(130.0, 476.0), Vector2(1150.0, 476.0),
-		],
-		"core_spawns": [Vector2(160.0, 370.0), Vector2(640.0, 570.0), Vector2(1120.0, 370.0)],
-		"platforms": [
-			# Deep side rooms remain useful as the middle changes allegiance.
-			{"rect": Rect2(0, 320, 300, 16), "hp": -1},
-			{"rect": Rect2(980, 320, 300, 16), "hp": -1},
-			{"rect": Rect2(0, 500, 260, 16), "hp": -1},
-			{"rect": Rect2(1020, 500, 260, 16), "hp": -1},
-			{"rect": Rect2(0, 190, 260, 16), "hp": -1},
-			{"rect": Rect2(1020, 190, 260, 16), "hp": -1},
-			# THE GUILLOTINE. Its 90px lower clearance is a real body route.
-			{
-				"rect": Rect2(360, 230, 48, 300), "hp": -1,
-				"motion": {"axis": Vector2.RIGHT, "travel": 512.0, "period": 420, "phase": 0.0},
-			},
-			{"rect": Rect2(40, 410, 190, 16), "hp": 2},
-			{"rect": Rect2(1050, 410, 190, 16), "hp": 2},
-			{"rect": Rect2(270, 560, 100, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(910, 560, 100, 14), "hp": 2, "min_players": 4},
-		],
-		"hazards": [],
-	}
-
-
-## The final arena keeps Level 2's four-way freedom and removes most of its safe
-## architecture. Two ferries cross the void at different heights; a low pulse
-## orb can eject bodies or knives straight through the bottom portal.
-static func _collision_course() -> Dictionary:
-	return {
-		"name": "COLLISION COURSE",
-		"feature": "ZERO-G CROSSING // ferries and a pulse launcher feed a four-way void.",
-		"wrap_x": true,
-		"wrap_y": true,
-		"skip_ground": true,
-		"spawns": [
-			Vector2(150.0, 596.0), Vector2(1130.0, 596.0),
-			Vector2(210.0, 296.0), Vector2(1090.0, 236.0),
-		],
-		"respawn_points": [
-			Vector2(140.0, 596.0), Vector2(1140.0, 596.0),
-			Vector2(210.0, 296.0), Vector2(1090.0, 236.0),
-			Vector2(190.0, 476.0), Vector2(1070.0, 406.0), Vector2(640.0, 366.0),
-		],
-		"core_spawns": [Vector2(250.0, 420.0), Vector2(640.0, 330.0), Vector2(1030.0, 350.0)],
-		"platforms": [
-			{"rect": Rect2(0, STAGE_TOP, 300, 16), "hp": -1},
-			{"rect": Rect2(980, STAGE_TOP, 300, 16), "hp": -1},
-			{"rect": Rect2(0, 620, 340, 70), "hp": -1},
-			{"rect": Rect2(940, 620, 340, 70), "hp": -1},
-			# Sparse fixed islands leave the portals as first-class routes.
-			{"rect": Rect2(80, 320, 260, 16), "hp": -1},
-			{"rect": Rect2(980, 260, 220, 16), "hp": -1},
-			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
-			{"rect": Rect2(940, 430, 260, 16), "hp": -1},
-			{"rect": Rect2(570, 390, 140, 16), "hp": -1},
-			# Ferries cross at different heights, never forming a safe mirrored row.
-			{
-				"rect": Rect2(340, 520, 180, 16), "hp": -1,
-				"motion": {"axis": Vector2.RIGHT, "travel": 400.0, "period": 360, "phase": 0.0},
-			},
-			{
-				"rect": Rect2(760, 250, 180, 16), "hp": -1,
-				"motion": {"axis": Vector2.LEFT, "travel": 400.0, "period": 360, "phase": 0.5},
-			},
-			{"rect": Rect2(400, 450, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(770, 450, 110, 14), "hp": 2, "min_players": 4},
-		],
-		"hazards": [
-			{
-				"home": Vector2(640.0, 570.0),
-				"motion": {"axis": Vector2.UP, "travel": 120.0, "period": 240, "phase": 0.0},
-				"blast_radius": 165.0,
-				"recharge_windows": 3,
-			},
-			{
-				"home": Vector2(420.0, 175.0),
-				"motion": {"axis": Vector2.RIGHT, "travel": 440.0, "period": 360, "phase": 0.5},
-				"blast_radius": 145.0,
-				"min_players": 3,
-			},
-		],
 	}

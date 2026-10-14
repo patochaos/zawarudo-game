@@ -25,7 +25,7 @@ func _run() -> void:
 	game.hit_freeze_enabled = false
 	var reports := []
 	for sample in samples:
-		game.start_quick_match(false, 1, 2)
+		game.start_quick_match(false, 4, 2)
 		game.rng.seed = 90210 + sample * 137
 		game.restart()
 		game.set_physics_process(false)

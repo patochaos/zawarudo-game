@@ -82,8 +82,7 @@ func _draw_frozen_world() -> void:
 
 	# An incomplete clock face sits behind the arena action. It is a motif, not
 	# a timer: the actual countdown remains in the HUD.
-	# Pendulum already has a physical clock behind play. Avoid a second dial.
-	var show_clock: bool = gm.level_index != 2
+	var show_clock: bool = true
 	for hour in (12 if show_clock else 0):
 		var angle: float = -PI * 0.5 + TAU * float(hour) / 12.0
 		var d := Vector2.from_angle(angle)

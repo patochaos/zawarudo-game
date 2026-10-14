@@ -50,7 +50,8 @@ func _test_styles_change_the_plan() -> void:
 	game.set_physics_process(false)
 	game._sfx.muted = true
 	game.settings_path = SETTINGS_PATH
-	game.start_demo_duel(0)
+	# The wrap arena gives the rusher and the sniper different routes to prefer.
+	game.start_demo_duel(4)
 	game._transition.visible = false
 	var rival: Player = game.players[0]
 	var cpu: Player = game.players[1]

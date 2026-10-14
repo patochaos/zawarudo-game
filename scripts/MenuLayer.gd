@@ -725,7 +725,7 @@ func _page_description() -> String:
 		MenuPage.MAIN:
 			return [
 				"Climb the opponent ladder: five named CPUs, each in its own arena, first to 3 hits. %s Uses your offline tuning." % ladder_line,
-				"Pick any of the ten arenas, the number of fighters, each CPU's skill and the match length.",
+				"Pick any of the five arenas, the number of fighters, each CPU's skill and the match length.",
 				"Predict the next landing. One jump, committed air movement and quick ground stops. Contest the central core against a Standard CPU. First to 3 hits. Fixed test rules.",
 				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
 				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",

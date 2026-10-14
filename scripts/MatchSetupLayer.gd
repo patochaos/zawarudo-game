@@ -120,11 +120,6 @@ class ArenaPlan:
 			var field := _to_plan(zone["rect"])
 			draw_rect(field, Color(0.52, 0.38, 0.92, 0.22))
 			draw_rect(field, Color(0.74, 0.62, 1.0, 0.6), false, 1.0)
-		for stone: Dictionary in layout.get("lodestones", []):
-			var core := _to_plan_point(stone["at"])
-			draw_arc(core, float(stone.get("radius", 200.0)) * PLAN_SCALE, 0.0, TAU, 40,
-				Color(1.0, 0.76, 0.34, 0.3), 1.0)
-			draw_circle(core, 4.0, Color(1.0, 0.76, 0.34, 0.95))
 		for hazard: Dictionary in layout.get("hazards", []):
 			var orb := _to_plan_point(hazard.get("home", Vector2.ZERO))
 			draw_arc(orb, float(hazard.get("blast_radius", 190.0)) * PLAN_SCALE,
@@ -486,8 +481,7 @@ func _refresh() -> void:
 	_write("rule_value_0", "%s" % MODE_NAMES[battle_mode])
 	_write("rule_note_0", MODE_NOTES[battle_mode])
 	_write("rule_value_1", str(layout["name"]))
-	_write("rule_note_1", "FEATURED 1v1 · %d OF %d" % [level + 1, Levels.count()]
-		if count == 2 and level in [1, 3] else "%d OF %d" % [level + 1, Levels.count()])
+	_write("rule_note_1", "%d OF %d" % [level + 1, Levels.count()])
 	_write("rule_value_2", "NO SCORE" if free_play else "FIRST TO %d" % match_lives)
 	_write("rule_note_2", "FREE PLAY KEEPS NO SCORE" if free_play else "")
 	_tint("rule_value_2", Color(0.55, 0.51, 0.62) if free_play else HOT)

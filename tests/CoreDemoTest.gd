@@ -30,7 +30,7 @@ func run() -> void:
 	check(game._menu._page_names() == ["START DUEL", "CUSTOM MATCH", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Custom Match, Interception and offline tuning alongside its primary destinations")
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")
-	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "Start Duel must use Endless Descent with four-way wrapping")
+	check(game.level_index == Opponents.arena(0) and game.level_name == "CROSSHAIR COURT", "Start Duel must open on the readable walled court")
 	check(game.player_difficulty(1) == game.Difficulty.NOVICE and game.demo_opponent == 0 and game.planning_time_left == 8.0, "first opponent must be the ladder's first rung, Novice skill, with eight-second turns")
 	game._physics_process(0.5)
 	check(game.planning_time_left == 8.0, "the opening wipe must not consume planning time")

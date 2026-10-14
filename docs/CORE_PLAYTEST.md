@@ -11,8 +11,9 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
   Spire, The Phantom); each has its own skill preset and a style the planner
   reads: closing in and throwing early, keeping the knife until a throw is sure,
   taking the high ground with full draws, throwing through the wrap seam. Each
-  is fought in its own arena: Endless Descent, then the three twist arenas
-  (timed shutters, stasis fields, lodestones), then Collision Course. Beating
+  is fought in its own arena, in rotation order: Crosshair Court, Clockwork
+  Gallery (timed shutters), Stilled Hall (stasis fields), Pulse Chamber (pulse
+  orbs), Endless Descent (four-way wrap). Beating
   the current opponent unlocks the next and saves locally.
   Side edges wrap left/right; open shafts connect bottom/top.
 - Learn to Play: three real-physics timed exercises, retryable without penalty.
@@ -31,7 +32,7 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 - Rematches retain the arena, rules and opponent. After a win, a separate action
   starts the next opponent; the result-screen arrows revisit any opponent
   already reached.
-- Custom Match is public: any of the ten arenas, 2 to 4 fighters, each CPU's
+- Custom Match is public: any of the five arenas, 2 to 4 fighters, each CPU's
   skill preset and the match length. Experiments stay behind `--dev-tools`.
 - Online remains a separate existing private-room route. Do not pool CPU and
   online findings when assessing fun or opponent readability.

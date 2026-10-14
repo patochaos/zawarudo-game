@@ -73,49 +73,29 @@ func _test_level(index: int) -> void:
 	for tick in _pose_ticks(level["platforms"]):
 		_test_pose(level, tick)
 
-	if label == "SHATTERED SANCTUM":
-		_check(_has_platform_material_mix(level["platforms"]),
-			"%s: needs both permanent and breakable authored platforms" % label)
 
 
 ## The sequence should add new topology, not repeat one symmetric scaffold with
 ## a different prop in the middle. These are identity contracts, not coordinates.
 func _test_level_progression() -> void:
-	var intro := Levels.build(0, 2)
-	var descent := Levels.build(1, 2)
-	var pendulum := Levels.build(2, 2)
-	var pulse := Levels.build(3, 2)
-	var sanctum := Levels.build(4, 2)
-	var foundry := Levels.build(5, 2)
-	var finale := Levels.build(6, 2)
-	_check(not intro["wrap_x"] and not intro["wrap_y"]
-		and _mover_count(intro["platforms"]) == 0 and intro["hazards"].is_empty(),
-		"Level 1 must remain the quiet, walled introduction")
-	_check(descent["wrap_x"] and descent["wrap_y"],
-		"Level 2 must retain its four-way wrap identity")
-	_check(not pendulum["wrap_x"] and pendulum["wrap_y"]
-		and _mover_count(pendulum["platforms"]) == 1,
-		"Level 3 must be a vertical-only loop around one lift")
-	_check(pulse["wrap_x"] and not pulse["wrap_y"] and pulse["hazards"].size() >= 2,
-		"Level 4 must be a horizontal slingshot built around paired hazards")
-	_check(sanctum["wrap_x"] and sanctum["wrap_y"]
-		and _breakable_count(sanctum["platforms"]) >= 5,
-		"Level 5 must be a destructible four-way-wrap arena")
-	_check(foundry["wrap_x"] and not foundry["wrap_y"]
-		and _has_tall_mover(foundry["platforms"]),
-		"Level 6 must be divided by a roaming wall")
-	_check(finale["wrap_x"] and finale["wrap_y"]
-		and _mover_count(finale["platforms"]) >= 2 and not finale["hazards"].is_empty(),
-		"Level 7 must combine four-way wrap, ferries and a pulse launcher")
-	var gallery := Levels.build(7, 2)
-	var hall := Levels.build(8, 2)
-	var reach := Levels.build(9, 2)
+	var court := Levels.build(0, 2)
+	var gallery := Levels.build(1, 2)
+	var hall := Levels.build(2, 2)
+	var chamber := Levels.build(3, 2)
+	var descent := Levels.build(4, 2)
+	_check(not court["wrap_x"] and not court["wrap_y"]
+		and _mover_count(court["platforms"]) == 0 and court["hazards"].is_empty()
+		and _cycle_count(court["platforms"]) == 0 and court["zones"].is_empty(),
+		"Arena 1 must remain the quiet, walled introduction")
 	_check(gallery["wrap_x"] and _cycle_count(gallery["platforms"]) >= 3,
-		"Level 8 must be built around timed shutters")
+		"Arena 2 must be built around timed shutters")
 	_check(not hall["wrap_x"] and hall["zones"].size() >= 2,
-		"Level 9 must be built around stasis fields")
-	_check(not reach["wrap_x"] and reach["lodestones"].size() >= 2,
-		"Level 10 must be built around lodestones")
+		"Arena 3 must be built around stasis fields")
+	_check(chamber["wrap_x"] and not chamber["wrap_y"] and chamber["hazards"].size() >= 2,
+		"Arena 4 must be a horizontal slingshot built around paired pulse orbs")
+	_check(descent["wrap_x"] and descent["wrap_y"],
+		"Arena 5 must retain its four-way wrap identity")
+	_check(Levels.count() == 5, "the rotation is one arena per rule")
 
 
 func _cycle_count(platforms: Array) -> int:
@@ -134,10 +114,11 @@ func _test_player_scaling(index: int) -> void:
 	var trio := Levels.build(index, 3)
 	var crowd := Levels.build(index, 4)
 	var label: String = crowd["name"]
-	_check(duel["platforms"].size() < trio["platforms"].size(),
-		"%s: 3P needs more platforms than 2P" % label)
-	_check(trio["platforms"].size() < crowd["platforms"].size(),
-		"%s: 4P needs more platforms than 3P" % label)
+	# Four fighters is the authored board; fewer fighters cut pieces from it.
+	_check(duel["platforms"].size() <= trio["platforms"].size()
+		and trio["platforms"].size() <= crowd["platforms"].size()
+		and duel["platforms"].size() < crowd["platforms"].size(),
+		"%s: the duel must be the four-player board cut down" % label)
 	_check(duel.get("feature", "") == trio.get("feature", "") \
 			and trio.get("feature", "") == crowd.get("feature", ""),
 		"%s: player scaling must preserve the arena's defining feature" % label)
