@@ -126,6 +126,11 @@ func _test_player_scaling(index: int) -> void:
 		var rects: Array[Rect2] = []
 		for platform: Dictionary in variant["platforms"]:
 			rects.append(platform["rect"])
+		for respawn: Vector2 in variant.get("respawn_points", []):
+			_check(_spawn_is_supported(respawn, rects),
+				"%s %dP: respawn socket %s needs support on that count's board" % [label, variant["player_count"], respawn])
+		_check(variant.get("respawn_points", []).size() >= 5,
+			"%s %dP: keep a varied respawn pool after the cut" % [label, variant["player_count"]])
 		for spawn_index in int(variant["player_count"]):
 			var spawn: Vector2 = variant["spawns"][spawn_index]
 			_check(_spawn_is_supported(spawn, rects),

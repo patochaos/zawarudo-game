@@ -222,6 +222,16 @@ static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 		if pf.has("motion"):
 			pf["home"] = pf["rect"].position
 	lv["platforms"] = plats
+	# A respawn socket may sit on a crowd-only perch: {"at": point, "min_players": 3}.
+	var sockets: Array = []
+	for entry in lv.get("respawn_points", lv["spawns"]):
+		if entry is Dictionary:
+			if int(entry.get("min_players", 2)) > player_count:
+				continue
+			sockets.append(entry["at"])
+		else:
+			sockets.append(entry)
+	lv["respawn_points"] = sockets
 	lv["wrap_x"] = lv.get("wrap_x", false)
 	lv["wrap_y"] = lv.get("wrap_y", false)
 	var active_hazards: Array = []
@@ -271,7 +281,8 @@ static func _crosshair_court() -> Dictionary:
 		"respawn_points": [
 			Vector2(120.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
 			Vector2(880.0, 596.0), Vector2(1160.0, 596.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			{"at": Vector2(120.0, 296.0), "min_players": 3},
+			{"at": Vector2(1160.0, 296.0), "min_players": 3},
 			Vector2(180.0, 476.0), Vector2(1100.0, 476.0),
 			Vector2(360.0, 386.0), Vector2(920.0, 386.0),
 			Vector2(550.0, 226.0), Vector2(730.0, 226.0),
@@ -279,8 +290,9 @@ static func _crosshair_court() -> Dictionary:
 		"core_spawns": [Vector2(300.0, 460.0), Vector2(640.0, 555.0), Vector2(980.0, 460.0)],
 		"platforms": [
 			# Visible side architecture doubles as permanent P3/P4 spawn support.
-			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
+			# A duel cuts it: the fight stays on the two-step climbs and the mast.
+			{"rect": Rect2(0, 320, 240, 16), "hp": -1, "min_players": 3},
+			{"rect": Rect2(1040, 320, 240, 16), "hp": -1, "min_players": 3},
 			# Simple two-step climbs keep every height reachable without a mover.
 			{"rect": Rect2(70, 500, 230, 16), "hp": -1},
 			{"rect": Rect2(980, 500, 230, 16), "hp": -1},
@@ -358,14 +370,16 @@ static func _stilled_hall() -> Dictionary:
 		"respawn_points": [
 			Vector2(100.0, 596.0), Vector2(480.0, 596.0), Vector2(800.0, 596.0),
 			Vector2(1180.0, 596.0),
-			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+			{"at": Vector2(110.0, 306.0), "min_players": 3},
+			{"at": Vector2(1170.0, 306.0), "min_players": 3},
 			Vector2(220.0, 476.0), Vector2(1060.0, 476.0),
 			Vector2(640.0, 216.0),
 		],
 		"core_spawns": [Vector2(640.0, 330.0), Vector2(250.0, 440.0), Vector2(1030.0, 440.0)],
 		"platforms": [
-			{"rect": Rect2(0, 330, 220, 16), "hp": -1},
-			{"rect": Rect2(1060, 330, 220, 16), "hp": -1},
+			# High side ledges seat P3/P4; a duel cuts them and fights lower.
+			{"rect": Rect2(0, 330, 220, 16), "hp": -1, "min_players": 3},
+			{"rect": Rect2(1060, 330, 220, 16), "hp": -1, "min_players": 3},
 			{"rect": Rect2(120, 500, 200, 16), "hp": -1},
 			{"rect": Rect2(960, 500, 200, 16), "hp": -1},
 			# The pillar closes the flat lane, so throws arc through the fields.
@@ -400,7 +414,8 @@ static func _pulse_chamber() -> Dictionary:
 			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
 			Vector2(190.0, 476.0), Vector2(1090.0, 476.0), Vector2(640.0, 446.0),
 			Vector2(420.0, 316.0), Vector2(860.0, 316.0),
-			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
+			{"at": Vector2(120.0, 266.0), "min_players": 3},
+			{"at": Vector2(1160.0, 266.0), "min_players": 3},
 		],
 		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
 		"platforms": [
@@ -408,8 +423,9 @@ static func _pulse_chamber() -> Dictionary:
 			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
 			{"rect": Rect2(330, 340, 180, 16), "hp": -1},
 			{"rect": Rect2(770, 340, 180, 16), "hp": -1},
-			{"rect": Rect2(0, 290, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 290, 240, 16), "hp": -1},
+			# High side perches seat P3/P4 above the orbs; a duel cuts them.
+			{"rect": Rect2(0, 290, 240, 16), "hp": -1, "min_players": 3},
+			{"rect": Rect2(1040, 290, 240, 16), "hp": -1, "min_players": 3},
 			# Central high ground is exposed to either player's loaded orb.
 			{"rect": Rect2(550, 470, 180, 16), "hp": -1},
 			{"rect": Rect2(440, 555, 120, 16), "hp": 2},
