@@ -10,6 +10,8 @@ func _init() -> void:
 
 func _run() -> void:
 	var game = MAIN_SCENE.instantiate()
+	# Planning-time checks must not read the developer's saved Game Tuning profile.
+	game.offline_tuning_path = "user://test-fourplayermodetest-tuning.cfg"
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
