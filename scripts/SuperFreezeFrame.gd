@@ -10,6 +10,9 @@ const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
 const PANEL_MAX_H := 430.0
+## Original copy. The kicker sets the beat, the two title lines are the chant.
+const KICKER := "THE WORLD HOLDS ITS BREATH"
+const TITLE_LINES := ["STAND", "STILL"]
 const SUPER_DIAL := preload("res://assets/art/combat/super-dial.png")
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
 const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
@@ -36,9 +39,10 @@ class CutInArt:
 		visible = false
 		set_process(true)
 
-	func begin(who: int, tint: Color, fighter: Variant = 0) -> void:
+	func begin(who: int, tint: Color, fighter: Variant = 0, length: float = DURATION) -> void:
 		owner_index = who
 		owner_color = tint
+		duration = maxf(0.1, length)
 		match int(fighter):
 			2: portrait = ROOK_PORTRAIT
 			3: portrait = ECLIPSE_PORTRAIT
@@ -72,12 +76,18 @@ class CutInArt:
 		var alpha: float = minf(intro, outro)
 		var accent: Color = owner_color.lightened(0.16)
 		var deep: Color = owner_color.darkened(0.68)
-		var ink := Color(0.018, 0.008, 0.035, alpha)
+		# The frame is ink but not opaque: the collapsed two-value world the
+		# event direction grades sits behind the panel for the anticipation beat.
+		var ink := Color(0.018, 0.008, 0.035, alpha * 0.66)
 
-		# The cut-in snaps on as a hard black frame, then the central manga panel
-		# expands vertically. The slight horizontal shake is deterministic.
+		# Release: in the last beat the whole panel tears away along the thrower's
+		# facing and combat resumes on the sound transient.
+		var face_dir: float = 1.0 if owner_index == 0 else -1.0
+		var tear: float = clampf((u - 0.92) / 0.08, 0.0, 1.0)
+		var slide := Vector2(face_dir * ease(tear, 2.2) * 1500.0, 0.0)
 		draw_rect(Rect2(0.0, 0.0, W, H), ink)
 		var shake := Vector2.ZERO if reduced_flashes else Vector2(sin(elapsed * 74.0), cos(elapsed * 61.0)) * (4.0 * (1.0 - intro))
+		shake += slide
 		var panel_h: float = lerpf(18.0, PANEL_MAX_H, ease(intro, 0.45))
 		var top: float = H * 0.5 - panel_h * 0.5
 		var panel := PackedVector2Array([
@@ -114,7 +124,7 @@ class CutInArt:
 		var strike := clampf((u - 0.12) / 0.10, 0.0, 1.0)
 		var release := clampf((u - 0.70) / 0.30, 0.0, 1.0)
 		var dial_size := lerpf(420.0, 490.0, intro) + release * 38.0
-		draw_set_transform(Vector2(portrait_x, H * 0.5),
+		draw_set_transform(Vector2(portrait_x, H * 0.5) + slide,
 			0.0 if reduced_flashes else (-0.12 + u * 0.18) * face)
 		draw_texture_rect(SUPER_DIAL,
 			Rect2(Vector2.ONE * -dial_size * 0.5, Vector2.ONE * dial_size), false,
@@ -158,13 +168,13 @@ class CutInArt:
 	func _draw_copy(top: float, panel_h: float, accent: Color, alpha: float, shake: Vector2) -> void:
 		var copy_x: float = 600.0 if owner_index == 0 else 80.0
 		draw_string(ThemeDB.fallback_font, Vector2(copy_x, top + 76.0) + shake,
-			"THE MOMENT IS YOURS", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 24,
+			KICKER, HORIZONTAL_ALIGNMENT_CENTER, 590.0, 24,
 			Color(0.98, 0.96, 0.88, 0.88 * alpha))
 		# Bounded title stays clear of the portrait in either player orientation.
-		for line in 2:
+		for line in TITLE_LINES.size():
 			draw_string(ThemeDB.fallback_font,
 				Vector2(copy_x, top + panel_h * (0.49 + float(line) * 0.22)) + shake,
-				"MUDA MUDA", HORIZONTAL_ALIGNMENT_CENTER, 590.0, 55,
+				TITLE_LINES[line], HORIZONTAL_ALIGNMENT_CENTER, 590.0, 55,
 				Color(accent.r, accent.g, accent.b, alpha))
 		draw_string(ThemeDB.fallback_font, Vector2(copy_x, top + panel_h - 30.0) + shake,
 			"PLAYER %d  //  SUPER" % (owner_index + 1), HORIZONTAL_ALIGNMENT_CENTER, 590.0, 18,
@@ -214,9 +224,10 @@ func _ready() -> void:
 	_portrait_warmup.call_deferred("queue_free")
 
 
-func play(who: int, tint: Color, fighter: Variant = 0, reduce_flashes: bool = false) -> void:
+func play(who: int, tint: Color, fighter: Variant = 0, reduce_flashes: bool = false,
+		length: float = DURATION) -> void:
 	_art.reduced_flashes = reduce_flashes
-	_art.begin(who, tint, fighter)
+	_art.begin(who, tint, fighter, length)
 
 
 func cancel() -> void:

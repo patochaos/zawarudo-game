@@ -27,6 +27,14 @@ var _defeat_elapsed: float = 0.0
 ## delta. This cosmetic clock lets locomotion animate there without feeding any
 ## presentation state back into movement, collision, replay or the online digest.
 var _freeplay_elapsed: float = 0.0
+## Presentation-only timers: the lock-in snap, the hit flash and the last
+## grounded state (for landing dust). None of them feed back into gameplay.
+var _lock_snap: float = 0.0
+var _hit_flash: float = 0.0
+var _was_grounded: bool = true
+var _was_alive: bool = true
+const LOCK_SNAP_TIME := 0.16
+const HIT_FLASH_TIME := 0.12
 
 
 class AimArm extends Node2D:
@@ -64,10 +72,32 @@ func _process(delta: float) -> void:
 		_freeplay_elapsed += delta
 	else:
 		_freeplay_elapsed = 0.0
+	var previous_state := body_state
 	sync_from_player()
 	if body_state == DEFEAT:
 		_defeat_elapsed += delta
+	_lock_snap = maxf(0.0, _lock_snap - delta)
+	_hit_flash = maxf(0.0, _hit_flash - delta)
+	if body_state == LOCK and previous_state != LOCK:
+		_lock_snap = LOCK_SNAP_TIME
+	if _fighter != null:
+		if _was_alive and not _fighter.alive:
+			_hit_flash = HIT_FLASH_TIME
+		_was_alive = _fighter.alive
+		_observe_landing()
 	queue_redraw()
+
+
+## Landing dust and run-start puffs are observed, never simulated: the visual
+## notices a grounded transition and asks Effects for a cosmetic puff.
+func _observe_landing() -> void:
+	var grounded: bool = _fighter.on_ground
+	if grounded and not _was_grounded and _fighter.alive and _fighter.cfg != null \
+			and _fighter.cfg._effects != null \
+			and int(_fighter.cfg.state) in [Phase.EXECUTING, Phase.FREEPLAY, Phase.REPLAY]:
+		var body: Color = skin.palette.get(&"body", _fighter.color) if skin != null else _fighter.color
+		_fighter.cfg._effects.add(Effects.Kind.DUST, _fighter.position + Vector2(0.0, Player.HALF.y), body)
+	_was_grounded = grounded
 
 
 func sync_from_player() -> void:
@@ -110,6 +140,11 @@ func _derive_state() -> StringName:
 	if not _fighter.alive:
 		return DEFEAT
 	var phase := Phase.FREEPLAY if _fighter.cfg == null else int(_fighter.cfg.state)
+	# The final tableau: the winner holds the poised lock stance as a victory
+	# pose while the loser keeps the real defeat silhouette.
+	if phase == Phase.GAME_OVER and _fighter.cfg != null \
+			and int(_fighter.cfg.winner) == _fighter.index and skin.has_sprite(LOCK):
+		return LOCK
 	if _shot_is_visible(phase):
 		return SHOT
 	if _fighter.plan.confirmed and phase in [Phase.PLANNING, Phase.COMMITTING, Phase.ONLINE_WAIT]:
@@ -197,10 +232,37 @@ func _draw_sprite_body() -> void:
 		return
 	var cell := Vector2(skin.sprite_cell_size)
 	var source := Rect2(Vector2(float(body_frame) * cell.x, 0.0), cell)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(_fighter.facing), 1.0))
+	# The lock-in snap: a brief swell as the fighter settles into the held pose.
+	var snap: float = 1.0
+	if _lock_snap > 0.0:
+		snap = 1.0 + 0.07 * sin(PI * (1.0 - _lock_snap / LOCK_SNAP_TIME))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(_fighter.facing) * snap, snap))
 	_draw_identity_aura(source)
+	_draw_outline(source)
 	draw_texture_rect_region(atlas, skin.sprite_draw_rect, source, skin.sprite_tint)
+	if _hit_flash > 0.0:
+		var silhouette: Texture2D = skin.ghost_atlases.get(body_state)
+		if silhouette != null:
+			draw_texture_rect_region(silhouette, skin.sprite_draw_rect, source,
+				Color(1.0, 0.96, 0.9, 0.85 * _hit_flash / HIT_FLASH_TIME))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## A one-pixel ink outline separates the costume from any backdrop, and a rim
+## of the player's colour along the back edge keeps ownership readable at a
+## glance. Both reuse the matching alpha silhouette of the current frame.
+func _draw_outline(source: Rect2) -> void:
+	var silhouette: Texture2D = skin.ghost_atlases.get(body_state)
+	if silhouette == null:
+		return
+	var rect: Rect2 = skin.sprite_draw_rect
+	var ink := Color(0.02, 0.015, 0.03, 0.9)
+	for offset in [Vector2(1.0, 0.0), Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2(0.0, -1.0)]:
+		draw_texture_rect_region(silhouette, Rect2(rect.position + offset, rect.size), source, ink)
+	var identity: Color = _fighter.color
+	if _fighter.alive:
+		draw_texture_rect_region(silhouette, Rect2(rect.position + Vector2(-2.0, -1.0), rect.size),
+			source, Color(identity.r, identity.g, identity.b, 0.55))
 
 
 func _draw_identity_aura(source: Rect2) -> void:
@@ -220,7 +282,7 @@ func _draw_identity_aura(source: Rect2) -> void:
 			source, Color(identity.r, identity.g, identity.b, 0.035))
 		draw_texture_rect_region(silhouette,
 			Rect2(skin.sprite_draw_rect.position + direction * 1.25, skin.sprite_draw_rect.size),
-			source, Color(identity.r, identity.g, identity.b, 0.16))
+			source, Color(identity.r, identity.g, identity.b, 0.22))
 
 
 func _draw_world_markers() -> void:

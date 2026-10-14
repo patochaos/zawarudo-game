@@ -132,9 +132,9 @@ func _draw_release_pulse(u: float) -> void:
 		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 25, Color(1.0, 0.92, 0.66, u))
 
 
+## The palette preset in EventDirection carries the colour of a hit; this keeps
+## only the local ring and rays, so there is no generic white flash.
 func _draw_impact(u: float) -> void:
-	var strength := 0.32 if reduced_flashes else 1.0
-	draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.94, 0.82, 0.18 * u * strength))
 	var reach: float = 42.0 + (1.0 - u) * 96.0
 	draw_arc(_impact_at, reach, 0.0, TAU, 36,
 		Color(_impact_color.r, _impact_color.g, _impact_color.b, 0.95 * u), 4.0)

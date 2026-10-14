@@ -179,13 +179,15 @@ class ResultChrome:
 				Color(violet.r, violet.g, violet.b, 0.035), 2.0)
 			draw_line(Vector2(1280.0, y), Vector2(1010.0 - float(i % 3) * 22.0, 360.0),
 				Color(gold.r, gold.g, gold.b, 0.035), 2.0)
+		# A band for the verdict only. The lower field stays open so the final
+		# tableau, the winner lit and the loser down, remains in view.
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1004.0, 610.0),
-			Vector2(218.0, 610.0),
-		]), Color(0.018, 0.010, 0.035, 0.90))
+			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1030.0, 400.0),
+			Vector2(236.0, 400.0),
+		]), Color(0.018, 0.010, 0.035, 0.86))
 		draw_polyline(PackedVector2Array([
-			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1004.0, 610.0),
-			Vector2(218.0, 610.0), Vector2(250.0, 176.0),
+			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1030.0, 400.0),
+			Vector2(236.0, 400.0), Vector2(250.0, 176.0),
 		]), Color(gold.r, gold.g, gold.b, 0.48), 1.5, true)
 		draw_line(Vector2(380.0, 306.0), Vector2(900.0, 306.0),
 			Color(gold.r, gold.g, gold.b, 0.55), 2.0)
@@ -351,7 +353,7 @@ func build(manager) -> void:
 	_over_bg = ColorRect.new()
 	_over_bg.position = Vector2.ZERO
 	_over_bg.size = Vector2(1280.0, 720.0)
-	_over_bg.color = Color(0.012, 0.008, 0.025, 0.84)
+	_over_bg.color = Color(0.012, 0.008, 0.025, 0.56)
 	_over_bg.visible = false
 	add_child(_over_bg)
 	_over_chrome = ResultChrome.new()

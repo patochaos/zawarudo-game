@@ -487,10 +487,39 @@ A gold ring around the fighter marks a full meter. Once full, press the player's
 SUPER toggle (`T` for P1 or gamepad `Y` for P2) to arm or disarm the upgrade, then draw
 the shot normally. The meter is only spent when the first super wave actually
 leaves the player. Immediately before that first wave, combat hard-freezes for
-a short illustrated manga portrait cut-in with **IT'S ALL USELESS** and a rapid
-synthetic **muda** chant. The portrait mirrors with the attacking side while the
-panel inherits that player's color. If both supers share a tick, both
-introductions play before the simulation advances.
+a short illustrated portrait cut-in in three beats: the world collapses to two
+values (anticipation), the portrait strikes with **THE WORLD HOLDS ITS BREATH**
+and the **STAND STILL** title over a rapid synthetic chant, and the panel tears
+away along the thrower's facing as combat resumes (release). GameManager owns
+the pause (`super_cutin_duration`); the cut-in only animates for the same
+length. The portrait mirrors with the attacking side while the panel inherits
+that player's color. If both supers share a tick, both introductions play
+before the simulation advances.
+
+### Event direction
+
+`scripts/EventDirection.gd` is one grammar for the match's theatrical beats,
+drawn in world space above the fighters and below the HUD, on wall time, never
+touching simulation, replay or the lockstep digest. Each beat is a palette
+preset (a multiply tint plus an additive lift) with its own return to base:
+
+- **Lock**: confirming a plan swells the fighter into its held stance, drops a
+  short spotlight around it and strikes **DECIDED** beside the body.
+- **Impact**: a hit crushes the frame warm, crops it with a diagonal band
+  through the contact and one hard shadow, and strikes **SNAP** (or
+  **TIME // CUT** on the match-deciding hit). The grade returns in three hard
+  steps. There is no generic white flash.
+- **SUPER**: the three beats above.
+- **Result**: the final world state holds under a subdued grade. The winner
+  takes the poised lock stance as a victory pose inside a spotlight; the loser
+  keeps the real defeat silhouette under a dim halo. The result panel is a band
+  for the verdict, so both bodies stay in view.
+
+Reduced flashes keeps every tint but drops the additive lift, removes the
+stepped return and shortens each transition, so the information survives
+without high-luminance jumps. Fighters also carry a one-pixel ink outline, a
+player-colour rim, a brief hit flash and landing dust, all observed from the
+authoritative state.
 
 A hitless exchange also advances the **Temporal Core** clock. After two
 consecutive hitless execution windows, one of the level's authored Core sockets

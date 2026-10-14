@@ -577,6 +577,12 @@ var _time_stop
 var _super_freeze
 var _transition: TransitionLayer
 var _super_cutins_shown: Array[bool] = [false, false, false, false]
+## GameManager owns the SUPER pause. The cut-in layer only animates for the
+## same length; the simulation waits on this timer, not on the art.
+@export var super_cutin_duration: float = 1.45
+var _super_pause_left: float = 0.0
+const EVENT_DIRECTION_SCRIPT := preload("res://scripts/EventDirection.gd")
+var _event_direction
 var _ui
 var _online_client: OnlineClient
 var _online_lobby: OnlineLobby
@@ -667,6 +673,9 @@ func _ready() -> void:
 	_time_stop = TIME_STOP_SCRIPT.new()
 	_time_stop.gm = self
 	add_child(_time_stop)
+	_event_direction = EVENT_DIRECTION_SCRIPT.new()
+	_event_direction.gm = self
+	add_child(_event_direction)
 
 	_ui = UI_SCRIPT.new()
 	add_child(_ui)
@@ -963,8 +972,9 @@ func _open_menu() -> void:
 	if state == Phase.REPLAY:
 		_finish_match_replay()
 	_set_close_camera_mode(false)
-	if _super_freeze != null:
-		_super_freeze.cancel()
+	_cancel_super_cutin()
+	if _event_direction != null:
+		_event_direction.clear()
 	if _tutorial != null:
 		_tutorial.stop()
 	tutorial_mode = false
@@ -1820,6 +1830,8 @@ func _apply_setting(key: String) -> void:
 			reduced_flashes = bool(_settings["reduced_flashes"])
 			if _time_stop != null:
 				_time_stop.reduced_flashes = reduced_flashes
+			if _event_direction != null:
+				_event_direction.reduced_flashes = reduced_flashes
 			if _effects != null:
 				_effects.reduced_flashes = reduced_flashes
 		"high_contrast_previews":
@@ -2656,14 +2668,17 @@ func _physics_process(delta: float) -> void:
 			if commit_time_left <= 0.0:
 				_begin_execution()
 		Phase.EXECUTING:
-			# Cut-ins run on ordinary frame time, but no deterministic simulation tick
-			# is consumed until the portrait and chant have completely cleared.
-			if _super_freeze == null or not _super_freeze.is_active():
+			# The SUPER pause is a GameManager timer on frame time. No deterministic
+			# simulation tick is consumed until it has run out (or the cut-in was
+			# explicitly cancelled).
+			if _super_pause_left > 0.0:
+				_super_pause_left = maxf(0.0, _super_pause_left - delta)
+			if not _super_pause_active():
 				# The fixed tick, never the frame delta. The planning ghost is built
 				# from tick_dt(), so execution has to integrate with the same number
 				# or the plan the player committed to stops being the one that runs.
 				_sim_tick(tick_dt())
-				if _super_freeze == null or not _super_freeze.is_active():
+				if not _super_pause_active():
 					_capture_replay_frame()
 					if online_mode and state == Phase.GAME_OVER:
 						exec_tick += 1
@@ -2699,9 +2714,13 @@ func _sim_tick(dt: float) -> void:
 		var since_launch: int = exec_tick - p.plan.shot_tick
 		if since_launch == 0 and not _super_cutins_shown[p.index]:
 			_super_cutins_shown[p.index] = true
+			_super_pause_left = super_cutin_duration
 			if _super_freeze != null:
-				_super_freeze.play(p.index, p.color, player_weapons[p.index], reduced_flashes)
-			_sfx.play("muda")
+				_super_freeze.play(p.index, p.color, player_weapons[p.index], reduced_flashes,
+					super_cutin_duration)
+			if _event_direction != null:
+				_event_direction.super_beats(p.index, p.color, super_cutin_duration)
+			_sfx.play("super_chant")
 			return
 
 	# Shots scheduled for this tick leave before anything moves.
@@ -3685,6 +3704,8 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		_hit_pause_used_this_execution = true
 	if _time_stop != null:
 		_time_stop.impact_flash(at, victim.color)
+	if _event_direction != null:
+		_event_direction.impact(at, victim.color, "SNAP")
 	if state == Phase.FREEPLAY:
 		return          # the sandbox keeps no score and never ends
 	_hit_this_execution = true
@@ -3743,6 +3764,9 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		_sfx.play("victory")
 		_finish_match_telemetry()
 		_record_ladder_result(scorer)
+		if _event_direction != null:
+			_event_direction.impact(at, victim.color, "TIME // CUT")
+			_event_direction.tableau(scorer)
 	else:
 		banner_text = "P%d  →  HIT  →  P%d" % [scorer + 1, victim_idx + 1]
 		banner_color = PLAYER_COLORS[scorer]
@@ -3807,7 +3831,7 @@ func _auto_ready_close_camera_plans(delta: float) -> void:
 
 func _begin_planning(first: bool) -> void:
 	if _super_freeze != null:
-		_super_freeze.cancel()
+		_cancel_super_cutin()
 	state = Phase.PLANNING
 	_online_plan_sent = false
 	_online_match_reported = false
@@ -3994,6 +4018,7 @@ func _begin_execution() -> void:
 
 	state = Phase.EXECUTING
 	_super_cutins_shown.fill(false)
+	_super_pause_left = 0.0
 	exec_tick = 0
 	exec_ticks_total = exec_ticks()
 	_hit_pause_left = 0.0
@@ -4118,7 +4143,7 @@ func _start_match_replay() -> void:
 	_replay_accum = 0.0
 	state = Phase.REPLAY
 	if _super_freeze != null:
-		_super_freeze.cancel()
+		_cancel_super_cutin()
 	_apply_replay_frame(_replay_frames[0])
 	banner_time = 0.0
 	_preview.queue_redraw()
@@ -4660,7 +4685,7 @@ func restart() -> void:
 	if _ui != null: _ui._turn_review.visible = false
 	_secret_triple_match = false
 	if _super_freeze != null:
-		_super_freeze.cancel()
+		_cancel_super_cutin()
 	_replay_frames.clear()
 	_replay_terminal_frame.clear()
 	_replay_frame_index = 0
@@ -5522,6 +5547,8 @@ func _confirm(i: int) -> void:
 	if charging[i]:
 		_release_charge(i)
 	p.plan.confirmed = true
+	if _event_direction != null:
+		_event_direction.lock_in(i, p.position, p.color)
 	if _telemetry != null:
 		_telemetry.record("plan_locked", turn, {
 			"player": i + 1,
@@ -5920,6 +5947,20 @@ func _begin_match_telemetry(mode: String) -> void:
 		("gamepad" if not _pads.is_empty() and _pads[0] >= 0 else "keyboard_mouse")
 	_telemetry.begin_match(mode, level_name, input_name)
 	_telemetry_finished = false
+
+
+## True while a SUPER cut-in holds the simulation. The timer is authoritative;
+## cancelling the art layer (tests, menu, replay) releases the pause early.
+func _super_pause_active() -> bool:
+	if _super_pause_left <= 0.0:
+		return false
+	return _super_freeze == null or _super_freeze.is_active()
+
+
+func _cancel_super_cutin() -> void:
+	_super_pause_left = 0.0
+	if _super_freeze != null:
+		_super_freeze.cancel()
 
 
 func _finish_match_telemetry() -> void:

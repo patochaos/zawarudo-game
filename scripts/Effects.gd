@@ -5,10 +5,10 @@ class_name Effects
 ## Purely cosmetic — nothing here touches the simulation, and it is driven by
 ## real time so it does not consume execution ticks.
 
-enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION }
+enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION, DUST }
 
 const LIFE := {Kind.SPARK: 0.35, Kind.SHATTER: 0.55, Kind.KILL: 0.9,
-	Kind.CLASH: 0.42, Kind.AFTERMATH: 1.4, Kind.EXPLOSION: 0.68}
+	Kind.CLASH: 0.42, Kind.AFTERMATH: 1.4, Kind.EXPLOSION: 0.68, Kind.DUST: 0.32}
 const TEX_SPARK := preload("res://assets/kenney/vfx/spark.png")
 const TEX_SLASH := preload("res://assets/kenney/vfx/slash.png")
 const TEX_CIRCLE := preload("res://assets/kenney/vfx/temporal-circle.png")
@@ -108,6 +108,16 @@ func _draw() -> void:
 				draw_circle(f["pos"], 26.0 * (1.0 - u), Color(c.r, c.g, c.b, (1.0 - u) * 0.35))
 			Kind.CLASH:
 				_knife_impact(f, u, true)
+			Kind.DUST:
+				# Two small grounded puffs drifting apart from the feet.
+				var c: Color = f["col"]
+				for side in [-1.0, 1.0]:
+					var at: Vector2 = f["pos"] + Vector2(side * (6.0 + 22.0 * u), -4.0 - 10.0 * u)
+					draw_set_transform(at, 0.0)
+					draw_texture_rect(TEX_SMOKE, Rect2(Vector2(-14.0, -14.0) * (0.6 + u), Vector2(28.0, 28.0) * (0.6 + u)),
+						false, Color(0.82, 0.78, 0.70, (1.0 - u) * 0.28))
+					draw_set_transform(Vector2.ZERO)
+				draw_arc(f["pos"], 6.0 + 16.0 * u, PI, TAU, 12, Color(c.r, c.g, c.b, (1.0 - u) * 0.35), 1.0)
 			Kind.AFTERMATH:
 				var c: Color = f["col"]
 				var alpha: float = pow(1.0 - u, 1.6)

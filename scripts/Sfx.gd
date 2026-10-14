@@ -60,7 +60,7 @@ const K_VICTORY := preload("res://assets/kenney/audio/victory.ogg")
 ## The game has no music bed. The axis that actually matters is the loud,
 ## opinionated voice cues against everything else, so that is the split the
 ## options screen offers.
-const VOICE_CUES := ["match_start", "victory", "muda"]
+const VOICE_CUES := ["match_start", "victory", "super_chant"]
 
 var muted: bool = false
 var sfx_volume: float = 1.0
@@ -76,12 +76,12 @@ var _stop_at: Array[float] = []
 var _base_db: Array[float] = []
 var _variant_cursor: Dictionary = {}
 var _pitch := {"match_start": 1.0, "victory": 1.0}
-var _cutoff := {"muda": 1.38, "knife_super": 0.44,
+var _cutoff := {"super_chant": 1.38, "knife_super": 0.44,
 	"chakram_bounce": 0.52, "plasma_hit": 0.56,
 	"orb_cast": 0.72, "orb_deflect": 0.62, "orb_pop": 0.85,
 	"orb_combo": 1.05, "shock_super": 0.62,
 	"hazard_blast": 0.80, "core_collect": 0.75}
-var _gain_db := {"match_start": -4.0, "victory": -5.0, "muda": -1.5,
+var _gain_db := {"match_start": -4.0, "victory": -5.0, "super_chant": -1.5,
 	"knife_super": -8.0, "knife_ricochet": -8.0, "knife_hit": -8.0,
 	"dash": 5.0, "dash_super": 9.0, "dash_guard": -9.0,
 	"dash_wall": -7.0, "dash_hit": -8.0,
@@ -114,7 +114,7 @@ func _ready() -> void:
 	_streams["time_resume"] = _resume()
 	_streams["ui_move"] = _ui_move()
 	_streams["ui_accept"] = _ui_accept()
-	_streams["muda"] = _muda_chant()
+	_streams["super_chant"] = _super_chant()
 	_streams["dash"] = K_DASH
 	_streams["dash_super"] = K_DASH_SUPER
 	_streams["dash_guard"] = K_DASH_GUARD
@@ -342,11 +342,11 @@ func _clash() -> AudioStreamWAV:
 	return _wav(s)
 
 
-## Rapid synthetic "muda" chant for the SUPER freeze frame. A pulsed glottal
+## Rapid synthetic chant for the SUPER freeze frame. A pulsed glottal
 ## fundamental plus two moving formants gives it a voice-like body without
 ## requiring a bundled speech sample; each word has a closed "mu" and a harder
 ## noisy "da" onset.
-func _muda_chant() -> AudioStreamWAV:
+func _super_chant() -> AudioStreamWAV:
 	var word_length := 0.18
 	var words := 7
 	var total := word_length * float(words) + 0.06

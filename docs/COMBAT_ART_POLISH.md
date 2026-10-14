@@ -1,11 +1,12 @@
-# SUPER and impact art — September 4, 2026
+# SUPER and impact art — September 4, 2026 (copy revised October 14, 2026)
 
 SUPER uses an original Blender-rendered temporal dial with five blade facets,
-followed by the existing fighter portrait and “MUDA MUDA MUDA MUDA” title,
-displayed as two lines of “MUDA MUDA”. This name preserves the intended JoJo
-reference. Five
-accents build toward release. The pause remains 1.45 seconds; GameManager still
-owns the pause and volley timing. Portraits and fighter animations are unchanged.
+followed by the existing fighter portrait and, since the Gate 3 pass, the
+original title THE WORLD HOLDS ITS BREATH / STAND STILL in place of the former
+borrowed chant. Five accents build toward release, then the panel tears away
+along the thrower's facing. The pause remains 1.45 seconds and is now a
+GameManager timer (`super_cutin_duration`); the cut-in animates for the same
+length. Portraits and fighter animations are unchanged.
 
 Shared SPARK and CLASH feedback now uses four rendered metallic shard poses.
 Wall contacts stay smaller than clashes; a short contact glint and a partial

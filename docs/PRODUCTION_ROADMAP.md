@@ -123,17 +123,24 @@ motion, dishonest launch origin or visible Web performance regression.
 
 Goal: create one reusable theatrical grammar instead of isolated effects.
 
-- Palette presets for lock, impact, SUPER and result.
-- Lock-in pose and spotlight.
-- Impact crop with one focal point and original typography.
-- Three-beat SUPER: anticipation, portrait strike, release.
-- Victory tableau using the real final world state.
-- Reduced-flash variants preserving all gameplay information.
-- Replace derivative portrait, copy and inherited catchphrases.
+Implemented 2026-10-14 in `scripts/EventDirection.gd`, `SuperFreezeFrame.gd`,
+`FighterVisual.gd` and the result screen; see "Event direction" in the README
+and `EventDirectionTest` / `EventDirectionVisualTest`.
 
-Do not refactor `SuperFreezeFrame` timing during Gate 1. It currently influences
-when gameplay resumes; first make `GameManager` own that timing in a separate,
-fully tested change, then turn the cut-in into a pure observer.
+- [x] Palette presets for lock, impact, SUPER and result.
+- [x] Lock-in pose and spotlight.
+- [x] Impact crop with one focal point and original typography.
+- [x] Three-beat SUPER: anticipation, portrait strike, release.
+- [x] Victory tableau using the real final world state (the winner holds the
+  lock stance; a dedicated victory atlas can replace it later).
+- [x] Reduced-flash variants preserving all gameplay information.
+- [x] Replace derivative copy and inherited catchphrases: the SUPER line is now
+  THE WORLD HOLDS ITS BREATH / STAND STILL and the chant cue is `super_chant`.
+  The portrait remains `duelist-portrait-v1`; a repaint needs the art pipeline.
+
+`GameManager` now owns the SUPER pause (`super_cutin_duration`,
+`_super_pause_active`); `SuperFreezeFrame` is a pure observer that animates for
+the same length and can still be cancelled to release the pause early.
 
 ## Gate 4 — Fighter B and UI identity
 
