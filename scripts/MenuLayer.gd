@@ -27,15 +27,15 @@ signal ui_navigated
 signal ui_accepted
 
 const ROW_PLAY := 0
-const ROW_INTERCEPTION := 1
-const ROW_TUTORIAL := 2
-const ROW_ONLINE := 3
-const ROW_CONTROLS := 4
-const ROW_OPTIONS := 5
-const ROW_TUNING := 6
-const ROW_EXPERIMENTS := 7
-const ROW_QUIT := 8
-const ROW_CUSTOM := 9
+const ROW_CUSTOM := 1
+const ROW_INTERCEPTION := 2
+const ROW_TUTORIAL := 3
+const ROW_ONLINE := 4
+const ROW_CONTROLS := 5
+const ROW_OPTIONS := 6
+const ROW_TUNING := 7
+const ROW_EXPERIMENTS := 8
+const ROW_QUIT := 9
 var developer_mode: bool = "--dev-tools" in OS.get_cmdline_user_args()
 ## Rows on the separate experiments page.
 const ROW_REAL_TIME := 0
@@ -662,7 +662,7 @@ func _activate(row: int) -> void:
 			_cursor = 0
 			_refresh()
 		ROW_CUSTOM:
-			if developer_mode: roster_requested.emit()
+			roster_requested.emit()
 		ROW_TUNING:
 			tuning_requested.emit()
 		ROW_EXPERIMENTS:
@@ -703,6 +703,7 @@ func _page_names() -> Array[String]:
 		return ["REAL TIME", "FATE TRIAL", "CLOSE CAMERA", "SANDBOX", "CLASS LAB", "‹  BACK"]
 	var main_rows: Array[String] = [
 		"START DUEL",
+		"CUSTOM MATCH",
 		"INTERCEPTION",
 		"LEARN TO PLAY",
 		"ONLINE",
@@ -712,7 +713,6 @@ func _page_names() -> Array[String]:
 		"EXPERIMENTS" if developer_mode else "SEND FEEDBACK",
 		"RELOAD DEMO" if OS.has_feature("web") else "QUIT",
 	]
-	if developer_mode: main_rows.append("CUSTOM MATCH")
 	return main_rows
 
 
@@ -725,6 +725,7 @@ func _page_description() -> String:
 		MenuPage.MAIN:
 			return [
 				"Climb the opponent ladder: five named CPUs, each in its own arena, first to 3 hits. %s Uses your offline tuning." % ladder_line,
+				"Pick any of the ten arenas, the number of fighters, each CPU's skill and the match length.",
 				"Predict the next landing. One jump, committed air movement and quick ground stops. Contest the central core against a Standard CPU. First to 3 hits. Fixed test rules.",
 				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
 				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",
@@ -733,7 +734,6 @@ func _page_description() -> String:
 				"Fine-tune freeze time, jumps, projectiles and more for offline play. Changes save automatically. Online uses standard rules.",
 				"Unfinished modes and tuning tools." if developer_mode else "Tell us what you tried, what surprised you, and whether you want another match. Email feedback with an optional match report.",
 				"Reload this browser demo." if OS.has_feature("web") else "Close ZAWARUDO.",
-				"Configure local players, arenas and experimental match formats.",
 			][_cursor]
 		MenuPage.EXPERIMENTS:
 			return [

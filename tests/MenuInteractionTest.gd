@@ -25,7 +25,7 @@ func _run() -> void:
 	_check(menu._row_buttons.size() == menu.ROWS,
 		"every menu row slot must have a mouse hit target")
 	_check(menu._page_names() == [
-		"START DUEL", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT",
+		"START DUEL", "CUSTOM MATCH", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT",
 	], "the main menu must retain its primary destinations")
 	for slot in menu.ROWS:
 		_check(menu._rows[slot].visible == (slot < menu._page_names().size()),

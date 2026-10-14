@@ -47,6 +47,7 @@ may leave an `in_progress` checkpoint rather than a confirmed abandonment.
 
 ## Developer access
 
-`Play.bat -- --dev-tools` exposes **EXPERIMENTS** and **CUSTOM MATCH**. Normal
-source play and exports use the focused public menu. Tests remain in the source
+**CUSTOM MATCH** on the main menu picks the arena, the number of fighters, each
+CPU's skill and the match length. `Play.bat -- --dev-tools` additionally exposes
+**EXPERIMENTS**. Normal source play and exports use the focused public menu. Tests remain in the source
 project and are excluded from exports. No archive is required for local play.

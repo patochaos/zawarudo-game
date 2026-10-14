@@ -27,7 +27,7 @@ func run() -> void:
 	# Ladder progress is saved on a demo win; keep it off the player's settings.
 	game.settings_path = "user://test-coredemotest-settings.cfg"
 	game._settings["ladder_progress"] = 0
-	check(game._menu._page_names() == ["START DUEL", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Interception and offline tuning alongside its primary destinations")
+	check(game._menu._page_names() == ["START DUEL", "CUSTOM MATCH", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Custom Match, Interception and offline tuning alongside its primary destinations")
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")
 	check(game.level_index == 1 and game.wrap_x and game.wrap_y, "Start Duel must use Endless Descent with four-way wrapping")

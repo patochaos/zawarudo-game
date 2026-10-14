@@ -236,6 +236,7 @@ var _over_chrome: ResultChrome
 var _over_label: Label
 var _over_score: Label
 var _over_arena: Label
+var _over_kicker: Label
 var _turn_review: Control
 var _planning_timeline: Control
 var _over_controls: Label
@@ -367,16 +368,19 @@ func build(manager) -> void:
 	_over_score = _mk_label(Vector2(390.0, 295.0), 500.0, 42, HORIZONTAL_ALIGNMENT_CENTER)
 	_over_score.size = Vector2(500.0, 64.0)
 	_over_score.visible = false
-	_over_arena = _mk_label(Vector2(300.0, 354.0), 680.0, 21, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_arena.size = Vector2(800.0, 54.0)
+	_over_arena = _mk_label(Vector2(300.0, 350.0), 680.0, 21, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_arena.size = Vector2(680.0, 30.0)
 	_over_arena.visible = false
+	_over_kicker = _mk_label(Vector2(300.0, 378.0), 680.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_kicker.size = Vector2(680.0, 20.0)
+	_over_kicker.visible = false
 	_over_controls = _mk_label(Vector2(140.0, 568.0), 1000.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
 	_over_controls.size = Vector2(1000.0, 34.0)
 	_over_controls.visible = false
 
-	_arena_previous_button = _result_button(Vector2(282.0, 352.0), Vector2(52.0, 44.0), "‹", false)
+	_arena_previous_button = _result_button(Vector2(282.0, 302.0), Vector2(52.0, 44.0), "‹", false)
 	_arena_previous_button.pressed.connect(func(): gm._cycle_rematch_level(-1))
-	_arena_next_button = _result_button(Vector2(946.0, 352.0), Vector2(52.0, 44.0), "›", false)
+	_arena_next_button = _result_button(Vector2(946.0, 302.0), Vector2(52.0, 44.0), "›", false)
 	_arena_next_button.pressed.connect(func(): gm._cycle_rematch_level(1))
 	_replay_button = _result_button(Vector2(342.0, 438.0), Vector2(184.0, 52.0), "R  WATCH REPLAY")
 	_replay_button.pressed.connect(func(): gm._start_match_replay())
@@ -660,6 +664,10 @@ func refresh() -> void:
 
 	# hit banner, fading out over its last half second
 	var bt: float = gm.banner_time
+	# The verdict panel already says who won; the banner under it only collided
+	# with the key hints.
+	if gm.state == Phase.GAME_OVER and not touch_mode:
+		bt = 0.0
 	_banner_bg.visible = bt > 0.0
 	_banner.visible = bt > 0.0
 	if bt > 0.0:
@@ -766,6 +774,7 @@ func refresh() -> void:
 	_over_label.visible = ui_result
 	_over_score.visible = ui_result
 	_over_arena.visible = ui_result
+	_over_kicker.visible = ui_result
 	_over_controls.visible = ui_result
 	var desktop_result: bool = over and not bool(gm._touch_controls.enabled)
 	var next_opponent: bool = desktop_result and gm.next_opponent_available()
@@ -802,7 +811,8 @@ func refresh() -> void:
 			controls = "KEYBOARD AND GAMEPAD SHORTCUTS REMAIN AVAILABLE" \
 				if gm.online_player == 0 else "THE HOST CHOOSES THE NEXT ARENA"
 		else:
-			controls = "KEYBOARD  ←/→ LEVEL · R REPLAY · ENTER REMATCH     GAMEPAD  D-PAD · Y · A"
+			controls = "KEYBOARD  ←/→ ARENA · R REPLAY · ENTER REMATCH     GAMEPAD  D-PAD · Y · A"
+		var kicker := "" if gm.fate_trial_mode or gm.close_camera_mode else "FIRST TO %d HITS" % gm.hits_to_win
 		var arena_line := "CLOSE CAMERA — KNIFE COURT" if gm.close_camera_mode else \
 			("TRIAL 01 — THE CROSSFIRE" if gm.fate_trial_mode else \
 			"NEXT ARENA   %02d / %02d   —   %s" % [
@@ -812,18 +822,20 @@ func refresh() -> void:
 				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		if gm.demo_match:
 			var shown: int = gm.rematch_opponent if gm.rematch_opponent >= 0 else maxi(gm.demo_opponent, 0)
-			arena_line = "%s   —   %s · %s" % [Opponents.position_label(shown),
-				Opponents.display_name(shown), Opponents.arena_name(shown)]
+			arena_line = "%s  ·  %s" % [Opponents.display_name(shown), Opponents.arena_name(shown)]
+			kicker = "%s · FIRST TO %d HITS" % [Opponents.position_label(shown), gm.hits_to_win]
+			if gm.ladder_progress() > 0:
+				kicker += " · ←/→ ANOTHER OPPONENT"
 			controls = "ENTER REMATCH · R REPLAY · ESC MENU"
 			if gm.next_opponent_available():
 				controls = "N NEXT OPPONENT · " + controls
-			if gm.ladder_progress() > 0:
-				controls += " · ←/→ CHOOSE OPPONENT"
 		if gm.interception_mode:
 			arena_line = "INTERCEPTION COURT · FIRST TO 3 HITS"
 			controls = "R WATCH REPLAY · ENTER REMATCH · ESC MENU"
 		_over_score.text = gm._score_text()
 		_over_arena.text = arena_line
+		_over_kicker.text = kicker
+		_over_kicker.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
 		_over_controls.text = controls
 		_over_score.add_theme_color_override("font_color", Color(0.92, 0.93, 0.98))
 		_over_arena.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))

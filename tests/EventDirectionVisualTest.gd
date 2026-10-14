@@ -64,6 +64,7 @@ func run() -> void:
 	game.score[0] = 3
 	game.score[1] = 1
 	game._time_stop.visible = false
+	game._record_ladder_result(0)
 	ed.tableau(0)
 	ed._process(0.5)
 	await snap("tableau")

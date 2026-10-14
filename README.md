@@ -1,6 +1,6 @@
 # ZAWARUDO — Tactical Knife Duel
 
-**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). Experiments and custom local setups require `Play.bat -- --dev-tools`.
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). **CUSTOM MATCH** picks any arena, the number of fighters, each CPU's skill and the match length. Experiments require `Play.bat -- --dev-tools`.
 
 ### Interception test
 

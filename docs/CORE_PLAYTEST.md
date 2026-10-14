@@ -31,7 +31,8 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 - Rematches retain the arena, rules and opponent. After a win, a separate action
   starts the next opponent; the result-screen arrows revisit any opponent
   already reached.
-- Experiments and local custom setups are available with `--dev-tools` only.
+- Custom Match is public: any of the ten arenas, 2 to 4 fighters, each CPU's
+  skill preset and the match length. Experiments stay behind `--dev-tools`.
 - Online remains a separate existing private-room route. Do not pool CPU and
   online findings when assessing fun or opponent readability.
 
