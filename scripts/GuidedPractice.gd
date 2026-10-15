@@ -1,6 +1,9 @@
 extends CanvasLayer
 
-## Three timed exercises using the ordinary planner and execution physics.
+## Three timed exercises using the ordinary planner and execution physics,
+## hosted by the one who stops time. He speaks of himself in the third person,
+## calls everything you do useless, and is never wrong. HOST_NAME is the only
+## place his name lives: every line reads it through %s.
 var gm
 var active := false
 var lesson := 0
@@ -11,6 +14,8 @@ var survival_windows := 0
 var survival_knife_ids: Array[int] = []
 var _panel: Panel
 var _title: Label
+var _host_name: Label
+var _host_role: Label
 var _body: Label
 var _action: Button
 var _hint: Label
@@ -22,10 +27,13 @@ var _jump_visual_position := Vector2.ZERO
 var _jump_visual_scale := Vector2.ONE
 const JUMP_WINDUP_TICKS := 4
 const JUMP_HOLD_TICKS := 8
-const JUMP_HINT := "Aim at the gold ring. Charge about 3/4, release, then LOCK PLAN."
-const DODGE_HINT := "Jump over the low knife. The second covers your landing."
-const LANDING_HINT := "Read the incoming knife. Steer toward a safe landing."
-const TITLES := ["01  MOVE, LOCK, WATCH", "02  CATCH THE LANDING", "03  THE WORLD REMEMBERS"]
+const JUMP_HINT := "Gold ring. Three-quarters charge. Release. LOCK. Checkmate."
+const DODGE_HINT := "Leap the low knife. The second one is waiting for your landing."
+const LANDING_HINT := "Read the knife. Land where it is not."
+const TITLES := ["01  TIME, STOP. NOW WALK.", "02  THROW AT THE FUTURE", "03  KNIVES DON'T FORGET"]
+const HOST_NAME := "DIO"
+const HOST_ROLE := "STOPS TIME. JUDGES YOU."
+const PORTRAIT_SIZE := 150.0
 
 class Markers:
 	extends Control
@@ -64,8 +72,8 @@ class Markers:
 func _ready() -> void:
 	layer = 14
 	_panel = Panel.new()
-	_panel.position = Vector2(220, 155)
-	_panel.size = Vector2(840, 410)
+	_panel.position = Vector2(220, 130)
+	_panel.size = Vector2(840, 470)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.035, 0.02, 0.065, 0.98)
 	style.border_color = Color(0.96, 0.69, 0.18)
@@ -73,17 +81,30 @@ func _ready() -> void:
 	_panel.add_theme_stylebox_override("panel", style)
 	add_child(_panel)
 	_title = _label(Vector2(30, 24), Vector2(780, 42), 25)
-	_body = _label(Vector2(30, 82), Vector2(780, 225), 22)
+	var portrait := HostPortrait.new()
+	portrait.position = Vector2(30, 82)
+	portrait.size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+	_panel.add_child(portrait)
+	_host_name = _label(Vector2(30, 240), Vector2(PORTRAIT_SIZE, 22), 14)
+	_host_name.text = HOST_NAME
+	_host_name.add_theme_color_override("font_color", Color(0.96, 0.69, 0.18))
+	_host_role = _label(Vector2(30, 262), Vector2(172, 20), 13)
+	_host_role.text = HOST_ROLE
+	_host_role.add_theme_font_override("font", preload("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"))
+	_host_role.add_theme_color_override("font_color", Color(0.68, 0.72, 0.82))
+	_host_role.clip_text = true
+	_body = _label(Vector2(206, 82), Vector2(604, 296), 21)
 	_body.add_theme_font_override("font", preload("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"))
+	_body.add_theme_constant_override("line_spacing", 6)
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_action = Button.new()
-	_action.position = Vector2(30, 330)
+	_action.position = Vector2(30, 392)
 	_action.size = Vector2(430, 54)
 	_action.add_theme_font_size_override("font_size", 18)
 	_action.pressed.connect(advance)
 	_panel.add_child(_action)
 	var back := Button.new()
-	back.position = Vector2(606, 330)
+	back.position = Vector2(606, 392)
 	back.size = Vector2(204, 54)
 	back.text = "ESC  MENU"
 	back.pressed.connect(func(): gm._open_menu())
@@ -150,14 +171,15 @@ func show_briefing(message: String = "") -> void:
 	_title.text = TITLES[lesson]
 	var move_keys: String = gm._menu._keys_text("right")
 	var jump_keys: String = gm._menu._keys_text("jump")
+	# One beat per line. The clock rule is told once, on the first lesson.
 	var instructions: Array[String] = [
-		"Hold %s to record a move into the gold zone. Your body waits; the ghost shows your future. Then lock with Left Shift or the Lock Plan button." % move_keys,
-		"The opponent is preparing to jump onto the marked ledge. Aim at the gold ring on the landing ghost. Hold left-click to charge about three-quarters, release, then lock. Watch them jump into your throw. Only this lesson reveals their route.",
-		"Two knives are already in flight. Hold %s to jump over the low knife from your left. The knife from the right covers the landing of a straight jump. At the next freeze, read its path and steer toward a safe landing. Survive both turns." % jump_keys,
+		"The World! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with Left Shift, and time resumes.\n\nEight seconds per attempt. When the clock runs out, whatever you planned happens. Even nothing." % [HOST_NAME, move_keys],
+		"Oh? The fool across from you is approaching the marked ledge.\nLet him. I reveal his route this once.\nAim at the gold ring on his landing ghost.\nHold left-click to three-quarters, release, LOCK.\nHe will leap into your knife. If this were chess, I would call it checkmate.",
+		"Two knives already hang in the air. Mine.\nHold %s to leap the low one from the left.\nThe one from the right waits for your landing.\nAt the next freeze, read it and land elsewhere.\nSurvive both turns, and I may consider you a human worth stepping on." % jump_keys,
 	]
-	_body.text = message if not message.is_empty() else instructions[lesson] + "\n\nEvery attempt gives you 8 seconds. The current plan executes when time runs out."
-	_action.text = "ENTER  START DUEL" if completed and lesson == 2 else ("ENTER  NEXT LESSON" if completed else "ENTER  START · 8 SECONDS")
-	if between_turns: _action.text = "ENTER  NEXT TURN · 8 SECONDS"
+	_body.text = message if not message.is_empty() else instructions[lesson]
+	_action.text = "ENTER  PLAYTIME IS OVER. FIGHT." if completed and lesson == 2 else ("ENTER  NEXT LESSON" if completed else "ENTER  TIME RESUMES · 8s")
+	if between_turns: _action.text = "ENTER  NEXT TURN · 8s"
 	_markers.queue_redraw()
 
 func advance() -> void:
@@ -241,7 +263,7 @@ func begin_attempt() -> void:
 	gm._telemetry.record("lesson_attempt", gm.turn, {"lesson": lesson + 1, "attempt": attempt})
 	_panel.visible = false
 	_hint.visible = true
-	_hint.text = ["Move into the gold zone, then LOCK PLAN", JUMP_HINT,
+	_hint.text = ["Ghost into the gold zone, then LOCK. Anything else is USELESS.", JUMP_HINT,
 		LANDING_HINT if survival_windows > 0 else DODGE_HINT][lesson]
 	_markers.queue_redraw()
 
@@ -256,21 +278,21 @@ func finish_window() -> void:
 				if survival_windows < 2:
 					between_turns = true
 					gm._telemetry.record("lesson_window_survived", gm.turn, {"lesson": 3})
-					show_briefing("You survived the jump. The second knife is still incoming, and the world has not reset. Read its path and change your landing if it crosses your ghost. Steering left is one way to escape. Survive one more turn.")
+					show_briefing("You cleared the jump.\nThe second knife is still coming. The world did not reset for your comfort.\nIf it crosses your ghost, land elsewhere. Left works.\nOne more turn, human.")
 					return
 				success = true
 	gm._telemetry.record("lesson_result", gm.turn, {"lesson": lesson + 1, "success": success})
 	completed = success
 	var messages: Array[String] = [
-		"Your recorded move became real. The ghost is a preview; execution is the result. Next, place a throw on that route.",
-		"You placed a throw before the jump and caught the opponent's future position. In a real duel, their route is hidden. Read their movement and look for the next landing.",
-		"You escaped both knives across two turns. A safe jump can still have a dangerous landing: read the next threat at every freeze. You're ready for a Duelist versus CPU match, first to three hits.",
+		"Your ghost became flesh.\nThe ghost previews. EXECUTE delivers.\nEven a human can learn this. Next: put a knife on that route.",
+		"You threw at a spot where nobody stood yet. That is the whole game.\nIn a real duel his route is hidden.\nRead his feet. Guess the landing.",
+		"Two knives, two turns, zero holes in you.\nA safe jump can still have a terrible landing. Read the threat at every freeze.\nThe playtime service is now over.\nGo fight the CPU, first to three hits. Do not embarrass me.",
 	]
 	var retries: Array[String] = [
-		"Try again. Hold your right-move control until the ghost reaches the gold zone, then lock. You can reset your route before the deadline.",
-		"Try the landing. Stay on your ledge and aim at the gold ring, above the marked platform. Charge about three-quarters, release, then lock. Every retry restores the same jump, so you can adjust your aim or charge.",
-		("The second knife caught your landing. Jump over the low knife again, then steer left during the next plan to land elsewhere. Both knives repeat the same paths on every retry."
-			if survival_windows > 0 else "The low knife caught you. Hold jump to record your escape before locking. Then watch the second knife at the next freeze: it covers the landing of a straight jump."),
+		"USELESS.\nHold your right-move control until the ghost stands in the gold zone. Then LOCK.\nRESET wipes a bad route.\nAgain. I have all the time in the world. Literally.",
+		"USELESS, USELESS.\nStay on your ledge. Aim at the gold ring above the marked platform.\nThree-quarters charge, release, LOCK.\nThe jump repeats on every retry. Your aim does not have to.",
+		("The second knife met your landing.\nLeap the low one again, then steer left on the next plan.\nThe knives repeat their paths. Learn their habits, or remain a pincushion."
+			if survival_windows > 0 else "The low knife found you.\nHold jump before you LOCK.\nAt the next freeze, watch the second knife. It covers the straight-jump landing.\nOh? You thought a straight jump was clever?"),
 	]
 	show_briefing(messages[lesson] if success else retries[lesson])
 
@@ -316,8 +338,8 @@ func _process(_delta: float) -> void:
 	if active:
 		_sync_jump_preparation()
 		if lesson == 1:
-			_hint.text = "Watch your throw meet the landing." if gm.state == Phase.EXECUTING else JUMP_HINT
+			_hint.text = "Time resumes. Your knife has an appointment." if gm.state == Phase.EXECUTING else JUMP_HINT
 		elif lesson == 2:
-			_hint.text = "Watch both knives keep moving." if gm.state == Phase.EXECUTING \
+			_hint.text = "Time resumes. Knives don't forget." if gm.state == Phase.EXECUTING \
 				else (LANDING_HINT if survival_windows > 0 else DODGE_HINT)
 		_markers.queue_redraw()
