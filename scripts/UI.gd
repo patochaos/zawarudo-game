@@ -161,8 +161,37 @@ class HudChrome:
 			Color(0.84, 0.60, 0.19, 0.52), 1.0)
 
 
+## A drawn chevron for the arena-cycling buttons: neither Kenney font has a
+## "<" or "‹" that reads at button size.
+class Chevron:
+	extends Control
+
+	var points_left: bool = true
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		queue_redraw()
+
+	func _draw() -> void:
+		var centre := size * 0.5
+		var tip_x := centre.x - 6.0 if points_left else centre.x + 6.0
+		var tail_x := centre.x + 6.0 if points_left else centre.x - 6.0
+		var ink := Color(0.94, 0.95, 1.0) if not get_parent().disabled else Color(0.38, 0.39, 0.46)
+		draw_polyline(PackedVector2Array([
+			Vector2(tail_x, centre.y - 10.0), Vector2(tip_x, centre.y),
+			Vector2(tail_x, centre.y + 10.0),
+		]), ink, 2.5, true)
+
+
 class ResultChrome:
 	extends Control
+
+	## Bottom edge of the card. It drops when there is a gamepad line to hold.
+	var card_bottom: float = 556.0:
+		set(value):
+			if card_bottom != value:
+				card_bottom = value
+				queue_redraw()
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -179,19 +208,22 @@ class ResultChrome:
 				Color(violet.r, violet.g, violet.b, 0.035), 2.0)
 			draw_line(Vector2(1280.0, y), Vector2(1010.0 - float(i % 3) * 22.0, 360.0),
 				Color(gold.r, gold.g, gold.b, 0.035), 2.0)
-		# A band for the verdict only. The lower field stays open so the final
-		# tableau, the winner lit and the loser down, remains in view.
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1030.0, 400.0),
-			Vector2(236.0, 400.0),
-		]), Color(0.018, 0.010, 0.035, 0.86))
-		draw_polyline(PackedVector2Array([
-			Vector2(250.0, 176.0), Vector2(1052.0, 176.0), Vector2(1030.0, 400.0),
-			Vector2(236.0, 400.0), Vector2(250.0, 176.0),
-		]), Color(gold.r, gold.g, gold.b, 0.48), 1.5, true)
-		draw_line(Vector2(380.0, 306.0), Vector2(900.0, 306.0),
+		# One card holds the verdict and the actions. Buttons floating over the
+		# arena platforms read as clutter; the final tableau still shows through
+		# the dimmed field on either side and below.
+		var skew := (card_bottom - 168.0) * 0.08
+		var card := PackedVector2Array([
+			Vector2(246.0, 168.0), Vector2(1054.0, 168.0), Vector2(1054.0 - skew, card_bottom),
+			Vector2(246.0 - skew, card_bottom),
+		])
+		draw_colored_polygon(card, Color(0.018, 0.010, 0.035, 0.90))
+		draw_polyline(card + PackedVector2Array([card[0]]),
+			Color(gold.r, gold.g, gold.b, 0.48), 1.5, true)
+		# Verdict rule above the score, violet rule between the match summary
+		# and the action tray.
+		draw_line(Vector2(380.0, 268.0), Vector2(900.0, 268.0),
 			Color(gold.r, gold.g, gold.b, 0.55), 2.0)
-		draw_line(Vector2(424.0, 388.0), Vector2(856.0, 388.0),
+		draw_line(Vector2(300.0, 410.0), Vector2(980.0, 410.0),
 			Color(violet.r, violet.g, violet.b, 0.42), 1.0)
 
 var gm
@@ -215,7 +247,8 @@ const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
 const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_ABANDONED := "OPPONENT DISCONNECTED  ·  ENTER CLAIMS THE MATCH  ·  ESC LEAVES"
 const _HINT_ONLINE_BROKEN := "MATCH STOPPED  ·  ESC RETURNS TO THE MENU"
-const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · ↓ WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
+# The Kenney fonts carry no arrow glyphs, so hints spell directions out.
+const _HINT_PAD := "PAD P%d  L-STICK MOVE · A JUMP · STICK DOWN WAIT · R-STICK AIM · R2 THROW · Y SUPER · START LOCK · B UNDO"
 var _banner_bg: ColorRect
 var _banner_rule: ColorRect
 var _banner: Label
@@ -353,7 +386,7 @@ func build(manager) -> void:
 	_over_bg = ColorRect.new()
 	_over_bg.position = Vector2.ZERO
 	_over_bg.size = Vector2(1280.0, 720.0)
-	_over_bg.color = Color(0.012, 0.008, 0.025, 0.56)
+	_over_bg.color = Color(0.012, 0.008, 0.025, 0.70)
 	_over_bg.visible = false
 	add_child(_over_bg)
 	_over_chrome = ResultChrome.new()
@@ -361,36 +394,44 @@ func build(manager) -> void:
 	_over_chrome.visible = false
 	add_child(_over_chrome)
 
-	_over_label = _mk_label(Vector2(140.0, 205.0), 1000.0, 46, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_label.size = Vector2(1000.0, 74.0)
+	# Every line sits inside the card drawn by ResultChrome (x 246..1054 at the
+	# top, narrowing to 212..1020 at the bottom). The verdict and arena lines
+	# shrink to fit their width in refresh(); long names used to spill past
+	# the gold frame.
+	_over_label = _mk_label(Vector2(270.0, 186.0), 740.0, 44, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_label.size = Vector2(740.0, 72.0)
 	_over_label.visible = false
-	_over_score = _mk_label(Vector2(390.0, 295.0), 500.0, 42, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_score.size = Vector2(500.0, 64.0)
+	_over_score = _mk_label(Vector2(390.0, 278.0), 500.0, 40, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_score.size = Vector2(500.0, 60.0)
 	_over_score.visible = false
-	_over_arena = _mk_label(Vector2(300.0, 350.0), 680.0, 21, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_arena.size = Vector2(680.0, 30.0)
+	_over_arena = _mk_label(Vector2(280.0, 342.0), 720.0, 21, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_arena.size = Vector2(720.0, 30.0)
 	_over_arena.visible = false
-	_over_kicker = _mk_label(Vector2(300.0, 378.0), 680.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_kicker.size = Vector2(680.0, 20.0)
+	_over_kicker = _mk_label(Vector2(280.0, 374.0), 720.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_kicker.size = Vector2(720.0, 20.0)
 	_over_kicker.visible = false
-	_over_controls = _mk_label(Vector2(140.0, 568.0), 1000.0, 13, HORIZONTAL_ALIGNMENT_CENTER)
-	_over_controls.size = Vector2(1000.0, 34.0)
+	_over_controls = _mk_label(Vector2(280.0, 552.0), 720.0, 12, HORIZONTAL_ALIGNMENT_CENTER)
+	_over_controls.size = Vector2(720.0, 24.0)
 	_over_controls.visible = false
 
-	_arena_previous_button = _result_button(Vector2(282.0, 302.0), Vector2(52.0, 44.0), "‹", false)
+	_arena_previous_button = _result_button(Vector2(300.0, 284.0), Vector2(52.0, 48.0), "", false)
 	_arena_previous_button.pressed.connect(func(): gm._cycle_rematch_level(-1))
-	_arena_next_button = _result_button(Vector2(946.0, 302.0), Vector2(52.0, 44.0), "›", false)
+	_arena_next_button = _result_button(Vector2(928.0, 284.0), Vector2(52.0, 48.0), "", false)
 	_arena_next_button.pressed.connect(func(): gm._cycle_rematch_level(1))
-	_replay_button = _result_button(Vector2(342.0, 438.0), Vector2(184.0, 52.0), "R  WATCH REPLAY")
+	for entry in [[_arena_previous_button, true], [_arena_next_button, false]]:
+		var chevron := Chevron.new()
+		chevron.points_left = entry[1]
+		chevron.size = entry[0].size
+		entry[0].add_child(chevron)
+	_replay_button = _result_button(Vector2(342.0, 428.0), Vector2(184.0, 52.0), "R  WATCH REPLAY")
 	_replay_button.pressed.connect(func(): gm._start_match_replay())
-	_rematch_button = _result_button(Vector2(544.0, 438.0), Vector2(208.0, 52.0), "ENTER  REMATCH", true)
+	_rematch_button = _result_button(Vector2(544.0, 428.0), Vector2(208.0, 52.0), "ENTER  REMATCH", true)
 	_rematch_button.pressed.connect(func(): gm._request_rematch())
-	_menu_button = _result_button(Vector2(770.0, 438.0), Vector2(168.0, 52.0), "ESC  MENU")
+	_menu_button = _result_button(Vector2(770.0, 428.0), Vector2(168.0, 52.0), "ESC  MENU")
 	_menu_button.pressed.connect(_leave_result)
-	_report_button = _result_button(Vector2(520.0, 510.0), Vector2(240.0, 42.0), "C  COPY MATCH REPORT")
-	_report_button.text = "SEND FEEDBACK"
+	_report_button = _result_button(Vector2(520.0, 494.0), Vector2(240.0, 42.0), "SEND FEEDBACK")
 	_report_button.pressed.connect(func(): gm.open_feedback())
-	_next_opponent_button = _result_button(Vector2(670, 510), Vector2(240, 42), "N  NEXT OPPONENT")
+	_next_opponent_button = _result_button(Vector2(670, 494), Vector2(240, 42), "N  NEXT OPPONENT")
 	_next_opponent_button.pressed.connect(func(): gm.start_next_opponent())
 	_lock_plan = _result_button(Vector2(836, 74), Vector2(156, 32), "SHIFT  LOCK PLAN", true)
 	_lock_plan.pressed.connect(func(): gm._confirm(gm._keyboard_player()))
@@ -774,7 +815,10 @@ func refresh() -> void:
 	_over_score.visible = ui_result
 	_over_arena.visible = ui_result
 	_over_kicker.visible = ui_result
-	_over_controls.visible = ui_result
+	# The live control reference has nothing to say once the match is over;
+	# the card carries every key that still works.
+	for item in _help:
+		item.visible = help_visible and not ui_result
 	var desktop_result: bool = over and not bool(gm._touch_controls.enabled)
 	var next_opponent: bool = desktop_result and gm.next_opponent_available()
 	_report_button.position.x = 370.0 if next_opponent else 520.0
@@ -797,20 +841,17 @@ func refresh() -> void:
 		and (gm.online_player != 0 or bool(gm._online_waiting_rematch))
 	_arena_previous_button.disabled = level_locked
 	_arena_next_button.disabled = level_locked
+	for button in [_arena_previous_button, _arena_next_button]:
+		for chevron in button.get_children():
+			chevron.queue_redraw()
 	_rematch_button.disabled = gm.online_mode and gm._online_waiting_rematch
 	if over:
-		var controls: String
-		if gm.fate_trial_mode or gm.close_camera_mode:
-			controls = "R WATCH REPLAY · ENTER RETRY · ESC MENU"
-		elif touch_mode:
-			controls = "HOST CHOOSES THE ARENA · WATCH THE FIGHT · OR RUN IT BACK" \
-				if gm.online_mode and gm.online_player != 0 else \
-				"CHOOSE THE NEXT ARENA · WATCH THE FIGHT · OR RUN IT BACK"
-		elif gm.online_mode:
-			controls = "KEYBOARD AND GAMEPAD SHORTCUTS REMAIN AVAILABLE" \
-				if gm.online_player == 0 else "THE HOST CHOOSES THE NEXT ARENA"
-		else:
-			controls = "KEYBOARD  ←/→ ARENA · R REPLAY · ENTER REMATCH     GAMEPAD  D-PAD · Y · A"
+		# The buttons already name their keys, so this line only says what they
+		# cannot: the gamepad mapping, or who controls the next arena online.
+		var cycle_label := "OPPONENT" if gm.demo_match else "ARENA"
+		var controls := _result_pad_hint(cycles, cycle_label)
+		if gm.online_mode and gm.online_player != 0:
+			controls = "THE HOST CHOOSES THE NEXT ARENA"
 		var kicker := "" if gm.fate_trial_mode or gm.close_camera_mode else "FIRST TO %d HITS" % gm.hits_to_win
 		var arena_line := "CLOSE CAMERA — KNIFE COURT" if gm.close_camera_mode else \
 			("TRIAL 01 — THE CROSSFIRE" if gm.fate_trial_mode else \
@@ -819,45 +860,82 @@ func refresh() -> void:
 		if gm.online_mode and gm.online_player != 0:
 			arena_line = "HOST ARENA — %d/%d — %s" % [
 				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
+		var score_line: String = gm._score_text()
 		if gm.demo_match:
 			var shown: int = gm.rematch_opponent if gm.rematch_opponent >= 0 else maxi(gm.demo_opponent, 0)
 			arena_line = "%s  ·  %s" % [Opponents.display_name(shown), Opponents.arena_name(shown)]
 			kicker = "%s · FIRST TO %d HITS" % [Opponents.position_label(shown), gm.hits_to_win]
-			if gm.ladder_progress() > 0:
-				kicker += " · ←/→ ANOTHER OPPONENT"
-			controls = "ENTER REMATCH · R REPLAY · ESC MENU"
-			if gm.next_opponent_available():
-				controls = "N NEXT OPPONENT · " + controls
+			if cycles:
+				kicker += " · LEFT / RIGHT  ANOTHER OPPONENT"
+			if gm.demo_opponent >= 0 and gm.players.size() == 2:
+				score_line = "YOU %d  ·  %d %s" % [
+					gm.score[0], gm.score[1], Opponents.display_name(gm.demo_opponent)]
 		if gm.interception_mode:
 			arena_line = "INTERCEPTION COURT · FIRST TO 3 HITS"
-			controls = "R WATCH REPLAY · ENTER REMATCH · ESC MENU"
-		_over_score.text = gm._score_text()
-		_over_arena.text = arena_line
+		# The chevrons sit at x 300..352 and 928..980; the score keeps clear air
+		# on both sides of them.
+		_fit_text(_over_score, score_line, 40, 24, 470.0)
+		_fit_text(_over_arena, arena_line, 21, 15, 700.0)
 		_over_kicker.text = kicker
 		_over_kicker.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
 		_over_controls.text = controls
+		_over_controls.visible = ui_result and controls != ""
+		_over_chrome.card_bottom = 596.0 if _over_controls.visible else 556.0
 		_over_score.add_theme_color_override("font_color", Color(0.92, 0.93, 0.98))
 		_over_arena.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
 		_over_controls.add_theme_color_override("font_color", Color(0.68, 0.72, 0.82))
+		var verdict := "DRAW"
+		var verdict_color := Color(0.9, 0.9, 0.9)
 		if gm.fate_trial_mode:
-			_over_label.text = "FATE DEFIED" if gm.fate_trial_succeeded else "FATE CLAIMED YOU"
-			_over_label.add_theme_color_override("font_color",
-				gm.PLAYER_COLORS[0].lightened(0.2) if gm.fate_trial_succeeded \
-				else gm.PLAYER_COLORS[1].lightened(0.2))
+			verdict = "FATE DEFIED" if gm.fate_trial_succeeded else "FATE CLAIMED YOU"
+			verdict_color = gm.PLAYER_COLORS[0].lightened(0.2) if gm.fate_trial_succeeded \
+				else gm.PLAYER_COLORS[1].lightened(0.2)
 		elif gm.team_mode and gm.winning_team >= 0:
-			_over_label.text = "TEAM %s TAKES THE MATCH" % gm.TEAM_NAMES[gm.winning_team]
-			_over_label.add_theme_color_override("font_color", gm.TEAM_COLORS[gm.winning_team].lightened(0.18))
+			verdict = "TEAM %s TAKES THE MATCH" % gm.TEAM_NAMES[gm.winning_team]
+			verdict_color = gm.TEAM_COLORS[gm.winning_team].lightened(0.18)
 		elif gm.winner >= 0:
-			_over_label.text = "%s TAKES THE MATCH" % (gm.slot_display_name(gm.winner) \
-				if gm.player_opponent(gm.winner) >= 0 else "PLAYER %d" % (gm.winner + 1))
-			_over_label.add_theme_color_override("font_color", gm.PLAYER_COLORS[gm.winner].lightened(0.2))
-		else:
-			_over_label.text = "DRAW"
-			_over_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+			if gm.demo_match and gm.winner == 0:
+				verdict = "YOU TAKE THE MATCH"
+			else:
+				verdict = "%s TAKES THE MATCH" % (gm.slot_display_name(gm.winner) \
+					if gm.player_opponent(gm.winner) >= 0 else "PLAYER %d" % (gm.winner + 1))
+			verdict_color = gm.PLAYER_COLORS[gm.winner].lightened(0.2)
+		_fit_text(_over_label, verdict, 44, 26, 720.0)
+		_over_label.add_theme_color_override("font_color", verdict_color)
+	else:
+		_over_controls.visible = false
 
 	if gm.class_lab:
 		_hint_p1.text = "A/D MOVE · SPACE JUMP · LMB CHARGE / RELEASE · SHIFT LOCK · R UNDO"
 		_hint_p2.text = ""
+
+
+## Shrinks the font until `text` fits `width`, so a long fighter or arena name
+## never runs past the result card's frame.
+func _fit_text(label: Label, text: String, max_size: int, min_size: int, width: float) -> void:
+	label.text = text
+	var font := label.get_theme_font("font")
+	var size := max_size
+	while size > min_size \
+			and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width:
+		size -= 1
+	label.add_theme_font_size_override("font_size", size)
+
+
+## Gamepad mapping for the result card, empty when no pad is connected.
+func _result_pad_hint(cycles: bool, cycle_label: String) -> String:
+	var pad_connected := false
+	for i in gm.players.size():
+		if gm._pads[i] >= 0:
+			pad_connected = true
+	if not pad_connected:
+		return ""
+	var parts := PackedStringArray()
+	if cycles:
+		parts.append("D-PAD %s" % cycle_label)
+	parts.append("Y REPLAY")
+	parts.append("A RETRY" if gm.fate_trial_mode or gm.close_camera_mode else "A REMATCH")
+	return "GAMEPAD   " + " · ".join(parts)
 
 
 func pointer_on_action(at: Vector2) -> bool:
