@@ -23,8 +23,6 @@ func _run() -> void:
 	await process_frame
 	_check(default_gm.fighter_visuals_enabled,
 		"authored fighter visuals must be enabled in the normal runtime")
-	_check(default_gm.simplified_fighter_proto_enabled,
-		"the normal runtime must select the arena-scale sprite pipeline")
 	for p: Player in default_gm.players:
 		var default_visual := p.get_node_or_null("FighterVisual") as FighterVisual
 		_check(not p.draw_legacy_visual and default_visual != null,
@@ -37,7 +35,6 @@ func _run() -> void:
 
 	var gm = GAME_MANAGER.new()
 	gm.fighter_visuals_enabled = true
-	gm.simplified_fighter_proto_enabled = false
 	root.add_child(gm)
 	await process_frame
 
@@ -52,10 +49,10 @@ func _run() -> void:
 		if child is FighterVisual:
 			_check(child.get_node_or_null("AimArm") != null,
 				"FighterVisual must keep aim on a separate child layer")
-			_check(child.skin.visual_bounds.size.is_equal_approx(Vector2(128.0, 128.0)),
-				"sprite art must use the authored 128x128 gameplay draw bounds")
+			_check(child.skin.visual_bounds.size.is_equal_approx(Vector2(87.0, 54.0)),
+				"sprite art must use the authored 87x54 gameplay draw bounds")
 			_check(child.skin.has_sprite(FIGHTER_VISUAL.IDLE),
-				"the rigged prototype must expose an imported idle atlas")
+				"the arena skin must expose an imported idle atlas")
 
 	var player: Player = gm.players[0]
 	var visual: FighterVisual = player.get_node("FighterVisual")
@@ -97,7 +94,10 @@ func _test_state_contract(gm, player: Player, visual: FighterVisual) -> void:
 	_check(visual.body_state == FIGHTER_VISUAL.IDLE, "standing body must select IDLE")
 	player.vel = Vector2(80.0, 0.0)
 	visual.sync_from_player()
-	_check(visual.body_state == FIGHTER_VISUAL.RUN, "ground movement must select RUN")
+	_check(visual.body_state == FIGHTER_VISUAL.WALK, "slow ground movement must select WALK")
+	player.vel = Vector2(500.0, 0.0)
+	visual.sync_from_player()
+	_check(visual.body_state == FIGHTER_VISUAL.RUN, "fast ground movement must select RUN")
 	player.on_ground = false
 	player.vel = Vector2(0.0, -80.0)
 	visual.sync_from_player()
@@ -141,21 +141,25 @@ func _test_shot_state(gm, player: Player, visual: FighterVisual) -> void:
 	player.vel = Vector2.ZERO
 	player.plan.confirmed = true
 	player.plan.shot_tick = 12
+	# Authored wind-up frames precede the launch tick, so the launch tick itself
+	# shows the skin's release frame rather than frame zero.
+	var release: int = visual.skin.shot_release_frame
+	var step: int = visual.skin.ticks_for_state(FIGHTER_VISUAL.SHOT)
 	visual.sync_from_player()
-	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 0,
-		"the authoritative launch tick must start SHOT on frame zero")
-	gm.exec_tick += visual.skin.ticks_per_frame
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == release,
+		"the authoritative launch tick must show SHOT on its release frame")
+	gm.exec_tick += step
 	visual.sync_from_player()
-	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 1,
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == release + 1,
 		"SHOT must advance from the authoritative execution tick")
 	gm.state = Phase.REPLAY
-	gm._replay_frame_index = player.plan.shot_tick + visual.skin.ticks_per_frame
+	gm._replay_frame_index = player.plan.shot_tick + step
 	visual.sync_from_player()
-	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == 1,
+	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == release + 1,
 		"replay must reconstruct SHOT from its captured frame index")
 	gm.state = Phase.EXECUTING
 	gm.exec_tick = player.plan.shot_tick \
-		+ visual.skin.frame_count(FIGHTER_VISUAL.SHOT) * visual.skin.ticks_per_frame
+		+ visual.skin.frame_count(FIGHTER_VISUAL.SHOT) * step
 	visual.sync_from_player()
 	_check(visual.body_state == FIGHTER_VISUAL.IDLE,
 		"SHOT must return to locomotion after its deterministic window")
@@ -194,7 +198,7 @@ func _test_cosmetics_are_digest_inert(gm, player: Player, visual: FighterVisual)
 	_check(player.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 		"extreme cosmetic bounds must not alter the 32x48 player rect")
 	# Restore representative data for the remaining visual checks.
-	visual.skin = FIGHTER_SKIN.executor_prototype(player.index)
+	visual.skin = gm._fighter_skin_for(player.index)
 	visual.sync_from_player()
 
 

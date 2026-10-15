@@ -12,7 +12,6 @@ func _capture() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1280, 720))
 	var game = MAIN_SCENE.instantiate()
-	game.simplified_fighter_proto_enabled = true
 	game.fighter_visuals_enabled = true
 	root.add_child(game)
 	await process_frame

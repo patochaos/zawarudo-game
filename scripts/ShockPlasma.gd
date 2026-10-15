@@ -130,17 +130,6 @@ func sim_step(dt: float, players: Array) -> Dictionary:
 	return result
 
 
-static func swept_circle_contact(from: Vector2, to: Vector2,
-		center: Vector2, combined_radius: float) -> bool:
-	var travel := to - from
-	var length_sq := travel.length_squared()
-	var fraction := 0.0
-	if length_sq > 0.000001:
-		fraction = clampf((center - from).dot(travel) / length_sq, 0.0, 1.0)
-	return from.lerp(to, fraction).distance_squared_to(center) \
-		<= combined_radius * combined_radius
-
-
 func fade_alpha() -> float:
 	var fade_distance := maxf(max_distance * clampf(fade_fraction, 0.01, 1.0), 1.0)
 	return clampf((max_distance - distance_travelled) / fade_distance, 0.0, 1.0)

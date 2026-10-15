@@ -115,9 +115,6 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## Authored fighter skins are the normal presentation. Fighters without an
 ## approved skin still fall back independently to the legacy renderer.
 @export var fighter_visuals_enabled: bool = true
-## Select the arena-scale Duelist and Rook atlases. This retains its historical
-## prototype name so old test fixtures and review launchers remain compatible.
-var simplified_fighter_proto_enabled: bool = true
 
 @export_group("Replay")
 ## The match replay concatenates execution ticks only: planning, commit delays
@@ -633,11 +630,6 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
-	if "--simplified-fighter-proto" in user_args:
-		simplified_fighter_proto_enabled = true
-		fighter_visuals_enabled = true
-	if "--rook-proto" in user_args:
-		local_weapon_choices[0] = _roster_weapon_or_default(Weapon.DASHBLADE)
 	_backdrop = BACKDROP_SCRIPT.new()
 	_backdrop.gm = self
 	add_child(_backdrop)
@@ -2199,8 +2191,6 @@ func _add_player(i: int) -> void:
 func _fighter_skin_for(i: int):
 	if not fighter_visuals_enabled:
 		return null
-	if not simplified_fighter_proto_enabled:
-		return FIGHTER_SKIN_SCRIPT.executor_prototype(i)
 	# A fighter is drawn the same way in every slot; the player's own accent is
 	# what separates two people who picked it, so the roster's duplicate rule
 	# stays legible instead of putting two identical figures on the board.

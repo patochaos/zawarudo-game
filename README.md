@@ -596,7 +596,6 @@ online, free play and sandbox. The following kits are retained for future
 iteration; these descriptions are reference material, not available choices.
 `Roster.ORDER` controls availability; match entry points enforce it. Online
 rooms containing unavailable kits are rejected to avoid mismatched simulations.
-The old `--rook-proto` launch option also falls back to Duelist.
 Character-specific prototype tests, balance simulations and visual captures
 use explicit fixture assignments to exercise retained mechanics outside the
 active roster. These do not make the benched kits available in play.

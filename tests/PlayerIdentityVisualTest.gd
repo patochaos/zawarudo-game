@@ -17,7 +17,6 @@ func _capture() -> void:
 	await process_frame
 	await VisualCapture.pin_window(self)
 	game._sfx.muted = true
-	game.simplified_fighter_proto_enabled = true
 	game.fighter_visuals_enabled = true
 	game.start_quick_match(false, 0, 2, [game.Weapon.KNIVES, game.Weapon.KNIVES])
 	game._transition.visible = false

@@ -19,10 +19,6 @@ class_name FighterSkin
 @export var portrait: Texture2D
 @export var palette: Dictionary = {}
 @export var visual_bounds := Rect2(-32.0, -68.0, 64.0, 92.0)
-@export var attachments: Dictionary = {
-	&"shoulder": Vector2(0.0, -6.0),
-	&"muzzle_distance": 22.0,
-}
 @export var silhouette: Dictionary = {}
 @export_range(1, 60, 1) var ticks_per_frame: int = 5
 @export var state_ticks_per_frame: Dictionary = {}
@@ -33,24 +29,6 @@ class_name FighterSkin
 ## Zero keeps the existing looping animation for other skins.
 @export var air_pose_speed_threshold: float = 0.0
 
-
-const EXECUTOR_ATLAS_PATHS := {
-	&"IDLE": "res://assets/art/fighters/gilded-executor-prototype-v1/idle.png",
-	&"RUN": "res://assets/art/fighters/gilded-executor-prototype-v1/run.png",
-	&"RISE": "res://assets/art/fighters/gilded-executor-prototype-v1/rise.png",
-	&"FALL": "res://assets/art/fighters/gilded-executor-prototype-v1/fall.png",
-	&"SHOT": "res://assets/art/fighters/gilded-executor-prototype-v1/shoot.png",
-	&"LOCK": "res://assets/art/fighters/gilded-executor-prototype-v1/lock.png",
-}
-
-const EXECUTOR_COUNTS := {
-	&"IDLE": 6,
-	&"RUN": 8,
-	&"RISE": 4,
-	&"FALL": 4,
-	&"SHOT": 6,
-	&"LOCK": 2,
-}
 
 const ANIMATED_EXECUTOR_PATHS := {
 	&"IDLE": "res://assets/art/fighters/duelist-polished-v2/idle.png",
@@ -247,24 +225,6 @@ func motion_frame(state: StringName, tick: int, velocity: Vector2) -> int:
 		if state == &"FALL":
 			return mini(1, count - 1) if velocity.y >= air_pose_speed_threshold else 0
 	return posmod(tick / ticks_for_state(state), count)
-
-
-static func executor_prototype(player_index: int) -> FighterSkin:
-	var skin := greybox(player_index)
-	skin.skin_id = &"gilded_executor_prototype_v1"
-	skin.display_name = "The Gilded Executor — rigged prototype"
-	skin.sprite_atlases = {}
-	for state: StringName in EXECUTOR_ATLAS_PATHS:
-		var texture := load(EXECUTOR_ATLAS_PATHS[state]) as Texture2D
-		if texture != null:
-			skin.sprite_atlases[state] = texture
-	skin.sprite_counts = EXECUTOR_COUNTS.duplicate()
-	skin.sprite_cell_size = Vector2i(256, 256)
-	skin.sprite_draw_rect = Rect2(-64.0, -97.0, 128.0, 128.0)
-	skin.sprite_tint = Color.WHITE if player_index % 2 == 0 else Color(0.82, 0.74, 1.0)
-	skin.visual_bounds = Rect2(-64.0, -97.0, 128.0, 128.0)
-	skin.ticks_per_frame = 5
-	return skin
 
 
 ## Pre-rendered art carries one authored colour, so two players who picked the

@@ -13,7 +13,6 @@ class_name Arena
 
 const INDESTRUCTIBLE := -1
 const STAGE_TOP := Levels.STAGE_TOP
-const OBSERVATORY_SOLID := preload("res://assets/art/arenas/pendulum/solid.png")
 const OBSERVATORY_MOVING := preload("res://assets/art/arenas/pendulum/moving.png")
 const OBSERVATORY_BREAKABLE := preload("res://assets/art/arenas/pendulum/breakable.png")
 ## Indexed by arena: Crosshair Court, Clockwork Gallery (foundry iron), Stilled

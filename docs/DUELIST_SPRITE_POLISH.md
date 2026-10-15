@@ -41,9 +41,8 @@ matching ghost alpha, launch-frame synchronization, non-cycling airborne poses,
 collision dimensions, player identity, replay and cosmetic digest isolation.
 
 `tests/DuelistSpritePolishVisualTest.gd` captures actual Godot rendering at
-1280x720 and 1024x576 plus a before/after board with enlarged and native-size
-samples. Outputs are under `previews/duelist-sprite-polish-*.png` (ignored local
-artifacts). Run windowed with a real render target:
+1280x720 and 1024x576. Outputs are under `previews/duelist-sprite-polish-*.png`
+(ignored local artifacts). Run windowed with a real render target:
 
 ```powershell
 godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/DuelistSpritePolishVisualTest.gd --quit-after 300

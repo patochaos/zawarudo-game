@@ -9,7 +9,6 @@ enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION, DUST }
 
 const LIFE := {Kind.SPARK: 0.35, Kind.SHATTER: 0.55, Kind.KILL: 0.9,
 	Kind.CLASH: 0.42, Kind.AFTERMATH: 1.4, Kind.EXPLOSION: 0.68, Kind.DUST: 0.32}
-const TEX_SPARK := preload("res://assets/kenney/vfx/spark.png")
 const TEX_SLASH := preload("res://assets/kenney/vfx/slash.png")
 const TEX_CIRCLE := preload("res://assets/kenney/vfx/temporal-circle.png")
 const TEX_MAGIC := preload("res://assets/kenney/vfx/temporal-magic.png")

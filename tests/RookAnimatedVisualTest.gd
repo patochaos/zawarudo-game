@@ -12,7 +12,6 @@ func _capture() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1280, 720))
 	var game = MAIN_SCENE.instantiate()
-	game.simplified_fighter_proto_enabled = true
 	game.fighter_visuals_enabled = true
 	root.add_child(game)
 	await process_frame
@@ -46,7 +45,7 @@ func _capture() -> void:
 		await process_frame
 
 	var error := VisualCapture.save(self,
-		"res://previews/rook-animated-v1-in-game.png",
+		"res://previews/rook-animated-v2-in-game.png",
 		"Animated Rook in-game preview", Vector2i(1280, 720))
 	root.remove_child(game)
 	game.free()
