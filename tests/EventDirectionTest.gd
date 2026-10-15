@@ -74,11 +74,8 @@ func _run() -> void:
 	game._physics_process(1.0)
 	check(is_zero_approx(game._super_pause_left) and game.exec_tick >= 1,
 		"ticks resume once the pause runs out")
-	var copy_ok: bool = game._super_freeze.KICKER.find("MUDA") < 0
-	for line in game._super_freeze.TITLE_LINES:
-		if "MUDA" in line:
-			copy_ok = false
-	check(copy_ok, "the cut-in copy is original")
+	var chant := " ".join(game._super_freeze.TITLE_LINES)
+	check(chant == "MUDA MUDA MUDA MUDA", "the cut-in title is the four-beat MUDA chant")
 	check(game._sfx._streams.has("super_chant") and not game._sfx._streams.has("muda"),
 		"the chant cue carries its own name")
 

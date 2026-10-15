@@ -293,9 +293,11 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export_group("Super")
 ## The meter rewards the play the duel wants: clashing, moving, committing early,
 ## throwing and landing hits. Every source is deterministic and goes through
-## `_gain_super`, which caps the meter and announces SUPER READY once.
+## `_gain_super`, which caps the meter and announces SUPER READY once. The shares
+## are paced so a fighter fills the meter about every five or six rounds;
+## tests/SuperMeterPaceSimulation.gd measures that cadence with two AI Duelists.
 ## A clean opposing-knife clash grants this much meter if the owner is moving.
-@export_range(0.01, 1.0, 0.005) var super_charge_per_clash: float = 0.12
+@export_range(0.01, 1.0, 0.005) var super_charge_per_clash: float = 0.10
 @export var super_move_speed_min: float = 80.0
 ## A rival knife that sweeps within this distance of a moving fighter without
 ## hitting them is a dodge. Each knife credits a fighter once, and a window
@@ -306,18 +308,18 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## this much at `super_travel_reference` pixels. A full piloted half-second run
 ## plus its coast covers about 120px, so a committed route earns most of it and
 ## a jump or a dash kit earns the rest.
-@export_range(0.0, 1.0, 0.005) var super_charge_per_window_travel: float = 0.06
+@export_range(0.0, 1.0, 0.005) var super_charge_per_window_travel: float = 0.05
 @export var super_travel_reference: float = 140.0
 ## Locking a plan before the planning clock runs out earns up to this much,
 ## scaled by the fraction of the window left unused. The AI locks as if it had
 ## used half the window, so its instant decisions are not a meter engine.
-@export_range(0.0, 1.0, 0.005) var super_charge_early_lock: float = 0.08
+@export_range(0.0, 1.0, 0.005) var super_charge_early_lock: float = 0.06
 ## Committing a throw earns this much at full charge, scaled by charge, so a
 ## fighter who keeps attacking out-earns one who waits.
-@export_range(0.0, 1.0, 0.005) var super_charge_per_throw: float = 0.04
+@export_range(0.0, 1.0, 0.005) var super_charge_per_throw: float = 0.03
 ## Landing a legitimate hit rewards aggression; taking one is a small comeback.
-@export_range(0.0, 1.0, 0.005) var super_charge_hit_landed: float = 0.15
-@export_range(0.0, 1.0, 0.005) var super_charge_hit_taken: float = 0.1
+@export_range(0.0, 1.0, 0.005) var super_charge_hit_landed: float = 0.12
+@export_range(0.0, 1.0, 0.005) var super_charge_hit_taken: float = 0.08
 @export var super_waves: int = 5
 @export var super_knives_per_wave: int = 3
 ## Eight ticks is 0.133s at 60Hz: separate enough to read as repeated waves,

@@ -10,9 +10,9 @@ const W := 1280.0
 const H := 720.0
 const DURATION := 1.45
 const PANEL_MAX_H := 430.0
-## Original copy. The kicker sets the beat, the two title lines are the chant.
+## The kicker sets the beat, the two title lines are the chant.
 const KICKER := "THE WORLD HOLDS ITS BREATH"
-const TITLE_LINES := ["STAND", "STILL"]
+const TITLE_LINES := ["MUDA MUDA", "MUDA MUDA"]
 const SUPER_DIAL := preload("res://assets/art/combat/super-dial.png")
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
 const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
