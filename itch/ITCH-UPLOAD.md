@@ -2,12 +2,13 @@
 
 Project: https://patochaos.itch.io/zawarudo
 
-Current release: **0.3.0-tuning.1**. Web and Windows use the existing
-`html5` and `windows` channels. The release adds 75 offline tuning settings and
-four presets: Tactical duel, Clear read, Crossfire, and Quick verdict.
-Online matches, tutorials, and INTERCEPTION keep their own rules.
+Current release: **0.4.0-host.1**. Web and Windows use the existing
+`html5` and `windows` channels. Since 0.3.0-tuning.1 this release adds the
+SUPER meter rewards, the named opponent ladder, five authored arenas plus the
+twist arenas, four-player online, the one-card result screen, and LEARN TO
+PLAY hosted by DIO with a painted portrait.
 
-Published exports and their file hashes are in `build/itch/0.3.0-tuning.1/`.
+Published exports and their file hashes are in `build/itch/0.4.0-host.1/`.
 
 `Build.bat` creates unpacked exports in `build/itch/web` and `build/itch/windows`.
 When ZIPs are requested, package each directory's contents as:
@@ -31,8 +32,8 @@ When ZIPs are requested, package each directory's contents as:
 After creating the itch.io project page and installing/authenticating butler:
 
 ```powershell
-butler push "build/itch/0.3.0-tuning.1/web" patochaos/zawarudo:html5 --userversion 0.3.0-tuning.1
-butler push "build/itch/0.3.0-tuning.1/windows" patochaos/zawarudo:windows --userversion 0.3.0-tuning.1
+butler push "build/itch/0.4.0-host.1/web" patochaos/zawarudo:html5 --userversion 0.4.0-host.1
+butler push "build/itch/0.4.0-host.1/windows" patochaos/zawarudo:windows --userversion 0.4.0-host.1
 ```
 
 On the itch.io edit page, mark the `html5` channel as playable in the browser.

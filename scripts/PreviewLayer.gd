@@ -411,7 +411,10 @@ func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2]
 		var last: PackedVector2Array = active_paths[active_paths.size() - 1]
 		for i in range(last.size() - 1, -1, -1):
 			fill.append(last[i])
-		if fill.size() >= 3:
+		# Two paths that cross each other make a self-intersecting outline the
+		# canvas cannot triangulate; it logs an error and draws nothing, so
+		# skip the fill rather than hand it over.
+		if fill.size() >= 3 and not Geometry2D.triangulate_polygon(fill).is_empty():
 			draw_colored_polygon(fill,
 				Color(col.r, col.g, col.b, 0.045 if live else 0.025))
 
