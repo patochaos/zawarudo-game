@@ -109,6 +109,20 @@ func run() -> void:
 	game._start_online_match(2, 1000, 1, [0, 0, 0, 0])
 	check(game.state == Phase.PLANNING and game.level_index == 2,
 		"An agreed rematch must exit replay instead of stranding that participant")
+	# The host picks the next arena before pressing REMATCH. A guest readying up
+	# first echoes the current arena; that echo must not undo the host's pick.
+	game.state = Phase.GAME_OVER
+	game._online_waiting_rematch = false
+	var picked: int = posmod(game.level_index + 1, Levels.count())
+	game._cycle_rematch_level(1)
+	check(game.rematch_level_index == picked, "Host must be able to cycle the rematch arena")
+	game._on_online_message({"type": "rematch_status", "ready": [1], "level": game.level_index})
+	check(game.rematch_level_index == picked,
+		"A guest's rematch request must not overwrite the host's pending arena pick")
+	var guest = games[1]
+	guest.state = Phase.GAME_OVER
+	guest._on_online_message({"type": "rematch_status", "ready": [0], "level": picked})
+	check(guest.rematch_level_index == picked, "Guests must follow the host's arena pick")
 	for entry in games:
 		entry.queue_free()
 	await process_frame

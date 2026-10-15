@@ -1594,7 +1594,10 @@ func _on_online_message(message: Dictionary) -> void:
 			banner_time = 2.2
 		"rematch_status":
 			var ready: Array = message.get("ready", [])
-			if message.has("level"):
+			# Guests follow the host's arena. The host keeps its own pick: a guest
+			# readying up first echoes the old arena, which must not undo a choice
+			# the host has not sent yet.
+			if message.has("level") and online_player != 0:
 				rematch_level_index = posmod(int(message["level"]), Levels.count())
 				rematch_level_name = str(Levels.build(rematch_level_index)["name"])
 			banner_text = "REMATCH %d / %d READY" % [ready.size(), player_count]
