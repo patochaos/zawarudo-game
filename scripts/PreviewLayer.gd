@@ -319,7 +319,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 		tip, col, 42.0, 0.48 if live else 0.28, dir.angle())
 
 	var shot_time: float = float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
-	var simple_labels: bool = gm.demo_match or (gm._practice != null and gm._practice.active)
+	var simple_labels: bool = gm.player_facing_labels()
 	_launch_marker(shoulder, col, 1.0 if live else 0.55,
 		("THROW HERE" if simple_labels else "FIRE %.2fs" % shot_time) if live else "")
 
@@ -679,7 +679,7 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 
 	var shot_time := float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
 	_launch_marker(shoulder, base, 1.0 if live else 0.55,
-		"FIRE %.2fs" % shot_time if live else "")
+		("FIRE HERE" if gm.player_facing_labels() else "FIRE %.2fs" % shot_time) if live else "")
 	var tag := ("ORB FIELD · %d LIVE · RMB" % gm.shock_orb_count(p.index) \
 		if mode == 1 else "PLASMA · LMB") \
 		+ " · %d%%" % int(round(power * 100.0))

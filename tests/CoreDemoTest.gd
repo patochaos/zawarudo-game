@@ -153,6 +153,12 @@ func run() -> void:
 	check(game.demo_opponent == 1 and game.hits_to_win == 3, "next opponent must advance one rung, keeping demo rules")
 	check(game.level_index == Opponents.arena(1) and game.level_name == Opponents.arena_name(1), "next opponent must be fought in its own arena")
 	game._open_menu()
+	game.start_quick_match(true, 0, 2)
+	check(not game.demo_match and game.player_facing_labels(), "Custom Match must use the plain aim labels, not the tuning readouts")
+	game._open_menu()
+	game.start_quick_freeplay(0)
+	check(not game.player_facing_labels(), "the sandbox keeps the numeric aim readouts")
+	game._open_menu()
 	game.free()
 	await process_frame
 	print("Core demo: %d failures" % failures)

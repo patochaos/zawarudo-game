@@ -876,6 +876,16 @@ func slot_display_name(player_index: int) -> String:
 	return weapon_short_name(player_index)
 
 
+## Experiments keep the numeric aim readouts (fire tick, elevation, draw). Every
+## match a player reaches from the public menu gets the plain labels the ladder
+## already uses, so Custom Match never looks like a tuning screen.
+func player_facing_labels() -> bool:
+	if _practice != null and _practice.active:
+		return true
+	return not (class_lab or real_time_mode or fate_trial_mode \
+		or close_camera_mode or state == Phase.FREEPLAY)
+
+
 func ladder_progress() -> int:
 	return clampi(int(_settings.get("ladder_progress", 0)), 0, Opponents.count())
 
