@@ -19,7 +19,7 @@
     }
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "https://zawarudo-pi.vercel.app,http://localhost:8000,http://127.0.0.1:8000"
+    "ALLOWED_ORIGINS": "https://zawarudo-pi.vercel.app,https://html-classic.itch.zone,http://localhost:8000,http://127.0.0.1:8000"
   },
   "observability": {
     "enabled": true,

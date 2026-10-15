@@ -68,6 +68,16 @@ describe("room HTTP API", () => {
     expect(third.status).toBe(409);
   });
 
+  it("accepts the itch.io embed origin", async () => {
+    const itch = "https://html-classic.itch.zone";
+    const preflight = await exports.default.fetch(new Request("https://example.test/rooms", {
+      method: "OPTIONS",
+      headers: { Origin: itch, "Access-Control-Request-Method": "POST" },
+    }));
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("Access-Control-Allow-Origin")).toBe(itch);
+  });
+
   it("rejects untrusted browser origins", async () => {
     const response = await exports.default.fetch(new Request("https://example.test/rooms", {
       method: "POST",
