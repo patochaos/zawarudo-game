@@ -362,9 +362,21 @@ sistemas convierten los intercambios largos en presión creciente.
 
 ### SUPER
 
-Los choques limpios entre cuchillos cargan el medidor cuando su propietario está
-en movimiento. La regla une defensa y riesgo: protegerse activamente también
-acerca una ofensiva futura.
+El medidor paga la conducta que el duelo quiere ver. Cada fuente es
+determinista y se acumula sobre el mismo medidor:
+
+- choque limpio entre cuchillos mientras el propietario se mueve;
+- esquivar: un cuchillo rival pasa muy cerca de un cuerpo en movimiento sin
+  tocarlo (una vez por cuchillo, hasta tres por ventana);
+- recorrer distancia durante la ventana de ejecución, en proporción a una
+  referencia de carrera completa;
+- confirmar el plan antes de agotar el reloj, en proporción al tiempo no usado
+  (la CPU cobra como si usara media ventana);
+- lanzar, en proporción a la carga;
+- acertar a un rival, y en menor medida recibir un impacto legítimo.
+
+La regla une defensa, movimiento y agresión: quien compone rutas, lanza y
+responde llega antes al clímax que quien espera.
 
 Al llenarse, el jugador puede anunciar y preparar una descarga especial de
 varias oleadas estrechas. La SUPER:

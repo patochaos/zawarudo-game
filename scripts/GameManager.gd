@@ -47,6 +47,8 @@ const RIDE_TOLERANCE := 3.0
 const SOLIDS_CACHE_LIMIT := 900
 ## Brief presentation-only hit-stop. At 60 Hz this holds roughly three frames.
 const HIT_PAUSE_DURATION := 0.045
+## Dodging a whole SUPER fan is already its own reward; the meter share stops here.
+const SUPER_DODGE_CREDITS_PER_WINDOW := 3
 
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
@@ -289,11 +291,33 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export var knife_reclash_scatter: float = 11.0   # degrees
 
 @export_group("Super")
+## The meter rewards the play the duel wants: clashing, moving, committing early,
+## throwing and landing hits. Every source is deterministic and goes through
+## `_gain_super`, which caps the meter and announces SUPER READY once.
 ## A clean opposing-knife clash grants this much meter if the owner is moving.
-## At 0.075 it takes fourteen qualifying clashes to earn a super, making it a
-## late-match pressure valve rather than part of every opening exchange.
-@export_range(0.01, 1.0, 0.005) var super_charge_per_clash: float = 0.075
+@export_range(0.01, 1.0, 0.005) var super_charge_per_clash: float = 0.12
 @export var super_move_speed_min: float = 80.0
+## A rival knife that sweeps within this distance of a moving fighter without
+## hitting them is a dodge. Each knife credits a fighter once, and a window
+## credits at most SUPER_DODGE_CREDITS_PER_WINDOW dodges per fighter.
+@export_range(0.0, 1.0, 0.005) var super_charge_per_dodge: float = 0.05
+@export var super_dodge_radius: float = 26.0
+## Distance covered during an execution window earns meter linearly, reaching
+## this much at `super_travel_reference` pixels. A full piloted half-second run
+## plus its coast covers about 120px, so a committed route earns most of it and
+## a jump or a dash kit earns the rest.
+@export_range(0.0, 1.0, 0.005) var super_charge_per_window_travel: float = 0.06
+@export var super_travel_reference: float = 140.0
+## Locking a plan before the planning clock runs out earns up to this much,
+## scaled by the fraction of the window left unused. The AI locks as if it had
+## used half the window, so its instant decisions are not a meter engine.
+@export_range(0.0, 1.0, 0.005) var super_charge_early_lock: float = 0.08
+## Committing a throw earns this much at full charge, scaled by charge, so a
+## fighter who keeps attacking out-earns one who waits.
+@export_range(0.0, 1.0, 0.005) var super_charge_per_throw: float = 0.04
+## Landing a legitimate hit rewards aggression; taking one is a small comeback.
+@export_range(0.0, 1.0, 0.005) var super_charge_hit_landed: float = 0.15
+@export_range(0.0, 1.0, 0.005) var super_charge_hit_taken: float = 0.1
 @export var super_waves: int = 5
 @export var super_knives_per_wave: int = 3
 ## Eight ticks is 0.133s at 60Hz: separate enough to read as repeated waves,
@@ -495,6 +519,11 @@ var stamina: Array[float] = [0.0, 0.0, 0.0, 0.0]
 ## Persistent for the whole match. It only resets when the super is actually
 ## released (or the match restarts), not between turns or after taking a hit.
 var super_meter: Array[float] = [0.0, 0.0, 0.0, 0.0]
+## Per execution window: where each body was at the last simulated tick, how far
+## it has travelled, and how many dodges have already been credited.
+var _exec_last_pos: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var _exec_travel: Array[float] = [0.0, 0.0, 0.0, 0.0]
+var _dodge_credits: Array[int] = [0, 0, 0, 0]
 ## A full meter is only spent when the player explicitly toggles SUPER on
 ## before placing the shot. The choice persists between turns until changed or
 ## the burst is actually released.
@@ -1703,6 +1732,9 @@ func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
 		return "attack mode %d is outside 0..1" % attack_mode
 	if bool(data.get("super_shot", false)) and (shot_tick < 0 or super_meter[i] < 1.0):
 		return "SUPER was requested without a legal charged shot"
+	var lock_permille := int(data.get("lock_permille", 0))
+	if lock_permille < 0 or lock_permille > 1000:
+		return "lock share %d is outside 0..1000" % lock_permille
 	return ""
 
 
@@ -2738,6 +2770,7 @@ func _sim_tick(dt: float) -> void:
 			var move_from: Vector2 = p.position
 			p.sim_step(dt, exec_tick, from_tick)
 			_accrue_frame_debt(p.index, move_from, p.position, p.plan.dir_at(exec_tick))
+	_accrue_window_travel()
 	_check_core_collection()
 	_step_arrows(dt)
 
@@ -2891,6 +2924,8 @@ func _step_arrows(dt: float) -> void:
 		var res: Dictionary = a.sim_step(dt, hittable_players)
 		if res.get("burst", false):
 			ClassLab.split(self, a, survivors)
+		if res["hit_player"] < 0 and not res.get("ricochet", false):
+			_credit_dodges(a, hittable_players)
 		if res["hit_player"] >= 0:
 			_sfx.play("knife_hit")
 			if _telemetry != null:
@@ -3502,20 +3537,71 @@ func _try_close_camera_trailing_boost(a: Arrow, b: Arrow, at: Vector2) -> bool:
 
 
 func _award_super_charge(shooter: int) -> void:
-	if class_lab:
-		return
-	if shooter < 0 or shooter >= players.size() or shooter >= super_meter.size():
+	if shooter < 0 or shooter >= players.size():
 		return
 	var p: Player = players[shooter]
-	if not p.alive or p.vel.length() < super_move_speed_min or super_meter[shooter] >= 1.0:
+	if not p.alive or p.vel.length() < super_move_speed_min:
 		return
-	super_meter[shooter] = minf(1.0, super_meter[shooter] + super_charge_per_clash)
-	p.queue_redraw()
-	if super_meter[shooter] >= 1.0:
-		banner_text = "PLAYER %d — SUPER READY" % (shooter + 1)
-		banner_color = PLAYER_COLORS[shooter].lightened(0.35)
+	_gain_super(shooter, super_charge_per_clash, "clash")
+
+
+## The single entry for every meter source. Capped at full, announced once.
+func _gain_super(i: int, amount: float, reason: String) -> void:
+	if class_lab or amount <= 0.0:
+		return
+	if i < 0 or i >= players.size() or i >= super_meter.size() or super_meter[i] >= 1.0:
+		return
+	super_meter[i] = minf(1.0, super_meter[i] + amount)
+	players[i].queue_redraw()
+	if _telemetry != null:
+		_telemetry.record("super_gain", turn, {"player": i + 1, "reason": reason,
+			"amount": snappedf(amount, 0.001), "meter": snappedf(super_meter[i], 0.001)})
+	if super_meter[i] >= 1.0:
+		banner_text = "PLAYER %d — SUPER READY" % (i + 1)
+		banner_color = PLAYER_COLORS[i].lightened(0.35)
 		banner_time = 1.4
-		_sfx.play("super_ready")
+		if _sfx != null:
+			_sfx.play("super_ready")
+
+
+## A rival knife passing close to a moving body without touching it. The swept
+## segment is tested against the body grown by the dodge radius; the body itself
+## was already cleared by the arrow's own hit test this tick.
+func _credit_dodges(a: Arrow, candidates: Array) -> void:
+	if super_charge_per_dodge <= 0.0 or a.prev_pos.is_equal_approx(a.position):
+		return
+	for p in candidates:
+		var i: int = p.index
+		if not p.alive or p.is_invulnerable() or i == a.shooter or i >= _dodge_credits.size():
+			continue
+		if a.shooter >= 0 and team_mode and player_teams[i] == player_teams[a.shooter]:
+			continue
+		if a.dodged_by & (1 << i) or _dodge_credits[i] >= SUPER_DODGE_CREDITS_PER_WINDOW:
+			continue
+		if p.vel.length() < super_move_speed_min:
+			continue
+		var near := false
+		for r in body_rects(p):
+			if Arrow.seg_hits_rect(a.prev_pos, a.position, r.grow(super_dodge_radius)):
+				near = true
+				break
+		if not near:
+			continue
+		a.dodged_by |= 1 << i
+		_dodge_credits[i] += 1
+		_gain_super(i, super_charge_per_dodge, "dodge")
+		_remember_aftermath("DODGE", p.position, p.color.lightened(0.3))
+
+
+## Called once per simulated tick so coasting, dashes and carried movement all
+## count. Only living bodies accumulate; a respawn starts from zero next window.
+func _accrue_window_travel() -> void:
+	for p in players:
+		var i: int = p.index
+		if i >= _exec_travel.size() or not p.alive:
+			continue
+		_exec_travel[i] += wrap_delta(_exec_last_pos[i], p.position).length()
+		_exec_last_pos[i] = p.position
 
 
 # ---------------------------------------------------------- temporal core ---
@@ -3724,6 +3810,9 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		banner_time = banner_duration
 		return
 	score[scorer] += 1
+	# Meter first, so the hit banner below stays the headline.
+	_gain_super(scorer, super_charge_hit_landed, "hit_landed")
+	_gain_super(victim_idx, super_charge_hit_taken, "hit_taken")
 
 	if team_mode:
 		var scoring_team := player_teams[scorer]
@@ -4014,6 +4103,16 @@ func _begin_execution() -> void:
 	_core_collected_this_execution = false
 	_blasts_this_execution = 0
 	frame_debt_locked.fill(false)
+	_dodge_credits.fill(0)
+	_exec_travel.fill(0.0)
+	for p in players:
+		if p.index < _exec_last_pos.size():
+			_exec_last_pos[p.index] = p.position
+		# The lock share lives on the plan so both lockstep clients read the same
+		# number from the relayed payload rather than their own clocks.
+		if p.alive and p.plan.confirmed and p.plan.lock_permille > 0:
+			_gain_super(p.index,
+				super_charge_early_lock * float(p.plan.lock_permille) / 1000.0, "early_lock")
 	if _time_stop != null:
 		_time_stop.phase_changed(Phase.EXECUTING)
 	if _sfx != null:
@@ -4271,6 +4370,11 @@ func _end_execution() -> void:
 		if p.invuln_turns > 0:
 			p.invuln_turns -= 1
 			p.queue_redraw()
+	if super_travel_reference > 0.0:
+		for p in players:
+			if p.alive and p.index < _exec_travel.size():
+				_gain_super(p.index, super_charge_per_window_travel
+					* clampf(_exec_travel[p.index] / super_travel_reference, 0.0, 1.0), "travel")
 	for h: Hazard in hazards:
 		h.end_of_window()
 	if fate_trial_mode:
@@ -4371,6 +4475,7 @@ func _spawn_player_attack(p: Player) -> void:
 	if class_lab:
 		ClassLab.spawn(self, p)
 		return
+	_gain_super(p.index, super_charge_per_throw * clampf(p.plan.power, 0.0, 1.0), "throw")
 	match player_weapons[p.index]:
 		Weapon.DASHBLADE:
 			_spawn_dashblade(p, false)
@@ -5534,6 +5639,8 @@ func _confirm(i: int) -> void:
 	if charging[i]:
 		_release_charge(i)
 	p.plan.confirmed = true
+	p.plan.lock_permille = 500 if is_ai(i) else int(round(1000.0
+		* clampf(planning_time_left / maxf(0.001, planning_window_duration), 0.0, 1.0)))
 	if _event_direction != null:
 		_event_direction.lock_in(i, p.position, p.color)
 	if _telemetry != null:

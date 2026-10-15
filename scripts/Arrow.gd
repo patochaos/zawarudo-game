@@ -37,6 +37,8 @@ var clash_count: int = 0
 ## a fast knife cannot pinball forever.
 var boost_count: int = 0
 var ricochet_count: int = 0
+## Bitmask of fighters already credited with dodging this knife.
+var dodged_by: int = 0
 ## Ticks before this knife may clash again, so a pair does not stick together
 ## and grind through the impulse every tick.
 var clash_cooldown: int = 0

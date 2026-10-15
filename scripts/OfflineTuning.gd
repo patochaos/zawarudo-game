@@ -29,7 +29,7 @@ const PRESETS: Array[Dictionary] = [
 			"arrow_speed_max": 640.0, "arrow_max_ticks": 6.0,
 			"aim_preview_duration": 0.6, "knife_ricochet_limit": 1,
 			"super_waves": 3, "super_knives_per_wave": 2,
-			"super_charge_per_clash": 0.1, "core_hitless_turns_to_announce": 3,
+			"super_charge_per_clash": 0.15, "core_hitless_turns_to_announce": 3,
 		},
 	},
 	{
@@ -42,7 +42,7 @@ const PRESETS: Array[Dictionary] = [
 			"knife_spread_min": 8.0, "arrow_drag": 0.5,
 			"arrow_gravity": 240.0, "arrow_clashed_gravity_scale": 3.0,
 			"knife_ricochet_limit": 1, "knife_ricochet_retention": 0.68,
-			"super_waves": 3, "super_charge_per_clash": 0.05,
+			"super_waves": 3, "super_charge_per_clash": 0.08,
 		},
 	},
 	{
@@ -135,8 +135,16 @@ func _build_catalog() -> void:
 	_add("Knife physics", "knife_ricochet_min_speed", "Wall bounce threshold", "Minimum speed needed to ricochet from hard terrain.", 100, 1500, 20, "px/s")
 	_add("Knife physics", "knife_ricochet_retention", "Speed after wall bounce", "Fraction of speed retained when bouncing off hard terrain.", 0.1, 1, 0.01, "x")
 	_add("Knife physics", "knife_ricochet_limit", "Wall bounce limit", "Maximum wall ricochets per knife. Zero disables them.", 0, 6, 1, "", "int")
-	_add("Supers and core", "super_charge_per_clash", "Super charge per clash", "Meter gained from a qualifying clash while moving. 1x fills the meter.", 0.025, 1, 0.025, "x")
-	_add("Supers and core", "super_move_speed_min", "Speed to earn super", "Minimum fighter movement speed for a clash to award super meter.", 0, 400, 10, "px/s")
+	_add("Supers and core", "super_charge_per_clash", "Super charge per clash", "Meter gained from a qualifying clash while moving. 1x fills the meter.", 0.01, 1, 0.005, "x")
+	_add("Supers and core", "super_move_speed_min", "Speed to earn super", "Minimum fighter movement speed for a clash or dodge to award super meter.", 0, 400, 10, "px/s")
+	_add("Supers and core", "super_charge_per_dodge", "Super charge per dodge", "Meter for a rival knife passing close to a moving fighter. At most three per window.", 0, 0.5, 0.01, "x")
+	_add("Supers and core", "super_dodge_radius", "Dodge distance", "How close a knife must pass to count as dodged.", 4, 80, 2, "px")
+	_add("Supers and core", "super_charge_per_window_travel", "Super charge for moving", "Meter for a full window of travel. Shorter routes earn a share.", 0, 0.5, 0.01, "x")
+	_add("Supers and core", "super_travel_reference", "Full-travel distance", "Distance per window that earns the whole movement share.", 40, 600, 10, "px")
+	_add("Supers and core", "super_charge_early_lock", "Super charge for locking early", "Meter for locking a plan the instant planning opens. Scales down with time used.", 0, 0.5, 0.01, "x")
+	_add("Supers and core", "super_charge_per_throw", "Super charge per throw", "Meter for a full-charge throw. Lighter throws earn a share.", 0, 0.5, 0.01, "x")
+	_add("Supers and core", "super_charge_hit_landed", "Super charge per hit landed", "Meter for scoring a hit on a rival.", 0, 1, 0.025, "x")
+	_add("Supers and core", "super_charge_hit_taken", "Super charge per hit taken", "Comeback meter for being hit by a rival.", 0, 1, 0.025, "x")
 	_add("Supers and core", "super_waves", "Super waves", "Number of volleys fired by a Duelist super.", 1, 8, 1, "", "int")
 	_add("Supers and core", "super_knives_per_wave", "Knives per wave", "Number of knives in each super volley.", 1, 5, 1, "", "int")
 	_add("Supers and core", "super_wave_interval_ticks", "Time between waves", "Moving-time delay between volleys. 60 ticks equal one second.", 1, 30, 1, "ticks", "int")

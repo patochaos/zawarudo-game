@@ -27,6 +27,8 @@ export interface PlayerPlanPayload {
   power: number;
   attack_mode: number;
   super_shot: boolean;
+  /** Thousandths of the planning window left unused at lock-in; feeds SUPER meter. */
+  lock_permille: number;
 }
 
 export type ClientMessage =
@@ -96,6 +98,11 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
   if (typeof value.super_shot !== "boolean") {
     return null;
   }
+  // Older clients omit the lock share; they simply earn no early-lock meter.
+  const lockPermille = value.lock_permille === undefined ? 0 : value.lock_permille;
+  if (!isIntegerInRange(lockPermille, 0, 1000)) {
+    return null;
+  }
 
   return {
     dirs,
@@ -107,6 +114,7 @@ export function parsePlan(value: unknown): PlayerPlanPayload | null {
     power: value.power,
     attack_mode: value.attack_mode,
     super_shot: value.super_shot,
+    lock_permille: lockPermille,
   };
 }
 

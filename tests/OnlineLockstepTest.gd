@@ -26,6 +26,7 @@ func _test_plan_roundtrip() -> void:
 	original.power = 0.8
 	original.attack_mode = 1
 	original.super_shot = true
+	original.lock_permille = 640
 	var restored := PlayerPlan.new()
 	restored.apply_network_dict(original.to_network_dict())
 	_check(restored.dirs == original.dirs and restored.jumps == original.jumps \
@@ -38,6 +39,8 @@ func _test_plan_roundtrip() -> void:
 		and restored.attack_mode == 1 and restored.super_shot,
 		"network plan must preserve shot timing, aim, kit settings and SUPER")
 	_check(restored.confirmed, "a relayed network plan must arrive locked")
+	_check(restored.lock_permille == 640,
+		"the early-lock share must travel with the plan so both clients award it")
 	var wire := original.to_network_dict()
 	_check(not wire.has("grenade_fuse_seconds"),
 		"the retired Grenadier fuse must not travel on the wire")
@@ -104,6 +107,10 @@ func _test_plan_legality() -> void:
 	bad_kit["attack_mode"] = 2
 	_check(not gm._online_plan_is_legal(0, bad_kit),
 		"a remote plan cannot inject an unknown character attack mode")
+	var greedy_lock := legal.duplicate(true)
+	greedy_lock["lock_permille"] = 1001
+	_check(not gm._online_plan_is_legal(0, greedy_lock),
+		"a remote plan cannot claim more than the whole planning window")
 	gm.free()
 
 

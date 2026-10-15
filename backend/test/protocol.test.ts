@@ -11,6 +11,7 @@ const validPlan = {
   power: 0.75,
   attack_mode: 1,
   super_shot: false,
+  lock_permille: 640,
 };
 
 function ticks(count: number): number[] {
@@ -31,6 +32,13 @@ describe("plan protocol", () => {
     expect(parsePlan({ ...validPlan, power: 1.01 })).toBeNull();
     expect(parsePlan({ ...validPlan, attack_mode: 2 })).toBeNull();
     expect(parsePlan({ ...validPlan, super_shot: 1 })).toBeNull();
+    expect(parsePlan({ ...validPlan, lock_permille: 1001 })).toBeNull();
+    expect(parsePlan({ ...validPlan, lock_permille: 0.5 })).toBeNull();
+  });
+
+  it("defaults a missing lock share to zero for older clients", () => {
+    const { lock_permille: _lock, ...legacy } = validPlan;
+    expect(parsePlan(legacy)).toEqual({ ...validPlan, lock_permille: 0 });
   });
 
   it("rejects payloads that omit a required field", () => {

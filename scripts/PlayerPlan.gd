@@ -32,6 +32,9 @@ var super_shot: bool = false
 ## itself as the staggered waves leave the player.
 var super_volley: int = -1
 var confirmed: bool = false
+## Thousandths of the planning window left unused when the plan was locked.
+## Carried on the plan so both lockstep clients award the same early-lock meter.
+var lock_permille: int = 0
 
 
 func recorded_ticks() -> int:
@@ -116,6 +119,7 @@ func start_new_turn() -> void:
 	super_shot = false
 	super_volley = -1
 	confirmed = false
+	lock_permille = 0
 
 
 ## Compact, JSON-safe lockstep payload. The server validates every byte before
@@ -131,6 +135,7 @@ func to_network_dict() -> Dictionary:
 		"power": power,
 		"attack_mode": attack_mode,
 		"super_shot": super_shot,
+		"lock_permille": lock_permille,
 	}
 
 
@@ -144,5 +149,6 @@ func apply_network_dict(data: Dictionary) -> void:
 	power = clampf(float(data.get("power", 0.5)), 0.0, 1.0)
 	attack_mode = clampi(int(data.get("attack_mode", 0)), 0, 1)
 	super_shot = bool(data.get("super_shot", false))
+	lock_permille = clampi(int(data.get("lock_permille", 0)), 0, 1000)
 	super_volley = -1
 	confirmed = true
