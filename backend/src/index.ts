@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, ROOM_CODE_PATTERN, TOKEN_PATTERN } from "./protocol";
+import { PROTOCOL_VERSION, ROOM_CODE_PATTERN, TOKEN_PATTERN, sanitizePlayerName } from "./protocol";
 
 export { Room } from "./room";
 
@@ -10,11 +10,14 @@ interface CreateRoomBody {
   level: number;
   weapon: number;
   protocol: number;
+  /** Sanitized nickname; empty when the client sent none. */
+  name: string;
 }
 
 interface JoinRoomBody {
   weapon: number;
   protocol: number;
+  name: string;
 }
 
 const ONLINE_WEAPONS = new Set([0, 2, 3, 4]);
@@ -115,7 +118,8 @@ async function readCreateBody(request: Request): Promise<CreateRoomBody | null> 
   if (capacity !== 2 && capacity !== 4) {
     return null;
   }
-  return { level, weapon, protocol, capacity };
+  const name = sanitizePlayerName("name" in value ? value.name : "");
+  return { level, weapon, protocol, capacity, name };
 }
 
 async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
@@ -136,7 +140,8 @@ async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
       || typeof protocol !== "number" || !Number.isInteger(protocol)) {
     return null;
   }
-  return { weapon, protocol };
+  const name = sanitizePlayerName("name" in value ? value.name : "");
+  return { weapon, protocol, name };
 }
 
 // Protocol 2 remains available for legacy two-player clients. Room membership must still
@@ -167,10 +172,10 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
     const token = randomHex(32);
     const seed = randomSeed();
     const stub = env.ROOMS.getByName(room);
-    if (await stub.reserve(room, token, body.level, seed, body.weapon, body.capacity, body.protocol)) {
+    if (await stub.reserve(room, token, body.level, seed, body.weapon, body.capacity, body.protocol, body.name)) {
       return json(request, env, {
         room, token, player: 0, level: body.level, weapon: body.weapon,
-        protocol: body.protocol, capacity: body.capacity,
+        protocol: body.protocol, capacity: body.capacity, name: body.name,
       }, 201);
     }
   }
@@ -186,7 +191,7 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
     return protocolMismatch(request, env, body.protocol);
   }
   const token = randomHex(32);
-  const result = await env.ROOMS.getByName(room).join(token, body.weapon, body.protocol);
+  const result = await env.ROOMS.getByName(room).join(token, body.weapon, body.protocol, body.name);
   if (!result.ok) {
     if (result.reason === "protocol_mismatch") {
       return json(request, env, {
@@ -205,7 +210,7 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
   }
   return json(request, env, {
     room, token, player: result.player, weapon: body.weapon, protocol: body.protocol,
-    capacity: result.capacity,
+    capacity: result.capacity, name: body.name,
   }, 200);
 }
 

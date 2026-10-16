@@ -951,8 +951,16 @@ func _draw() -> void:
 			_draw_knife_fan(pose["grip"], aim_dir())
 
 	if cfg == null or not bool(cfg.team_mode):
-		draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), "P%d" % (index + 1),
+		draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), seat_tag(),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color.lightened(0.5))
+
+
+## The tag above this fighter: an online nickname when the room registered one,
+## otherwise the P1..P4 label every local match uses.
+func seat_tag() -> String:
+	if cfg != null and cfg.has_method("player_tag"):
+		return cfg.player_tag(index)
+	return "P%d" % (index + 1)
 
 
 func _draw_team_marker() -> void:

@@ -27,7 +27,7 @@ clash fun enough to play again?
 **CONTROLS** reads current bindings. **OPTIONS** adjusts sound, display, flashes,
 and preview contrast. New installs start with high-contrast previews.
 The public demo focuses on keyboard/mouse solo play; touch controls are retained.
-**ONLINE** is a separate private-room test: both players need the same build.
+**ONLINE** is a separate private-room test: all players need the same build.
 Its hidden-plan matches should be evaluated separately from CPU results.
 
 ## Feedback

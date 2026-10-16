@@ -17,6 +17,26 @@ export const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 
 export type PlayerSlot = 0 | 1 | 2 | 3;
 
+// Nicknames are display-only. They are uppercased to match the game's all-caps chrome and
+// limited to a small alphabet so a name can never carry markup or crowd the lobby line.
+// MUST stay in sync with OnlineLobby.sanitize_name() on the client.
+export const MAX_PLAYER_NAME_LENGTH = 12;
+const PLAYER_NAME_CHARACTER = /^[A-Z0-9 _-]$/;
+
+/** The empty string means "no nickname": the client then shows the plain seat number. */
+export function sanitizePlayerName(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  let clean = "";
+  for (const character of value.toUpperCase()) {
+    if (PLAYER_NAME_CHARACTER.test(character)) {
+      clean += character;
+    }
+  }
+  return clean.replace(/ +/g, " ").trim().slice(0, MAX_PLAYER_NAME_LENGTH).trim();
+}
+
 export interface PlayerPlanPayload {
   dirs: number[];
   jumps: number[];

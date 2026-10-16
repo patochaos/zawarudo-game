@@ -72,6 +72,7 @@ export interface RoomInfo {
   turn?: number;
   hasGuest?: boolean;
   weapons?: number[];
+  names?: string[];
   capacity?: number;
   protocol?: number;
 }
@@ -174,6 +175,16 @@ export class Room extends DurableObject<Env> {
         INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (3, unixepoch());
       `);
     }
+    const namesMigrated = this.ctx.storage.sql.exec<{ id: number }>(
+      "SELECT id FROM _sql_schema_migrations WHERE id = 4",
+    ).toArray().length > 0;
+    if (!namesMigrated) {
+      // Seats created before nicknames existed keep an empty name, which clients show as P1..P4.
+      this.ctx.storage.sql.exec(`
+        ALTER TABLE participants ADD COLUMN name TEXT NOT NULL DEFAULT '';
+        INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (4, unixepoch());
+      `);
+    }
   }
 
   private room(): RoomRow | null {
@@ -190,6 +201,7 @@ export class Room extends DurableObject<Env> {
     hostWeapon: number,
     capacity: 2 | 4 = 2,
     protocol: number = PROTOCOL_VERSION,
+    hostName: string = "",
   ): Promise<boolean> {
     if ((protocol !== 2 && protocol !== PROTOCOL_VERSION) || (protocol === 2 && capacity !== 2)) {
       return false;
@@ -212,12 +224,19 @@ export class Room extends DurableObject<Env> {
       hostWeapon,
     );
     this.ctx.storage.sql.exec("UPDATE room SET capacity = ?, protocol = ? WHERE singleton = 1", capacity, protocol);
-    this.ctx.storage.sql.exec("INSERT INTO participants (slot, token) VALUES (0, ?)", hostToken);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO participants (slot, token, name) VALUES (0, ?, ?)", hostToken, hostName,
+    );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return true;
   }
 
-  async join(guestToken: string, guestWeapon: number, protocol: number = PROTOCOL_VERSION): Promise<JoinResult> {
+  async join(
+    guestToken: string,
+    guestWeapon: number,
+    protocol: number = PROTOCOL_VERSION,
+    guestName: string = "",
+  ): Promise<JoinResult> {
     if (!this.allowJoinAttempt()) {
       return { ok: false, reason: "rate_limited" };
     }
@@ -235,7 +254,9 @@ export class Room extends DurableObject<Env> {
       return { ok: false, reason: "full" };
     }
     const slot = count as PlayerSlot;
-    this.ctx.storage.sql.exec("INSERT INTO participants (slot, token) VALUES (?, ?)", slot, guestToken);
+    this.ctx.storage.sql.exec(
+      "INSERT INTO participants (slot, token, name) VALUES (?, ?, ?)", slot, guestToken, guestName,
+    );
     if (slot === 1) {
       this.ctx.storage.sql.exec("UPDATE room SET guest_token = ? WHERE singleton = 1", guestToken);
     }
@@ -274,6 +295,7 @@ export class Room extends DurableObject<Env> {
       hasGuest: room.guest_token !== null,
       protocol: room.protocol,
       weapons: this.weapons(),
+      names: this.names(),
       capacity: room.capacity,
     };
   }
@@ -307,8 +329,12 @@ export class Room extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server, [`player:${slot}`]);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
 
-    this.send(server, { type: "connected", room: room.code, player: slot, capacity: room.capacity });
-    this.broadcast({ type: "peer_status", player: slot, connected: true });
+    this.send(server, {
+      type: "connected", room: room.code, player: slot, capacity: room.capacity, names: this.names(),
+    });
+    // Peers already in the room learn the newcomer's name here; room_state only goes to the
+    // socket that just connected.
+    this.broadcast({ type: "peer_status", player: slot, connected: true, name: this.names()[slot] ?? "" });
     this.sendRoomState(server);
     this.maybeStartMatch();
     await this.maybeStartRematch();
@@ -664,7 +690,8 @@ export class Room extends DurableObject<Env> {
     `);
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     this.broadcast({
-      type: "match_start", level: selectedLevel, seed, turn: 1, weapons: this.weapons(), capacity: room.capacity,
+      type: "match_start", level: selectedLevel, seed, turn: 1, weapons: this.weapons(),
+      names: this.names(), capacity: room.capacity,
     });
   }
 
@@ -683,6 +710,7 @@ export class Room extends DurableObject<Env> {
       seed: room.seed,
       turn: room.turn,
       weapons: this.weapons(),
+      names: this.names(),
       capacity: room.capacity,
     });
   }
@@ -701,8 +729,23 @@ export class Room extends DurableObject<Env> {
       turn: room.turn,
       connected: this.slots(room).map((player) => this.isConnected(player)),
       weapons: this.weapons(),
+      names: this.names(),
       capacity: room.capacity,
     });
+  }
+
+  /** One entry per seat; an empty string marks a seat without a nickname. */
+  private names(): string[] {
+    const rows = this.ctx.storage.sql.exec<{ slot: number; name: string }>(
+      "SELECT slot, name FROM participants ORDER BY slot",
+    ).toArray();
+    const names: string[] = Array(this.room()?.capacity ?? 2).fill("");
+    for (const row of rows) {
+      if (row.slot >= 0 && row.slot < names.length) {
+        names[row.slot] = String(row.name ?? "");
+      }
+    }
+    return names;
   }
 
   private weapons(): number[] {

@@ -51,8 +51,31 @@ describe("Room durable object", () => {
       hasGuest: true,
       protocol: 3,
       weapons: [2, 4],
+      names: ["", ""],
       capacity: 2,
     });
+  });
+
+  it("carries each seat's sanitized nickname to every client", async () => {
+    const response = await post("/rooms", { level: 0, weapon: 0, protocol: 3, name: "  pato  chaos!! " });
+    expect(response.status).toBe(201);
+    const created = await response.json<{ room: string; token: string; name: string }>();
+    expect(created.name).toBe("PATO CHAOS");
+    // A guest without a name keeps the empty default; a long one is cut to twelve characters.
+    const guest = await joinRoom(created.room, 2);
+    const host = await TestSocket.open(created.room, created.token);
+    expect(await host.waitFor("connected")).toMatchObject({ names: ["PATO CHAOS", ""] });
+    expect(await host.waitFor("room_state")).toMatchObject({ names: ["PATO CHAOS", ""] });
+    // The host hears its own connect broadcast first, then the guest's.
+    expect(await host.waitFor("peer_status")).toMatchObject({ player: 0, name: "PATO CHAOS" });
+    const socket = await TestSocket.open(created.room, guest);
+    expect(await host.waitFor("peer_status")).toMatchObject({ player: 1, connected: true, name: "" });
+    expect(await socket.waitFor("match_start")).toMatchObject({ names: ["PATO CHAOS", ""] });
+    host.close();
+    socket.close();
+
+    const long = await post("/rooms", { level: 0, weapon: 0, protocol: 3, name: "zé-dos_anos 2026 extra" });
+    expect((await long.json<{ name: string }>()).name).toBe("Z-DOS_ANOS 2");
   });
 
   it("rejects clients that do not speak the current protocol", async () => {

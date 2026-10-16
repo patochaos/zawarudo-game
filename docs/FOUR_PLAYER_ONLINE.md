@@ -2,7 +2,7 @@
 
 The source supports four human players in a private online free-for-all, one
 player per PC. Online defaults to four seats and retains a two-player option.
-All seven arenas have four-player layouts. No level geometry changes were
+All five arenas have four-player layouts. No level geometry changes were
 needed for this work.
 
 The updated Cloudflare room service was deployed on September 19, 2026
@@ -15,15 +15,27 @@ changed.
 ## Joining with Play.bat
 
 1. Put the same updated project source on all four PCs and launch `Play.bat`.
-2. The host chooses Online, leaves 4 PLAYERS selected, chooses an arena, and
-   creates a private room.
-3. Share its six-character code. The other three PCs choose Online and join.
+2. The host chooses Online, optionally types a name, leaves 4 PLAYERS selected,
+   chooses an arena, and creates a private room.
+3. Share its six-character code. The other three PCs choose Online, optionally
+   type a name, and join.
 4. The match starts when all four seats are connected. Each PC controls its
    assigned fighter using its own keyboard/mouse or first connected gamepad.
 
 The host chooses the rematch arena; all four players must request a rematch.
 Planning remains private until all four plans arrive. A planning timeout submits
 that PC's current plan, rather than bypassing the other players.
+
+## Nicknames
+
+Each PC can register a nickname in the lobby before creating or joining. The
+room service sanitizes it (upper case, letters, digits, spaces, `_`, `-`, at most
+12 characters), stores it per seat, and includes a `names` array in its
+`connected`, `room_state` and `match_start` messages plus a `name` on the
+`peer_status` a newcomer triggers. The protocol version is unchanged: a client
+without the field sends no name and shows P1..P4, and a service without the
+change ignores the field, so mixed versions still play. The nickname is saved in
+`settings.cfg` on the device. Deploy the room service for names to appear.
 
 ## Disconnect behavior
 
@@ -46,7 +58,7 @@ players, and full state recovery after restarting the application are not suppor
 ## Verification
 
 - Four independent game simulations matched checksums through three turns on
-  each of the seven arenas, including movement, jumps, and projectiles.
+  each of the five arenas, including movement, jumps, and projectiles.
 - Arena tests checked four distinct safe starts, moving geometry, full-arena
   camera, simultaneous respawns after cover destruction, and every winning seat.
 - Real Godot OnlineClient HTTP/WebSocket tests checked four connections, hidden

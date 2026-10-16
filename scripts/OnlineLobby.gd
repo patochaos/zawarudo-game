@@ -12,6 +12,10 @@ const VIOLET := Color(0.76, 0.42, 1.0)
 const TEXT := Color(0.84, 0.87, 0.94)
 const DIM := Color(0.56, 0.61, 0.71)
 const ROOM_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+## Nicknames share the chrome's all-caps voice and stay short enough for four of
+## them on the occupancy line. MUST match sanitizePlayerName() on the room service.
+const NAME_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-"
+const MAX_NAME_LENGTH := 12
 const FIGHTER_ROSTER := Roster.ORDER
 ## Compact copy of the local roster grid: the whole cast on screen at once,
 ## sized for the one fighter this machine is choosing.
@@ -116,8 +120,13 @@ class LobbyChrome:
 var level: int = 0
 var weapon: int = 0
 var capacity: int = 4
+## The sanitized nickname this machine will register with the room. Empty means
+## the other players see the plain seat number.
+var nickname: String = ""
 var _capacity_button: Button
 var _occupancy: Label
+var _name_caption: Label
+var _name_input: LineEdit
 var _code_input: LineEdit
 var _room_label: Label
 var _room_caption: Label
@@ -152,8 +161,16 @@ func _ready() -> void:
 	eyebrow.text = "LOCKSTEP // HIDDEN PLANS // PRIVATE ROOM"
 	var heading := _label(Vector2(300.0, 132.0), 680.0, 42, GOLD)
 	heading.text = "ONLINE BATTLE"
-	var intro := _label(Vector2(330.0, 184.0), 620.0, 15, TEXT)
-	intro.text = "Private plans. Every living player must lock fate."
+	# The name row sits where the intro copy used to be: it is the one thing a
+	# player types before choosing a fighter, and the eyebrow already carries the
+	# premise.
+	_name_caption = _label(Vector2(425.0, 190.0), 110.0, 12, VIOLET)
+	_name_caption.text = "YOUR NAME //"
+	_name_input = _text_input(Vector2(545.0, 180.0), Vector2(310.0, 34.0), 16,
+		MAX_NAME_LENGTH, "OPTIONAL · SHOWN TO YOUR PLAYERS")
+	_name_input.tooltip_text = "Letters, digits, spaces, _ and - only. Saved on this device."
+	_name_input.text_changed.connect(_sanitize_name_input)
+	_name_input.text_submitted.connect(func(_text): _code_input.grab_focus())
 
 	_create = _button(Vector2(360.0, 398.0), Vector2(360.0, 54.0),
 		"01   CREATE PRIVATE ROOM", true)
@@ -167,31 +184,10 @@ func _ready() -> void:
 	_join_divider = _label(Vector2(300.0, 468.0), 680.0, 13, DIM)
 	_join_divider.text = "OR JOIN AN EXISTING ROOM"
 
-	_code_input = LineEdit.new()
-	_code_input.position = Vector2(360.0, 500.0)
-	_code_input.size = Vector2(356.0, 54.0)
-	_code_input.max_length = 6
-	_code_input.placeholder_text = "6-CHARACTER CODE"
-	_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_code_input.add_theme_font_size_override("font_size", 23)
-	_code_input.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
-	_code_input.add_theme_color_override("font_placeholder_color", Color(0.45, 0.49, 0.58))
-	_code_input.add_theme_color_override("caret_color", GOLD)
-	var input_style := StyleBoxFlat.new()
-	input_style.bg_color = Color(0.035, 0.022, 0.064, 0.98)
-	input_style.border_color = Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.52)
-	input_style.set_border_width_all(2)
-	input_style.set_corner_radius_all(3)
-	input_style.content_margin_left = 14.0
-	input_style.content_margin_right = 14.0
-	_code_input.add_theme_stylebox_override("normal", input_style)
-	var focus_style := input_style.duplicate()
-	focus_style.border_color = GOLD
-	_code_input.add_theme_stylebox_override("focus", focus_style)
+	_code_input = _text_input(Vector2(360.0, 500.0), Vector2(356.0, 54.0), 23, 6,
+		"6-CHARACTER CODE")
 	_code_input.text_changed.connect(_sanitize_code)
 	_code_input.text_submitted.connect(func(_text): _request_join())
-	_code_input.focus_entered.connect(func(): ui_navigated.emit())
-	add_child(_code_input)
 
 	_join = _button(Vector2(734.0, 500.0), Vector2(186.0, 54.0), "02   JOIN", true)
 	_join.pressed.connect(_request_join)
@@ -206,7 +202,8 @@ func _ready() -> void:
 	_copy.pressed.connect(func():
 		DisplayServer.clipboard_set(_room_label.text)
 		set_status("CODE COPIED // SHARE WITH YOUR PLAYERS", false))
-	_occupancy = _label(Vector2(330.0, 512.0), 620.0, 15, TEXT)
+	# Wider than the other copy lines: four full-length nicknames have to fit.
+	_occupancy = _label(Vector2(260.0, 512.0), 760.0, 15, TEXT)
 	_occupancy.visible = false
 
 	_fighter_label = _label(Vector2(300.0, 228.0), 680.0, 13, VIOLET)
@@ -239,11 +236,15 @@ func _ready() -> void:
 	visible = false
 
 
-func open(selected_level: int, selected_weapon: int = 0) -> void:
+## `saved_name` is the nickname remembered from the last room, so a returning
+## player only has to type it once.
+func open(selected_level: int, selected_weapon: int = 0, saved_name: String = "") -> void:
 	level = selected_level
 	weapon = selected_weapon if selected_weapon in FIGHTER_ROSTER else 0
 	visible = true
 	_chrome.set_room_active(false)
+	nickname = sanitize_name(saved_name)
+	_name_input.text = nickname
 	_code_input.text = ""
 	_code_input.editable = true
 	_create.visible = true
@@ -277,11 +278,16 @@ func show_room(code: String, player: int) -> void:
 	_chrome.set_room_active(true)
 	_occupancy.visible = true
 	_occupancy.text = "CONNECTING TO ROOM"
-	set_status("YOU ARE PLAYER %d // %s" % [player + 1,
+	var who := "PLAYER %d" % (player + 1) if nickname.is_empty() \
+		else "%s (P%d)" % [nickname, player + 1]
+	set_status("YOU ARE %s // %s" % [who,
 		"SHARE THIS CODE WITH YOUR PLAYERS" if player == 0 else "CONNECTING TO ROOM"], false)
 
 
-func update_room(connected: Array, room_capacity: int, selected_level: int) -> void:
+## `names` holds one nickname per seat as the room reports them; a missing or
+## empty entry falls back to the seat number.
+func update_room(connected: Array, room_capacity: int, selected_level: int,
+		names: Array = []) -> void:
 	capacity = room_capacity
 	level = selected_level
 	_refresh_choices()
@@ -291,8 +297,33 @@ func update_room(connected: Array, room_capacity: int, selected_level: int) -> v
 		var present := i < connected.size() and bool(connected[i])
 		if present:
 			count += 1
-		slots.append("P%d %s" % [i + 1, "READY" if present else "WAITING"])
-	_occupancy.text = "%d/%d CONNECTED\n%s" % [count, capacity, "  ·  ".join(slots)]
+		slots.append("%s %s" % [seat_tag(i, names), "READY" if present else "WAITING"])
+	var seats := "  ·  ".join(slots)
+	# Long nicknames step the font down rather than spilling past the frame.
+	_occupancy.add_theme_font_size_override("font_size", 15 if seats.length() <= 64 else 12)
+	_occupancy.text = "%d/%d CONNECTED\n%s" % [count, capacity, seats]
+
+
+## The label a seat gets everywhere online: its nickname, or P1..P4 without one.
+static func seat_tag(slot: int, names: Array) -> String:
+	if slot >= 0 and slot < names.size():
+		var tag := str(names[slot]).strip_edges()
+		if not tag.is_empty():
+			return tag
+	return "P%d" % (slot + 1)
+
+
+## Upper-case, allowed characters only, single spaces, at most MAX_NAME_LENGTH.
+## The room service applies the same rule, so what a player sees locally is
+## what every other client receives.
+static func sanitize_name(value: String) -> String:
+	var clean := ""
+	for character in value.to_upper():
+		if character in NAME_ALPHABET:
+			clean += character
+	while "  " in clean:
+		clean = clean.replace("  ", " ")
+	return clean.strip_edges().left(MAX_NAME_LENGTH).strip_edges()
 
 
 func set_status(text: String, is_error: bool) -> void:
@@ -306,6 +337,10 @@ func handle_key(code: int) -> bool:
 	if code == KEY_ESCAPE:
 		cancel_requested.emit()
 		return true
+	# A name is edited mid-word far more often than a six-character code, so its
+	# field keeps the arrows for the caret; Enter hands focus to the code field.
+	if _name_input.visible and _name_input.has_focus():
+		return false
 	# The room-code field owns the letter keys, so the grid answers to arrows only.
 	if code in [KEY_LEFT, KEY_RIGHT] and _fighter_grid.visible:
 		_cycle_fighter(-1 if code == KEY_LEFT else 1)
@@ -348,6 +383,8 @@ func _refresh_choices() -> void:
 ## down and the label alone records what this machine chose.
 func _set_choices_visible(can_edit: bool) -> void:
 	_capacity_button.visible = can_edit
+	_name_caption.visible = can_edit
+	_name_input.visible = can_edit
 	for tile in _fighter_buttons:
 		tile.visible = can_edit
 	for caption in _fighter_captions:
@@ -376,6 +413,23 @@ func _sanitize_code(value: String) -> void:
 	_code_input.set_block_signals(false)
 
 
+## Filters as the player types but keeps inner spaces, so "PATO CHAOS" can be
+## written in order; `nickname` holds the trimmed value the room will receive.
+func _sanitize_name_input(value: String) -> void:
+	var clean := ""
+	for character in value.to_upper():
+		if character in NAME_ALPHABET:
+			clean += character
+	clean = clean.left(MAX_NAME_LENGTH)
+	nickname = sanitize_name(clean)
+	if clean == value:
+		return
+	_name_input.set_block_signals(true)
+	_name_input.text = clean
+	_name_input.caret_column = clean.length()
+	_name_input.set_block_signals(false)
+
+
 func _request_join() -> void:
 	var code := _code_input.text.strip_edges().to_upper()
 	if code.length() != 6:
@@ -383,6 +437,34 @@ func _request_join() -> void:
 		_code_input.grab_focus()
 		return
 	join_requested.emit(code, weapon)
+
+
+func _text_input(pos: Vector2, box: Vector2, font_size: int, max_length: int,
+		placeholder: String) -> LineEdit:
+	var input := LineEdit.new()
+	input.position = pos
+	input.size = box
+	input.max_length = max_length
+	input.placeholder_text = placeholder
+	input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	input.add_theme_font_size_override("font_size", font_size)
+	input.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
+	input.add_theme_color_override("font_placeholder_color", Color(0.45, 0.49, 0.58))
+	input.add_theme_color_override("caret_color", GOLD)
+	var input_style := StyleBoxFlat.new()
+	input_style.bg_color = Color(0.035, 0.022, 0.064, 0.98)
+	input_style.border_color = Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.52)
+	input_style.set_border_width_all(2)
+	input_style.set_corner_radius_all(3)
+	input_style.content_margin_left = 14.0
+	input_style.content_margin_right = 14.0
+	input.add_theme_stylebox_override("normal", input_style)
+	var focus_style := input_style.duplicate()
+	focus_style.border_color = GOLD
+	input.add_theme_stylebox_override("focus", focus_style)
+	input.focus_entered.connect(func(): ui_navigated.emit())
+	add_child(input)
+	return input
 
 
 func _label(pos: Vector2, width: float, size: int, color: Color) -> Label:

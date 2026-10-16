@@ -34,20 +34,23 @@ func _ready() -> void:
 	add_child(_http)
 
 
-func create_room(level: int, weapon: int = 0, capacity: int = 4) -> void:
+## `nickname` is display-only; the service sanitizes it again and echoes every
+## seat's name in its room messages. Empty means "show the seat number".
+func create_room(level: int, weapon: int = 0, capacity: int = 4, nickname: String = "") -> void:
 	if _request_kind != RequestKind.NONE:
 		return
 	_request_kind = RequestKind.CREATE
 	status_changed.emit("CREATING PRIVATE ROOM…", false)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	var err := _http.request(_api_url() + "/rooms", headers, HTTPClient.METHOD_POST,
-		JSON.stringify({"level": level, "weapon": weapon, "capacity": capacity, "protocol": PROTOCOL_VERSION}))
+		JSON.stringify({"level": level, "weapon": weapon, "capacity": capacity,
+			"protocol": PROTOCOL_VERSION, "name": nickname}))
 	if err != OK:
 		_request_kind = RequestKind.NONE
 		status_changed.emit("COULD NOT START ROOM REQUEST", true)
 
 
-func join_room(code: String, weapon: int = 0) -> void:
+func join_room(code: String, weapon: int = 0, nickname: String = "") -> void:
 	if _request_kind != RequestKind.NONE:
 		return
 	var clean := code.strip_edges().to_upper()
@@ -58,7 +61,7 @@ func join_room(code: String, weapon: int = 0) -> void:
 	status_changed.emit("JOINING ROOM %s…" % clean, false)
 	var err := _http.request(_api_url() + "/rooms/%s/join" % clean,
 		PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST,
-		JSON.stringify({"weapon": weapon, "protocol": PROTOCOL_VERSION}))
+		JSON.stringify({"weapon": weapon, "protocol": PROTOCOL_VERSION, "name": nickname}))
 	if err != OK:
 		_request_kind = RequestKind.NONE
 		status_changed.emit("COULD NOT START JOIN REQUEST", true)

@@ -45,7 +45,7 @@ func _draw() -> void:
 		var col: Color = gm.PLAYER_COLORS[i]
 		var total: float = maxf(1.0, gm.exec_ticks())
 		var recorded := WIDTH * plan.recorded_ticks() / total
-		draw_string(FONT, Vector2(12.0, y + 4.0), "P%d" % [i + 1], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
+		draw_string(FONT, Vector2(12.0, y + 4.0), gm.player_tag(i), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
 		draw_line(Vector2(LEFT, y), Vector2(LEFT + WIDTH, y), Color(0.22, 0.24, 0.3), 5.0)
 		draw_line(Vector2(LEFT, y), Vector2(LEFT + recorded, y), col, 5.0)
 		# Dashes indicate the part that continues under momentum and gravity.

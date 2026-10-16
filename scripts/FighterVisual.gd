@@ -491,5 +491,5 @@ func _draw_player_label() -> void:
 	var body: Color = skin.palette.get(&"body", _fighter.color)
 	var label_y := minf(-Player.HALF.y - 48.0, skin.visual_bounds.position.y - 6.0)
 	draw_string(ThemeDB.fallback_font, Vector2(-12.0, label_y),
-		"P%d" % (_fighter.index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14,
+		_fighter.seat_tag(), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14,
 		body.lightened(0.45))

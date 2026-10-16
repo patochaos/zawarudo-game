@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PLAN_TICKS, parseClientMessage, parsePlan } from "../src/protocol";
+import { MAX_PLAN_TICKS, parseClientMessage, parsePlan, sanitizePlayerName } from "../src/protocol";
 
 const validPlan = {
   dirs: [0, 1, 2],
@@ -95,5 +95,16 @@ describe("plan protocol", () => {
     expect(parseClientMessage(JSON.stringify({ type: "rematch" }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: "rematch", level: null }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: "rematch", level: -1 }))).toBeNull();
+  });
+});
+
+describe("player names", () => {
+  it("uppercases, strips unsafe characters, and caps the length", () => {
+    expect(sanitizePlayerName("pato")).toBe("PATO");
+    expect(sanitizePlayerName("  a  very   long nickname here ")).toBe("A VERY LONG");
+    expect(sanitizePlayerName("<b>x_y-9</b>")).toBe("BX_Y-9B");
+    expect(sanitizePlayerName("!!!")).toBe("");
+    expect(sanitizePlayerName(42)).toBe("");
+    expect(sanitizePlayerName(undefined)).toBe("");
   });
 });

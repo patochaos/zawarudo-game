@@ -503,6 +503,9 @@ var online_player: int = -1
 var online_room: String = ""
 var online_peer_connected: bool = false
 var _online_connected: Array = [true, true]
+## One nickname per online seat, as the room reports them. An empty entry means
+## that seat shows its P1..P4 tag.
+var online_names: Array = []
 ## True from the moment an opponent drops out of a live match until they come
 ## back or the match is claimed. banner_time expires; being stranded does not,
 ## so the way out has to stay on screen rather than flash past.
@@ -647,6 +650,8 @@ var _settings: Dictionary = {
 	"telemetry": true,
 	## Rungs of the Start Duel opponent ladder beaten so far.
 	"ladder_progress": 0,
+	## Nickname registered with online rooms; empty shows the seat number.
+	"nickname": "",
 }
 ## Tests can point persistence at a disposable file without touching the
 ## player's actual preferences.
@@ -900,6 +905,32 @@ func set_player_opponent(player_index: int, rung: int) -> void:
 	if player_index == 1:
 		demo_opponent = player_opponents[1]
 		rematch_opponent = demo_opponent
+
+
+## The nickname an online seat registered, or "" when it has none or the match
+## is local. Local and CPU matches never carry names, so their labels stay P1..P4.
+func online_nickname(player_index: int) -> String:
+	if not online_mode or player_index < 0 or player_index >= online_names.size():
+		return ""
+	return str(online_names[player_index]).strip_edges()
+
+
+## Short seat label for tags and score lines: the nickname online, else "P1".
+func player_tag(player_index: int) -> String:
+	var nick := online_nickname(player_index)
+	return nick if not nick.is_empty() else "P%d" % (player_index + 1)
+
+
+## Long seat label for banners: the nickname online, else "PLAYER 1".
+func player_title(player_index: int) -> String:
+	var nick := online_nickname(player_index)
+	return nick if not nick.is_empty() else "PLAYER %d" % (player_index + 1)
+
+
+func _set_online_names(names: Array, seats: int) -> void:
+	online_names.resize(seats)
+	for i in seats:
+		online_names[i] = str(names[i]).strip_edges() if i < names.size() else ""
 
 
 ## The opponent's name where the HUD would otherwise show the fighter kit.
@@ -1482,17 +1513,26 @@ func _on_menu_online() -> void:
 	state = Phase.ONLINE_LOBBY
 	# The lobby starts from the arena and fighter the roster screen last held,
 	# then lets each side choose its own before the room opens.
-	_online_lobby.open(_setup.level, local_weapon_choices[0])
+	_online_lobby.open(_setup.level, local_weapon_choices[0], str(_settings.get("nickname", "")))
 	_transition.play("ONLINE MATCH", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
 
 
 func _on_online_create(lvl: int, weapon: int, capacity: int = 4) -> void:
 	_online_lobby.set_status("CREATING PRIVATE ROOM…", false)
-	_online_client.create_room(lvl, weapon, capacity)
+	_online_client.create_room(lvl, weapon, capacity, _remember_nickname())
 
 
 func _on_online_join(code: String, weapon: int) -> void:
-	_online_client.join_room(code, weapon)
+	_online_client.join_room(code, weapon, _remember_nickname())
+
+
+## The lobby's nickname is saved with the other options the moment it is used
+## for a room, so the next session starts with it filled in.
+func _remember_nickname() -> String:
+	var nick: String = _online_lobby.nickname
+	if nick != str(_settings.get("nickname", "")):
+		_on_option_changed("nickname", nick)
+	return nick
 
 
 func _on_online_room_ready(code: String, player_slot: int) -> void:
@@ -1520,6 +1560,7 @@ func _leave_online() -> void:
 	online_peer_lost = false
 	online_match_broken = false
 	_online_connected = [true, true]
+	online_names = []
 	_online_lobby.close()
 	_open_menu()
 
@@ -1540,13 +1581,17 @@ func _on_online_message(message: Dictionary) -> void:
 			if not online_mode:
 				_online_connected.resize(int(message.get("capacity", 2)))
 				_online_connected.fill(false)
+			if message.has("names"):
+				_set_online_names(message["names"], int(message.get("capacity", _online_connected.size())))
 		"room_state":
 			var connected: Array = message.get("connected", [])
 			_online_connected = connected.duplicate()
 			_refresh_online_connections()
+			if message.has("names"):
+				_set_online_names(message["names"], int(message.get("capacity", connected.size())))
 			if state == Phase.ONLINE_LOBBY:
 				_online_lobby.update_room(connected, int(message.get("capacity", connected.size())),
-					int(message.get("level", 0)))
+					int(message.get("level", 0)), online_names)
 			# Recover server transitions missed while our socket was disconnected.
 			var server_phase := str(message.get("phase", "waiting"))
 			var server_turn := int(message.get("turn", 1))
@@ -1558,25 +1603,33 @@ func _on_online_message(message: Dictionary) -> void:
 				elif server_turn == 1 and (not online_mode or \
 						(_online_waiting_rematch and int(message.get("seed", 0)) != _online_seed)):
 					_start_online_match(int(message.get("level", 0)),
-						int(message.get("seed", 0)), server_turn, message.get("weapons", []))
+						int(message.get("seed", 0)), server_turn, message.get("weapons", []),
+						message.get("names", []))
 		"peer_status":
 			var peer_slot := int(message.get("player", -1))
 			var connected := bool(message.get("connected", false))
 			if peer_slot >= 0 and peer_slot < _online_connected.size():
 				_online_connected[peer_slot] = connected
 				_refresh_online_connections()
+				# A newcomer's name arrives only here: room_state went to their socket.
+				if message.has("name"):
+					if online_names.size() < _online_connected.size():
+						_set_online_names(online_names, _online_connected.size())
+					online_names[peer_slot] = str(message["name"]).strip_edges()
 				if state == Phase.ONLINE_LOBBY:
-					_online_lobby.update_room(_online_connected, _online_connected.size(), _online_lobby.level)
+					_online_lobby.update_room(_online_connected, _online_connected.size(),
+						_online_lobby.level, online_names)
 				if online_mode and peer_slot != online_player:
-					banner_text = "PLAYER %d RECONNECTED" % (peer_slot + 1) if connected \
-						else ("PLAYER %d DISCONNECTED - WAIT FOR RECONNECT OR ESC TO LEAVE" % (peer_slot + 1) \
+					banner_text = "%s RECONNECTED" % player_title(peer_slot) if connected \
+						else ("%s DISCONNECTED - WAIT FOR RECONNECT OR ESC TO LEAVE" % player_title(peer_slot) \
 						if player_count > 2 else "OPPONENT DISCONNECTED - ENTER CLAIMS THE MATCH")
 					banner_color = Color(0.52, 0.95, 0.70) if connected else Color(1.0, 0.45, 0.35)
 					banner_time = 2.0
 		"match_start":
 			_start_online_match(int(message.get("level", 0)),
 				int(message.get("seed", 0)), int(message.get("turn", 1)),
-				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]))
+				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]),
+				message.get("names", []))
 		"plan_ack":
 			banner_text = "PLAN LOCKED - WAITING FOR PLAYERS"
 			banner_color = PLAYER_COLORS[online_player].lightened(0.3)
@@ -1620,8 +1673,10 @@ func _on_online_message(message: Dictionary) -> void:
 			banner_time = 2.4
 
 
+## `names` carries one nickname per seat; when the message has none, the names
+## learned in the lobby stay in force.
 func _start_online_match(lvl: int, seed_value: int, server_turn: int,
-		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES]) -> void:
+		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES], names: Array = []) -> void:
 	if weapons.size() not in [2, 4] or online_player < 0 or online_player >= weapons.size():
 		_online_lobby.set_status("ROOM RETURNED AN INVALID PLAYER LINEUP", true)
 		return
@@ -1670,6 +1725,7 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	_set_player_count(weapons.size())
 	_online_connected.resize(player_count)
 	_online_connected.fill(true)
+	_set_online_names(names if not names.is_empty() else online_names, player_count)
 	_assign_pads()
 	_online_seed = seed_value
 	rng.seed = _online_seed
@@ -3565,7 +3621,7 @@ func _gain_super(i: int, amount: float, reason: String) -> void:
 		_telemetry.record("super_gain", turn, {"player": i + 1, "reason": reason,
 			"amount": snappedf(amount, 0.001), "meter": snappedf(super_meter[i], 0.001)})
 	if super_meter[i] >= 1.0:
-		banner_text = "PLAYER %d — SUPER READY" % (i + 1)
+		banner_text = "%s — SUPER READY" % player_title(i)
 		banner_color = PLAYER_COLORS[i].lightened(0.35)
 		banner_time = 1.4
 		if _sfx != null:
@@ -3717,7 +3773,7 @@ func _check_core_collection() -> void:
 		banner_text = "MULTIPLE PLAYERS — SUPER READY"
 		banner_color = Color(1.0, 0.90, 0.48)
 	else:
-		banner_text = "PLAYER %d CLAIMED THE CORE — SUPER READY" % (collectors[0] + 1)
+		banner_text = "%s CLAIMED THE CORE — SUPER READY" % player_title(collectors[0])
 		banner_color = PLAYER_COLORS[collectors[0]].lightened(0.35)
 	banner_time = 1.8
 
@@ -3808,7 +3864,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 	# A returning knife may hit its owner. The hit still removes them for this
 	# window, but it must not award a point to an arbitrary rival.
 	if scorer < 0 or scorer >= players.size() or scorer == victim_idx:
-		banner_text = "P%d  SELF-HIT" % (victim_idx + 1)
+		banner_text = "%s  SELF-HIT" % player_tag(victim_idx)
 		banner_color = victim.color
 		banner_time = banner_duration
 		return
@@ -3843,7 +3899,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		state = Phase.GAME_OVER
 		winner = scorer
 		_prime_game_over_pad_state()
-		banner_text = "P%d  WINS" % (scorer + 1)
+		banner_text = "%s  WINS" % player_tag(scorer)
 		banner_color = PLAYER_COLORS[scorer]
 		_sfx.play("victory")
 		_finish_match_telemetry()
@@ -3852,7 +3908,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 			_event_direction.impact(at, victim.color, "TIME // CUT")
 			_event_direction.tableau(scorer)
 	else:
-		banner_text = "P%d  →  HIT  →  P%d" % [scorer + 1, victim_idx + 1]
+		banner_text = "%s  →  HIT  →  %s" % [player_tag(scorer), player_tag(victim_idx)]
 		banner_color = PLAYER_COLORS[scorer]
 	banner_time = banner_duration
 
@@ -3865,7 +3921,7 @@ func _score_text() -> String:
 		return "CRIMSON  %d   ·   %d  AZURE" % [team_score[0], team_score[1]]
 	var parts := PackedStringArray()
 	for i in players.size():
-		parts.append("P%d %d" % [i + 1, score[i]])
+		parts.append("%s %d" % [player_tag(i), score[i]])
 	return "  ·  ".join(parts)
 
 
@@ -4358,7 +4414,7 @@ func _finish_match_replay() -> void:
 	banner_text = ("FATE DEFIED" if fate_trial_succeeded else "FATE CLAIMED YOU") \
 		if fate_trial_mode else ("TEAM %s WINS THE MATCH" % TEAM_NAMES[winning_team] \
 		if team_mode and winning_team >= 0 else \
-		("PLAYER %d WINS THE MATCH" % (winner + 1) if winner >= 0 else "MATCH OVER"))
+		("%s WINS THE MATCH" % player_title(winner) if winner >= 0 else "MATCH OVER"))
 	banner_color = (PLAYER_COLORS[0] if fate_trial_succeeded else PLAYER_COLORS[1]) \
 		if fate_trial_mode else (TEAM_COLORS[winning_team] if team_mode and winning_team >= 0 else \
 		(PLAYER_COLORS[winner] if winner >= 0 else Color.WHITE)
@@ -4697,7 +4753,7 @@ func _spawn_character_super(p: Player) -> void:
 	super_armed[p.index] = false
 	p.queue_redraw()
 	_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
-	banner_text = "PLAYER %d — %s" % [p.index + 1, weapon_short_name(p.index)]
+	banner_text = "%s — %s" % [player_title(p.index), weapon_short_name(p.index)]
 	banner_color = PLAYER_COLORS[p.index].lightened(0.35)
 	banner_time = 0.9
 	match player_weapons[p.index]:
@@ -4746,7 +4802,7 @@ func _spawn_super_wave(p: Player, wave: int) -> void:
 		super_armed[p.index] = false
 		p.queue_redraw()
 		_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
-		banner_text = "PLAYER %d — SUPER" % (p.index + 1)
+		banner_text = "%s — SUPER" % player_title(p.index)
 		banner_color = PLAYER_COLORS[p.index].lightened(0.35)
 		banner_time = 0.9
 
@@ -5214,7 +5270,7 @@ func _finish_abandoned_match(claimed_by: int) -> void:
 	# edges are primed and a held button cannot instantly skip past it.
 	_prime_game_over_pad_state()
 	_finish_match_telemetry()
-	banner_text = "OPPONENT LEFT — PLAYER %d TAKES THE MATCH" % (winner + 1)
+	banner_text = "OPPONENT LEFT — %s TAKES THE MATCH" % player_title(winner)
 	banner_color = PLAYER_COLORS[winner].lightened(0.3)
 	banner_time = 3.0
 	if _sfx != null:
@@ -5548,7 +5604,7 @@ func _set_shock_attack_mode(i: int, mode: int) -> void:
 	if not p.alive or p.plan.confirmed:
 		return
 	p.plan.attack_mode = clampi(mode, 0, 1)
-	banner_text = "P%d PULSE — %s" % [i + 1,
+	banner_text = "%s PULSE — %s" % [player_tag(i),
 		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
 	banner_color = p.color
 	banner_time = 1.1
@@ -5565,7 +5621,7 @@ func _toggle_super(i: int) -> void:
 		return
 	super_armed[i] = not super_armed[i]
 	p.queue_redraw()
-	banner_text = "PLAYER %d — SUPER %s" % [i + 1, "ARMED" if super_armed[i] else "STANDBY"]
+	banner_text = "%s — SUPER %s" % [player_title(i), "ARMED" if super_armed[i] else "STANDBY"]
 	banner_color = Color(1.0, 0.94, 0.58) if super_armed[i] \
 		else PLAYER_COLORS[i].lightened(0.25)
 	banner_time = 1.1

@@ -152,11 +152,16 @@ next one begins.
 
 To play online:
 
-1. The host chooses **ONLINE**, selects **4 PLAYERS** (the default) or **2 PLAYERS**,
-   chooses the arena, and selects **CREATE PRIVATE ROOM**. Share the six-character
-   code with the other players.
-2. Each other player chooses **ONLINE**, enters the code, and presses **JOIN**.
-   The lobby displays connected seats and starts only when every seat is connected.
+1. The host chooses **ONLINE**, optionally types a name in **YOUR NAME**, selects
+   **4 PLAYERS** (the default) or **2 PLAYERS**, chooses the arena, and selects
+   **CREATE PRIVATE ROOM**. Share the six-character code with the other players.
+2. Each other player chooses **ONLINE**, optionally types a name, enters the code,
+   and presses **JOIN**. The lobby displays connected seats and starts only when
+   every seat is connected.
+
+Names are optional, up to 12 letters, digits, spaces, `_` or `-`, and are saved
+on the device for the next room. They replace the P1..P4 labels in the lobby, above
+each fighter, and in the match banners; a seat without a name keeps its number.
 3. Each player uses their own keyboard and mouse. Online, the controls on all
    computers are `A`/`D`, `W`, `S`, mouse aim, hold/release `LMB`, `Left Shift`
    to confirm, `R`/`RMB` to roll back, `F` to reset the path, and `T` for SUPER.
