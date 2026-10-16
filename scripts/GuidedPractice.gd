@@ -14,11 +14,27 @@ var survival_windows := 0
 var survival_knife_ids: Array[int] = []
 ## Tests set this to render the pad variant without a controller plugged in.
 var force_pad_prompts := false
+## Swap this for a dedicated dialogue face once one is added under assets/fonts.
+const DIALOGUE_FONT := "res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"
+const CHIP_FONT := "res://assets/kenney/fonts/kenney-future.ttf"
+## Prompt icons shown inside the input chips, keyed by the chip's label.
+const CHIP_ICONS := {
+	"A": "res://assets/kenney/prompts/key-a.png",
+	"D": "res://assets/kenney/prompts/key-d.png",
+	"S": "res://assets/kenney/prompts/key-s.png",
+	"SPACE": "res://assets/kenney/prompts/key-space.png",
+	"LEFT SHIFT": "res://assets/kenney/prompts/key-shift.png",
+	"LEFT-CLICK": "res://assets/kenney/prompts/mouse-left.png",
+	"LEFT STICK": "res://assets/kenney/prompts/pad-left-stick.png",
+	"PAD A": "res://assets/kenney/prompts/pad-a.png",
+	"START": "res://assets/kenney/prompts/pad-menu.png",
+	"R2": "res://assets/kenney/prompts/pad-rt.png",
+}
 var _panel: Panel
 var _title: Label
 var _host_name: Label
 var _host_role: Label
-var _body: Label
+var _body: RichTextLabel
 var _action: Button
 var _hint: Label
 var _markers: Control
@@ -95,9 +111,17 @@ func _ready() -> void:
 	_host_role.add_theme_font_override("font", preload("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"))
 	_host_role.add_theme_color_override("font_color", Color(0.68, 0.72, 0.82))
 	_host_role.clip_text = true
-	_body = _label(Vector2(206, 82), Vector2(604, 296), 21)
-	_body.add_theme_font_override("font", preload("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"))
-	_body.add_theme_constant_override("line_spacing", 6)
+	_body = RichTextLabel.new()
+	_body.position = Vector2(206, 82)
+	_body.size = Vector2(604, 296)
+	_body.bbcode_enabled = true
+	_body.scroll_active = false
+	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_body.add_theme_font_override("normal_font", load(DIALOGUE_FONT))
+	_body.add_theme_font_size_override("normal_font_size", 21)
+	_body.add_theme_constant_override("line_separation", 6)
+	_body.add_theme_color_override("default_color", Color(0.93, 0.94, 0.98))
+	_panel.add_child(_body)
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_action = Button.new()
 	_action.position = Vector2(30, 392)
@@ -171,10 +195,10 @@ func show_briefing(message: String = "") -> void:
 	_panel.visible = true
 	_hint.visible = false
 	_title.text = TITLES[lesson]
-	var move_keys := _prompt(gm._menu._keys_text("right"), "left stick")
-	var jump_keys := _prompt(gm._menu._keys_text("jump"), "A")
-	var lock_keys := _prompt("Left Shift", "Start")
-	var throw_keys := _prompt("left-click", "R2")
+	var move_keys := _prompt(gm._menu._keys_text("right"), "LEFT STICK")
+	var jump_keys := _prompt(gm._menu._keys_text("jump"), "PAD A")
+	var lock_keys := _prompt("LEFT SHIFT", "START")
+	var throw_keys := _prompt("LEFT-CLICK", "R2")
 	# One beat per line. The clock rule is told once, on the first lesson.
 	var instructions: Array[String] = [
 		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with %s, and time resumes.\n\nEight seconds per attempt. When the clock runs out, whatever you planned happens. Even nothing." % [HOST_NAME, move_keys, lock_keys],
@@ -186,12 +210,23 @@ func show_briefing(message: String = "") -> void:
 	if between_turns: _action.text = "ENTER  NEXT TURN · 8s"
 	_markers.queue_redraw()
 
-## Keyboard name plus the fixed pad control when a pad is connected, so the
-## briefing never advertises a stick nobody is holding.
+## Keyboard chips plus the fixed pad control when a pad is connected, so the
+## briefing never advertises a stick nobody is holding. Keys are gold, pad
+## controls violet, and each carries its prompt icon when the atlas has one.
 func _prompt(keys: String, pad_control: String) -> String:
+	var chips := PackedStringArray()
+	for key in keys.split(" / "):
+		chips.append(_chip(key.strip_edges().to_upper(), "f5b02e", "2b1a3f"))
 	if force_pad_prompts or not Input.get_connected_joypads().is_empty():
-		return "%s / %s" % [keys, pad_control]
-	return keys
+		chips.append(_chip(pad_control, "d9a6ff", "2a1540"))
+	return " ".join(chips)
+
+func _chip(label: String, text_hex: String, fill_hex: String) -> String:
+	var icon: String = CHIP_ICONS.get(label, "")
+	var shown := label.trim_prefix("PAD ")
+	var inner := "[img=22x22 color=#%s]%s[/img] %s" % [text_hex, icon, shown] if not icon.is_empty() else shown
+	return "[bgcolor=#%s][color=#%s][font=%s][font_size=15] %s [/font_size][/font][/color][/bgcolor]" \
+		% [fill_hex, text_hex, CHIP_FONT, inner]
 
 func advance() -> void:
 	if not active or gm.state != Phase.TUTORIAL: return
