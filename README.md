@@ -741,7 +741,7 @@ in every count, and the first arena is the deliberately readable one.
 | # | Name | Wrap | Character |
 |---|---|---|---|
 | 1 | **Crosshair Court** | walled | Static permanent cover: the clean baseline for reading knife collisions and delayed danger. |
-| 2 | **Clockwork Gallery** | ↔ | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. |
+| 2 | **Clockwork Gallery** | walled | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. Side walls keep every throw on the gates instead of across the seam. |
 | 3 | **Stilled Hall** | walled | Two stasis fields flank the centre pillar. Bodies and knives inside run at 35 percent speed, so a knife thrown in stays a threat for turns. |
 | 4 | **Pulse Chamber** | ↔ | Staggered islands and paired triggerable orbs turn the side seam into a slingshot loop. |
 | 5 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |

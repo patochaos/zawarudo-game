@@ -87,8 +87,8 @@ func _test_level_progression() -> void:
 		and _mover_count(court["platforms"]) == 0 and court["hazards"].is_empty()
 		and _cycle_count(court["platforms"]) == 0 and court["zones"].is_empty(),
 		"Arena 1 must remain the quiet, walled introduction")
-	_check(gallery["wrap_x"] and _cycle_count(gallery["platforms"]) >= 3,
-		"Arena 2 must be built around timed shutters")
+	_check(not gallery["wrap_x"] and _cycle_count(gallery["platforms"]) >= 3,
+		"Arena 2 must be a walled hall built around timed shutters")
 	_check(not hall["wrap_x"] and hall["zones"].size() >= 2,
 		"Arena 3 must be built around stasis fields")
 	_check(chamber["wrap_x"] and not chamber["wrap_y"] and chamber["hazards"].size() >= 2,

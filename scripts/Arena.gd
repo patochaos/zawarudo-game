@@ -75,7 +75,7 @@ func _draw() -> void:
 	for pf in platforms:
 		var r: Rect2 = pf["rect"]
 		if r.position.x < -1.0 or r.position.x >= 1280.0:
-			continue  # walls stay invisible
+			continue  # side walls and the ceiling stay invisible
 		if pf.has("cycle"):
 			_draw_gate(r, bool(pf.get("present", true)), float(pf.get("cycle_fraction", 1.0)))
 		elif pf["hp"] == INDESTRUCTIBLE:

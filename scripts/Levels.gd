@@ -16,6 +16,8 @@ class_name Levels
 ##            HUD everywhere except a gap in the middle third, and its floor gap
 ##            must sit inside that top gap. Then re-entry always reaches open,
 ##            un-occluded space instead of teleporting at an interior seam.
+##            A level without wrap_y gets an invisible ceiling whose underside
+##            is STAGE_TOP, so no jump or dash leaves the visible stage.
 ##
 ## MOVING GEOMETRY
 ##   A platform may carry a `motion` dictionary (see Mover.gd). It then sweeps
@@ -56,6 +58,9 @@ const STAGE_TOP := 58.0
 const GROUND := {"rect": Rect2(0, 620, 1280, 100), "hp": -1}
 const WALL_L := {"rect": Rect2(-60, -1400, 60, 2100), "hp": -1}
 const WALL_R := {"rect": Rect2(1280, -1400, 60, 2100), "hp": -1}
+## Invisible lid for non-wrapping levels. Its bottom edge is STAGE_TOP and it
+## starts left of the arena so Arena skips it like the side walls.
+const CEILING := {"rect": Rect2(-60, STAGE_TOP - 100.0, 1400, 100), "hp": -1}
 
 static func count() -> int:
 	return 5
@@ -209,6 +214,8 @@ static func _finish(lv: Dictionary, player_count: int) -> Dictionary:
 	if not lv.get("wrap_x", false):
 		plats.append(WALL_L.duplicate())
 		plats.append(WALL_R.duplicate())
+	if not lv.get("wrap_y", false) and not lv.get("skip_ceiling", false):
+		plats.append(CEILING.duplicate())
 	for authored: Dictionary in lv["platforms"]:
 		if int(authored.get("min_players", 2)) > player_count:
 			continue
@@ -314,11 +321,12 @@ static func _crosshair_court() -> Dictionary:
 ## floor will be when time stops again. Side rooms stay permanent.
 ## Authored for four: the breakable side shelves are crowd landings; a duel
 ## cuts them so the gates are the only middle ground.
+## Walled on purpose: the spawns sit 320px apart across the seam, so a side
+## wrap let fighters trade flat throws through the borders and skip the gates.
 static func _clockwork_gallery() -> Dictionary:
 	return {
 		"name": "CLOCKWORK GALLERY",
 		"feature": "SHUTTERS // every gate opens on a clock. Stand on one when it does and you fall.",
-		"wrap_x": true,
 		"spawns": [
 			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
 			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
