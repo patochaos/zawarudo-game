@@ -98,11 +98,17 @@ func _draw_player_preview(p: Player) -> void:
 	var here: Vector2 = gm.shot_origin(i)
 	var same_marker: bool = here.distance_to(end_pos) <= 2.0
 	_draw_destination(end_pos, p)
-	_draw_ghost_figure(end_pos, p, 0.85, path.size() - 1)
+	# The piloted head is the figure the player is steering, so it carries the
+	# readable silhouette in its true locomotion pose: walk, run, rise or fall,
+	# frame-synced to the tick the real fighter will show it on. The coasted
+	# end of the window has always braked to idle, so drawing it on top used to
+	# hide the moving pose under a standing one. It now sits faint behind the
+	# head; the END target on the ground already makes the destination promise.
+	_draw_ghost_figure(end_pos, p, 0.85 if same_marker else 0.45, path.size() - 1)
 
 	# live ghost head, i.e. the point the player is currently piloting
 	if not same_marker:
-		_draw_ghost_figure(here, p, 0.45, gm.pilot_tick(i))
+		_draw_ghost_figure(here, p, 0.85, gm.pilot_tick(i))
 
 	if gm.player_roles[i] != "DUMMY":
 		_draw_stamina(p, here)
