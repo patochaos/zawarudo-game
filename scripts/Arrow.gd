@@ -12,6 +12,27 @@ class_name Arrow
 
 const SELF_HIT_GRACE_TICKS := 8
 
+## Blender-rendered hourglass dagger (tools/blender/build_combat_art.py): a 4x4
+## atlas of 16 rotation cells, each KNIFE_CELL px, cell i pointing i * 22.5
+## degrees clockwise, plus a motion-stretched frame for near-cap speeds. The
+## tint layers hold only the waist wrap and centre diamond, drawn in the owner's
+## colour, and the glow layers are the silhouette, drawn enlarged under the
+## dagger in that colour so a near-black blade still reads on a dark backdrop.
+## Cosmetic: position, rotation, speed and geometry stay the simulation's.
+const KNIFE_ATLAS := preload("res://assets/art/combat/knife.png")
+const KNIFE_TINT_ATLAS := preload("res://assets/art/combat/knife-tint.png")
+const KNIFE_GLOW_ATLAS := preload("res://assets/art/combat/knife-glow.png")
+const KNIFE_STREAK := preload("res://assets/art/combat/knife-streak.png")
+const KNIFE_CELL := 128.0
+const KNIFE_STEPS := 16
+## A cell spans 4 scene units and the dagger 3.5 of them, so this draws it
+## 30 px tip to tip, the footprint of the former procedural knife.
+const KNIFE_DRAW := 34.3
+const KNIFE_GLOW_SCALE := 1.3
+const KNIFE_GLOW_ALPHA := 0.62
+## Above this share of the launch cap the stretched frame replaces the still one.
+const KNIFE_STREAK_SPEED := 0.9
+
 var cfg
 var vel: Vector2 = Vector2.ZERO
 var shooter: int = -1
@@ -48,6 +69,12 @@ var _clash_cooldowns: Dictionary = {}
 ## Recent world positions, newest last, drawn as a fading streak so a fast
 ## knife reads as motion during execution instead of a teleporting dash.
 var trail: PackedVector2Array = PackedVector2Array()
+
+
+func _init() -> void:
+	# The atlas is minified about 3.7x at match scale; trilinear sampling keeps
+	# the thin gold edge from shimmering as the cell turns. Lines are unaffected.
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 
 ## Advances one tick. Returns a dictionary describing what happened:
@@ -369,16 +396,7 @@ func _draw() -> void:
 		draw_line(Vector2(-22.0, 0.0), Vector2(-5.0, 0.0),
 			Color(1.0, 0.72, 0.18, 0.78), 4.0, true)
 		draw_arc(Vector2.ZERO, 9.0, 0.0, TAU, 16, Color(1.0, 0.88, 0.42, 0.62), 1.5)
-	# blade
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(15.0, 0.0), Vector2(1.0, -3.6), Vector2(-3.0, -2.6),
-		Vector2(-3.0, 2.6), Vector2(1.0, 3.6),
-	]), edge)
-	draw_line(Vector2(-3.0, 0.0), Vector2(15.0, 0.0), color.darkened(0.35), 1.0)
-	# guard and grip
-	draw_line(Vector2(-3.5, -6.0), Vector2(-3.5, 6.0), color, 2.5)
-	draw_line(Vector2(-4.0, 0.0), Vector2(-13.0, 0.0), color.darkened(0.25), 3.0)
-	draw_circle(Vector2(-13.5, 0.0), 2.2, color)
+	_draw_knife_sprite()
 
 	# A deflected knife carries one ring per impact (up to three). Re-hit knives
 	# shift toward hot gold, so the most chaotic hazards are also the easiest to
@@ -389,3 +407,35 @@ func _draw() -> void:
 		for ring in mini(clash_count, 3):
 			draw_arc(Vector2.ZERO, 11.0 + float(ring) * 4.0, 0.0, TAU, 16,
 				Color(glint.r, glint.g, glint.b, glint.a / float(ring + 1)), 1.0)
+
+
+## The dagger itself. The node is already rotated to the real flight angle, so
+## the atlas cell nearest that angle is drawn turned back by its own angle: the
+## knife points exactly along local +X while the baked lighting stays within
+## 11.25 degrees of the scene's. A tumbling (clashed) knife never streaks.
+func _draw_knife_sprite() -> void:
+	var glow := Color(color.r, color.g, color.b, KNIFE_GLOW_ALPHA)
+	var streaking: bool = not clashed and cfg != null \
+		and vel.length() >= cfg.arrow_speed_max * KNIFE_STREAK_SPEED
+	if streaking:
+		var size := Vector2(KNIFE_DRAW * 2.0, KNIFE_DRAW)
+		var wide := Rect2(-size * 0.5, size)
+		var halo := Rect2(-size * 0.5 * KNIFE_GLOW_SCALE, size * KNIFE_GLOW_SCALE)
+		draw_texture_rect_region(KNIFE_STREAK, halo,
+			Rect2(0.0, KNIFE_CELL * 2.0, KNIFE_CELL * 2.0, KNIFE_CELL), glow)
+		draw_texture_rect_region(KNIFE_STREAK, wide,
+			Rect2(0.0, 0.0, KNIFE_CELL * 2.0, KNIFE_CELL))
+		draw_texture_rect_region(KNIFE_STREAK, wide,
+			Rect2(0.0, KNIFE_CELL, KNIFE_CELL * 2.0, KNIFE_CELL), color)
+		return
+	var step: float = TAU / float(KNIFE_STEPS)
+	var cell: int = posmod(int(roundf(rotation / step)), KNIFE_STEPS)
+	var source := Rect2(Vector2(float(cell % 4), float(cell / 4)) * KNIFE_CELL,
+		Vector2(KNIFE_CELL, KNIFE_CELL))
+	var rect := Rect2(Vector2(-KNIFE_DRAW, -KNIFE_DRAW) * 0.5, Vector2(KNIFE_DRAW, KNIFE_DRAW))
+	var halo := Rect2(rect.position * KNIFE_GLOW_SCALE, rect.size * KNIFE_GLOW_SCALE)
+	draw_set_transform(Vector2.ZERO, -float(cell) * step)
+	draw_texture_rect_region(KNIFE_GLOW_ATLAS, halo, source, glow)
+	draw_texture_rect_region(KNIFE_ATLAS, rect, source)
+	draw_texture_rect_region(KNIFE_TINT_ATLAS, rect, source, color)
+	draw_set_transform(Vector2.ZERO)

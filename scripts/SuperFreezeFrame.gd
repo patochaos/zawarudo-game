@@ -13,7 +13,20 @@ const PANEL_MAX_H := 430.0
 ## The kicker sets the beat, the two title lines are the chant.
 const KICKER := "THE WORLD HOLDS ITS BREATH"
 const TITLE_LINES := ["MUDA MUDA", "MUDA MUDA"]
+## The temporal dial is a 24-frame rotation sheet (tools/blender/build_combat_art.py):
+## 6x4 cells of 384 px, DIAL_STEP radians apart, frame 12 upright. The cut-in
+## picks the frame nearest its drift angle instead of turning one render, so
+## the facets catch the baked lights as the dial moves. Reduced flashes holds
+## frame 12 flat, as the drawn rotation was disabled before.
 const SUPER_DIAL := preload("res://assets/art/combat/super-dial.png")
+const DIAL_FRAMES := 24
+const DIAL_COLUMNS := 6
+const DIAL_CELL := 384.0
+const DIAL_STEP := 0.011
+const DIAL_UPRIGHT := 12
+## Five rendered accent chips, one per wave, 64 px cells in a row.
+const SUPER_ACCENTS := preload("res://assets/art/combat/super-accents.png")
+const ACCENT_CELL := 64.0
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
 const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
 const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
@@ -124,21 +137,38 @@ class CutInArt:
 		var strike := clampf((u - 0.12) / 0.10, 0.0, 1.0)
 		var release := clampf((u - 0.70) / 0.30, 0.0, 1.0)
 		var dial_size := lerpf(420.0, 490.0, intro) + release * 38.0
-		draw_set_transform(Vector2(portrait_x, H * 0.5) + slide,
-			0.0 if reduced_flashes else (-0.12 + u * 0.18) * face)
-		draw_texture_rect(SUPER_DIAL,
-			Rect2(Vector2.ONE * -dial_size * 0.5, Vector2.ONE * dial_size), false,
+		var dial_angle: float = 0.0 if reduced_flashes else (-0.12 + u * 0.18) * face
+		var dial_frame: int = clampi(DIAL_UPRIGHT + int(round(dial_angle / DIAL_STEP)),
+			0, DIAL_FRAMES - 1)
+		draw_set_transform(Vector2(portrait_x, H * 0.5) + slide)
+		draw_texture_rect_region(SUPER_DIAL,
+			Rect2(Vector2.ONE * -dial_size * 0.5, Vector2.ONE * dial_size),
+			Rect2(float(dial_frame % DIAL_COLUMNS) * DIAL_CELL,
+				float(dial_frame / DIAL_COLUMNS) * DIAL_CELL, DIAL_CELL, DIAL_CELL),
 			Color(accent.r, accent.g, accent.b, alpha * 0.7))
 		draw_set_transform(Vector2.ZERO)
 		_draw_portrait(Vector2(portrait_x - face * (1.0 - strike) * 24.0,
 			H * 0.5 + 34.0) + shake, face, accent, alpha * strike, u)
 		_draw_copy(top, panel_h, accent, alpha * strike, shake)
 		var copy_x := 600.0 if owner_index == 0 else 80.0
+		# Five rendered accent impacts, each a blade chip with one more splinter
+		# than the last, strike in turn toward release. Each grows slightly as
+		# it lights; without reduced flashes the strike itself adds a brief
+		# white pop that peaks halfway through the 0.06 beat.
 		for wave in 5:
 			var lit := clampf((u - 0.44 - float(wave) * 0.065) / 0.06, 0.0, 1.0)
 			var at := Vector2(copy_x + 180.0 + float(wave) * 46.0, top + panel_h - 72.0)
-			draw_line(at, at + Vector2(19.0, -12.0),
-				Color(accent.r, accent.g, accent.b, alpha * strike * (0.16 + lit * 0.7)), 3.0, true)
+			var centre := at + Vector2(9.5, -6.0)
+			var chip := 44.0 * (0.82 + 0.18 * lit)
+			var cell := Rect2(float(wave) * ACCENT_CELL, 0.0, ACCENT_CELL, ACCENT_CELL)
+			draw_texture_rect_region(SUPER_ACCENTS,
+				Rect2(centre - Vector2.ONE * chip * 0.5, Vector2.ONE * chip), cell,
+				Color(accent.r, accent.g, accent.b, alpha * strike * (0.16 + lit * 0.7)))
+			var pop := 0.0 if reduced_flashes else lit * (1.0 - lit) * 4.0
+			if pop > 0.0:
+				draw_texture_rect_region(SUPER_ACCENTS,
+					Rect2(centre - Vector2.ONE * chip * 0.6, Vector2.ONE * chip * 1.2), cell,
+					Color(1.0, 0.98, 0.92, alpha * strike * pop * 0.5))
 
 		# A narrow entry glint marks the cut without a full-screen white flash.
 		var flash: float = maxf(0.0, 1.0 - u / 0.055)

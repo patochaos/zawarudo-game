@@ -1,5 +1,5 @@
-ZAWARUDO - Playtest 0.4.1-names.2
-=================================
+ZAWARUDO - Playtest 0.4.2-pacing.1
+==================================
 
 Portable Windows build. No installation is required: run ZAWARUDO.exe.
 

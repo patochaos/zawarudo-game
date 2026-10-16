@@ -9,6 +9,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	game._sfx.muted = true
+	game.randomize_spawns = false
 	game.start_quick_match(false, 4, 2)
 	game.set_physics_process(false)
 	var report := {}
@@ -29,7 +30,7 @@ func _run() -> void:
 				if ground: break
 			report["p%d_dir%d" % [side, direction]] = {"rise": game.players[side].position.y - min_y,
 				"landing": [pos.x, pos.y], "ceiling_hits": bonks}
-			if direction != 0 and (bonks != 0 or absf(pos.y - 446.0) > 1.0):
+			if direction != 0 and (bonks != 0 or absf(pos.y - 456.0) > 1.0):
 				failures += 1
 				push_error("A held outward opening jump must reach the permanent stair without a ceiling collision")
 	print("DESCENT ROUTES ", JSON.stringify(report))

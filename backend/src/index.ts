@@ -1,4 +1,11 @@
-import { PROTOCOL_VERSION, ROOM_CODE_PATTERN, TOKEN_PATTERN, sanitizePlayerName } from "./protocol";
+import {
+  ONLINE_WEAPONS,
+  PROTOCOL_VERSION,
+  ROOM_CODE_PATTERN,
+  SUPPORTED_PROTOCOLS,
+  TOKEN_PATTERN,
+  sanitizePlayerName,
+} from "./protocol";
 
 export { Room } from "./room";
 
@@ -19,8 +26,6 @@ interface JoinRoomBody {
   protocol: number;
   name: string;
 }
-
-const ONLINE_WEAPONS = new Set([0, 2, 3, 4]);
 
 function log(level: "info" | "error", message: string, data: Record<string, unknown>): void {
   const entry = JSON.stringify({ level, message, timestamp: new Date().toISOString(), ...data });
@@ -144,8 +149,8 @@ async function readJoinBody(request: Request): Promise<JoinRoomBody | null> {
   return { weapon, protocol, name };
 }
 
-// Protocol 2 remains available for legacy two-player clients. Room membership must still
-// use a single protocol so different client simulations never share a match.
+// Protocols 2 and 3 remain available for older clients. Room membership must still use a single
+// protocol so different client simulations never share a match.
 function protocolMismatch(request: Request, env: Env, protocol: number): Response {
   return json(request, env, {
     error: `Protocol version mismatch: this server speaks protocol ${PROTOCOL_VERSION}, `
@@ -159,7 +164,7 @@ async function createRoom(request: Request, env: Env): Promise<Response> {
   if (body === null) {
     return json(request, env, { error: "Invalid room settings" }, 400);
   }
-  if (body.protocol !== PROTOCOL_VERSION && body.protocol !== 2) {
+  if (!SUPPORTED_PROTOCOLS.has(body.protocol)) {
     return protocolMismatch(request, env, body.protocol);
   }
 
@@ -187,7 +192,7 @@ async function joinRoom(request: Request, env: Env, room: string): Promise<Respo
   if (body === null) {
     return json(request, env, { error: "Invalid fighter" }, 400);
   }
-  if (body.protocol !== PROTOCOL_VERSION && body.protocol !== 2) {
+  if (!SUPPORTED_PROTOCOLS.has(body.protocol)) {
     return protocolMismatch(request, env, body.protocol);
   }
   const token = randomHex(32);
@@ -231,7 +236,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return json(request, env, { error: "Origin not allowed" }, 403);
   }
   if (request.method === "GET" && url.pathname === "/health") {
-    return json(request, env, { ok: true, service: "zawarudo-rooms", protocol: PROTOCOL_VERSION, capacities: [2, 4], legacy_protocol: 2 });
+    return json(request, env, { ok: true, service: "zawarudo-rooms", protocol: PROTOCOL_VERSION, capacities: [2, 4], legacy_protocol: 2, legacy_protocols: [2, 3] });
   }
   if (request.method === "POST" && url.pathname === "/rooms") {
     return createRoom(request, env);

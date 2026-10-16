@@ -1,6 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import {
-  PROTOCOL_VERSION,
+  DEFAULT_MATCH_LIVES,
+  SELECTION_PROTOCOL,
+  SUPPORTED_PROTOCOLS,
   parseClientMessage,
   parseConnectionAttachment,
   parsePlan,
@@ -23,7 +25,14 @@ const MAX_JOIN_ATTEMPTS_PER_WINDOW = 10;
 // instead of a digest. Nothing compares it: the room is already game_over when it is written.
 const FORFEIT_DIGEST = "forfeit";
 
-type RoomPhase = "waiting" | "planning" | "executing" | "game_over" | "desync";
+// WebSocket close codes the client reads to stop reconnecting to a seat that no longer exists.
+export const CLOSE_SEAT_LOST = 4003;
+export const CLOSE_ROOM_CLOSED = 4004;
+// A seat is only up for grabs after its socket has been gone this long. It covers the gap between
+// the join request and the socket opening, and the client's reconnect after a Wi-Fi blip.
+export const SEAT_GRACE_MS = 15_000;
+
+type RoomPhase = "waiting" | "selecting" | "planning" | "executing" | "game_over" | "desync";
 
 type RoomRow = {
   code: string;
@@ -35,6 +44,15 @@ type RoomRow = {
   guest_token: string | null;
   capacity: number;
   protocol: number;
+  lives: number;
+} & Record<string, SqlStorageValue>;
+
+type SelectionRow = {
+  slot: number;
+  weapon: number;
+  level_vote: number;
+  lives_vote: number;
+  ready: number;
 } & Record<string, SqlStorageValue>;
 
 type StoredPlanRow = {
@@ -81,6 +99,27 @@ function freshSeed(): number {
   const bytes = new Uint32Array(1);
   crypto.getRandomValues(bytes);
   return bytes[0] ?? 0;
+}
+
+/**
+ * The most-voted value. A tie is broken at random among the tied values, so no seat order
+ * decides a split table.
+ */
+export function resolveVote(votes: number[], fallback: number): { value: number; tied: boolean } {
+  const counts = new Map<number, number>();
+  for (const vote of votes) {
+    counts.set(vote, (counts.get(vote) ?? 0) + 1);
+  }
+  if (counts.size === 0) {
+    return { value: fallback, tied: false };
+  }
+  const top = Math.max(...counts.values());
+  const leaders = [...counts.entries()].filter(([, count]) => count === top).map(([value]) => value);
+  leaders.sort((a, b) => a - b);
+  if (leaders.length === 1) {
+    return { value: leaders[0] ?? fallback, tied: false };
+  }
+  return { value: leaders[freshSeed() % leaders.length] ?? fallback, tied: true };
 }
 
 function log(level: "info" | "warn" | "error", message: string, data: Record<string, unknown>): void {
@@ -185,11 +224,25 @@ export class Room extends DurableObject<Env> {
         INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (4, unixepoch());
       `);
     }
+    const selectionMigrated = this.ctx.storage.sql.exec<{ id: number }>(
+      "SELECT id FROM _sql_schema_migrations WHERE id = 5",
+    ).toArray().length > 0;
+    if (!selectionMigrated) {
+      // A level vote of -1 means "no vote yet"; the selection phase seeds it with the room's arena.
+      this.ctx.storage.sql.exec(`
+        ALTER TABLE room ADD COLUMN lives INTEGER NOT NULL DEFAULT ${DEFAULT_MATCH_LIVES};
+        ALTER TABLE fighters ADD COLUMN level_vote INTEGER NOT NULL DEFAULT -1;
+        ALTER TABLE fighters ADD COLUMN lives_vote INTEGER NOT NULL DEFAULT ${DEFAULT_MATCH_LIVES};
+        ALTER TABLE fighters ADD COLUMN ready INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE participants ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0;
+        INSERT INTO _sql_schema_migrations (id, applied_at) VALUES (5, unixepoch());
+      `);
+    }
   }
 
   private room(): RoomRow | null {
     return this.ctx.storage.sql.exec<RoomRow>(
-      "SELECT code, phase, level, seed, turn, host_token, guest_token, capacity, protocol FROM room WHERE singleton = 1",
+      "SELECT code, phase, level, seed, turn, host_token, guest_token, capacity, protocol, lives FROM room WHERE singleton = 1",
     ).toArray()[0] ?? null;
   }
 
@@ -200,10 +253,10 @@ export class Room extends DurableObject<Env> {
     seed: number,
     hostWeapon: number,
     capacity: 2 | 4 = 2,
-    protocol: number = PROTOCOL_VERSION,
+    protocol: number = SELECTION_PROTOCOL,
     hostName: string = "",
   ): Promise<boolean> {
-    if ((protocol !== 2 && protocol !== PROTOCOL_VERSION) || (protocol === 2 && capacity !== 2)) {
+    if (!SUPPORTED_PROTOCOLS.has(protocol) || (protocol === 2 && capacity !== 2)) {
       return false;
     }
     if (this.room() !== null) {
@@ -220,8 +273,8 @@ export class Room extends DurableObject<Env> {
       Date.now(),
     );
     this.ctx.storage.sql.exec(
-      "INSERT OR REPLACE INTO fighters (slot, weapon) VALUES (0, ?)",
-      hostWeapon,
+      "INSERT OR REPLACE INTO fighters (slot, weapon, level_vote) VALUES (0, ?, ?)",
+      hostWeapon, level,
     );
     this.ctx.storage.sql.exec("UPDATE room SET capacity = ?, protocol = ? WHERE singleton = 1", capacity, protocol);
     this.ctx.storage.sql.exec(
@@ -234,7 +287,7 @@ export class Room extends DurableObject<Env> {
   async join(
     guestToken: string,
     guestWeapon: number,
-    protocol: number = PROTOCOL_VERSION,
+    protocol: number = SELECTION_PROTOCOL,
     guestName: string = "",
   ): Promise<JoinResult> {
     if (!this.allowJoinAttempt()) {
@@ -247,15 +300,13 @@ export class Room extends DurableObject<Env> {
     if (protocol !== room.protocol) {
       return { ok: false, reason: "protocol_mismatch", protocol: room.protocol };
     }
-    const count = this.ctx.storage.sql.exec<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM participants",
-    ).toArray()[0]?.count ?? 0;
-    if (room.phase !== "waiting" || count >= room.capacity) {
+    const slot = this.openSeat(room);
+    if (slot === null) {
       return { ok: false, reason: "full" };
     }
-    const slot = count as PlayerSlot;
     this.ctx.storage.sql.exec(
-      "INSERT INTO participants (slot, token, name) VALUES (?, ?, ?)", slot, guestToken, guestName,
+      "INSERT INTO participants (slot, token, name, last_seen) VALUES (?, ?, ?, ?)",
+      slot, guestToken, guestName, Date.now(),
     );
     if (slot === 1) {
       this.ctx.storage.sql.exec("UPDATE room SET guest_token = ? WHERE singleton = 1", guestToken);
@@ -265,6 +316,56 @@ export class Room extends DurableObject<Env> {
     );
     await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
     return { ok: true, player: slot, capacity: room.capacity };
+  }
+
+  /**
+   * The lowest empty seat. Before the first turn of a protocol 4 room, a guest seat whose socket
+   * is gone counts as empty: a player who closed the tab must not lock the room forever. The
+   * evicted seat's token stops working, so its owner cannot come back into someone else's seat.
+   */
+  private openSeat(room: RoomRow): PlayerSlot | null {
+    const seats = this.ctx.storage.sql.exec<{ slot: number; last_seen: number }>(
+      "SELECT slot, last_seen FROM participants",
+    ).toArray();
+    const taken = new Set(seats.map((row) => row.slot));
+    const lastSeen = new Map(seats.map((row) => [row.slot, Number(row.last_seen)]));
+    if (room.phase === "waiting") {
+      for (const slot of this.slots(room)) {
+        if (!taken.has(slot)) return slot;
+      }
+    }
+    if (room.protocol < SELECTION_PROTOCOL || (room.phase !== "waiting" && room.phase !== "selecting")) {
+      return null;
+    }
+    for (const slot of this.slots(room)) {
+      const idle = Date.now() - (lastSeen.get(slot) ?? 0) >= SEAT_GRACE_MS;
+      if (slot !== 0 && taken.has(slot) && idle && !this.isConnected(slot)) {
+        this.freeSeat(slot, CLOSE_SEAT_LOST);
+        if (room.phase === "selecting") {
+          this.ctx.storage.sql.exec("UPDATE room SET phase = 'waiting' WHERE singleton = 1");
+          this.broadcast({ type: "peer_left", player: slot });
+        }
+        log("info", "seat_evicted", { room: room.code, slot });
+        return slot;
+      }
+    }
+    return null;
+  }
+
+  private freeSeat(slot: PlayerSlot, closeCode: number): void {
+    this.ctx.storage.sql.exec("DELETE FROM participants WHERE slot = ?", slot);
+    this.ctx.storage.sql.exec("DELETE FROM fighters WHERE slot = ?", slot);
+    this.ctx.storage.sql.exec("DELETE FROM rematch_ready WHERE slot = ?", slot);
+    if (slot === 1) {
+      this.ctx.storage.sql.exec("UPDATE room SET guest_token = NULL WHERE singleton = 1");
+    }
+    for (const socket of this.ctx.getWebSockets(`player:${slot}`)) {
+      try {
+        socket.close(closeCode, "Seat released");
+      } catch {
+        // Already closing.
+      }
+    }
   }
 
   private allowJoinAttempt(): boolean {
@@ -306,15 +407,18 @@ export class Room extends DurableObject<Env> {
     }
 
     const room = this.room();
-    if (room === null) {
-      return Response.json({ error: "Room not found" }, { status: 404 });
-    }
     const token = new URL(request.url).searchParams.get("token") ?? "";
-    const slot = this.ctx.storage.sql.exec<{ slot: PlayerSlot }>(
+    const slot = room === null ? undefined : this.ctx.storage.sql.exec<{ slot: PlayerSlot }>(
       "SELECT slot FROM participants WHERE token = ?", token,
     ).toArray()[0]?.slot;
-    if (slot === undefined) {
-      return Response.json({ error: "Invalid room token" }, { status: 401 });
+    if (room === null || slot === undefined) {
+      // An HTTP error on the upgrade is invisible to a browser WebSocket, which would retry
+      // forever. Accept and close with a code the client reads as "this seat is gone".
+      const refused = new WebSocketPair();
+      refused[1].accept();
+      refused[1].close(room === null ? CLOSE_ROOM_CLOSED : CLOSE_SEAT_LOST,
+        room === null ? "Room closed" : "Seat released");
+      return new Response(null, { status: 101, webSocket: refused[0] });
     }
 
     const pair = new WebSocketPair();
@@ -338,6 +442,7 @@ export class Room extends DurableObject<Env> {
     this.sendRoomState(server);
     this.maybeStartMatch();
     await this.maybeStartRematch();
+    await this.maybeFinishSelection();
     this.maybeBroadcastStoredPlans();
 
     return new Response(null, { status: 101, webSocket: client });
@@ -381,6 +486,12 @@ export class Room extends DurableObject<Env> {
         case "forfeit":
           this.receiveForfeit(ws, attachment.slot);
           break;
+        case "select":
+          await this.receiveSelect(ws, attachment.slot, parsed);
+          break;
+        case "leave":
+          this.receiveLeave(ws, attachment.slot);
+          break;
       }
     } catch (error) {
       log("error", "websocket_message_failed", {
@@ -414,6 +525,11 @@ export class Room extends DurableObject<Env> {
   override webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): void {
     this.messageRates.delete(ws);
     const attachment = parseConnectionAttachment(ws.deserializeAttachment());
+    if (attachment !== null) {
+      this.ctx.storage.sql.exec(
+        "UPDATE participants SET last_seen = ? WHERE slot = ?", Date.now(), attachment.slot,
+      );
+    }
     if (attachment !== null && !this.isConnected(attachment.slot)) {
       this.broadcast({
         type: "peer_status",
@@ -649,9 +765,9 @@ export class Room extends DurableObject<Env> {
       this.sendError(ws, "wrong_phase", "Rematch is only available after game over");
       return;
     }
-    // Player 1 owns room-level choices, just as they did when creating the room.
-    // Slot 1 still sends a level; it is ignored.
-    if (slot === 0) {
+    // Player 1 owns room-level choices in protocol 3 rooms. Protocol 4 votes in the selection
+    // phase instead, so every rematch level is ignored there.
+    if (slot === 0 && room.protocol < SELECTION_PROTOCOL) {
       this.ctx.storage.sql.exec("UPDATE room SET level = ? WHERE singleton = 1", requestedLevel);
     }
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO rematch_ready (slot) VALUES (?)", slot);
@@ -674,6 +790,12 @@ export class Room extends DurableObject<Env> {
       "SELECT slot FROM rematch_ready ORDER BY slot",
     ).toArray();
     if (ready.length !== room.capacity || !this.slots(room).every((player) => this.isConnected(player))) {
+      return;
+    }
+    if (room.protocol >= SELECTION_PROTOCOL) {
+      this.ctx.storage.sql.exec("DELETE FROM rematch_ready");
+      await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
+      this.startSelection();
       return;
     }
     const selectedLevel = room.level;
@@ -700,7 +822,11 @@ export class Room extends DurableObject<Env> {
     if (room === null || room.phase !== "waiting") {
       return;
     }
-    if (!this.slots(room).every((player) => this.isConnected(player))) {
+    if (!this.slots(room).every((player) => this.isSeated(player) && this.isConnected(player))) {
+      return;
+    }
+    if (room.protocol >= SELECTION_PROTOCOL) {
+      this.startSelection();
       return;
     }
     this.ctx.storage.sql.exec("UPDATE room SET phase = 'planning' WHERE singleton = 1");
@@ -715,22 +841,175 @@ export class Room extends DurableObject<Env> {
     });
   }
 
+  /** Every seat is filled and connected: open the fighter and arena picks. Earlier picks stay. */
+  private startSelection(): void {
+    const room = this.room();
+    if (room === null) return;
+    this.ctx.storage.sql.exec("UPDATE room SET phase = 'selecting' WHERE singleton = 1");
+    this.ctx.storage.sql.exec(
+      "UPDATE fighters SET ready = 0, level_vote = CASE WHEN level_vote < 0 THEN ? ELSE level_vote END",
+      room.level,
+    );
+    this.broadcast(this.selectionState());
+  }
+
+  private async receiveSelect(
+    ws: WebSocket,
+    slot: PlayerSlot,
+    choice: { weapon: number; level: number; lives: number; ready: boolean },
+  ): Promise<void> {
+    const room = this.room();
+    if (room === null || room.phase !== "selecting") {
+      this.sendError(ws, "wrong_phase", "The room is not choosing fighters");
+      return;
+    }
+    this.ctx.storage.sql.exec(
+      "UPDATE fighters SET weapon = ?, level_vote = ?, lives_vote = ?, ready = ? WHERE slot = ?",
+      choice.weapon, choice.level, choice.lives, choice.ready ? 1 : 0, slot,
+    );
+    this.broadcast(this.selectionState());
+    await this.maybeFinishSelection();
+  }
+
+  private async maybeFinishSelection(): Promise<void> {
+    const room = this.room();
+    if (room === null || room.phase !== "selecting") return;
+    const rows = this.selections();
+    if (rows.length !== room.capacity || rows.some((row) => Number(row.ready) !== 1)
+        || !this.slots(room).every((player) => this.isConnected(player))) {
+      return;
+    }
+    const arena = resolveVote(rows.map((row) => Number(row.level_vote)), room.level);
+    const lives = resolveVote(rows.map((row) => Number(row.lives_vote)), DEFAULT_MATCH_LIVES);
+    const seed = freshSeed();
+    this.ctx.storage.sql.exec(
+      "UPDATE room SET phase = 'planning', level = ?, lives = ?, seed = ?, turn = 1 WHERE singleton = 1",
+      arena.value, lives.value, seed,
+    );
+    this.ctx.storage.sql.exec(`
+      DELETE FROM plans;
+      DELETE FROM turn_results;
+      DELETE FROM match_reports;
+      DELETE FROM rematch_ready;
+    `);
+    this.ctx.storage.sql.exec("UPDATE fighters SET ready = 0");
+    await this.ctx.storage.setAlarm(Date.now() + ROOM_LIFETIME_MS);
+    this.broadcast({
+      type: "match_start", level: arena.value, lives: lives.value, seed, turn: 1,
+      weapons: this.weapons(), names: this.names(), capacity: room.capacity,
+      level_tied: arena.tied, lives_tied: lives.tied,
+    });
+  }
+
+  /**
+   * A deliberate exit. Before and between matches of a protocol 4 room the seat is released so
+   * someone else can take it; the host leaving closes the room for everyone. During a match it is
+   * an ordinary disconnect, which the forfeit and reconnect rules already cover.
+   */
+  private receiveLeave(ws: WebSocket, slot: PlayerSlot): void {
+    const room = this.room();
+    const between = room !== null && room.protocol >= SELECTION_PROTOCOL
+      && (room.phase === "waiting" || room.phase === "selecting" || room.phase === "game_over"
+        || room.phase === "desync");
+    if (room === null || !between) {
+      try { ws.close(1000, "Left room"); } catch { /* already closed */ }
+      return;
+    }
+    if (slot === 0) {
+      this.closeRoom();
+      return;
+    }
+    this.freeSeat(slot, 1000);
+    // Whoever is still here goes back to waiting for a full table: a finished match cannot be
+    // rematched with an empty seat, and a desynced one is over anyway.
+    this.ctx.storage.sql.exec("UPDATE room SET phase = 'waiting', turn = 1 WHERE singleton = 1");
+    this.ctx.storage.sql.exec(`
+      DELETE FROM plans;
+      DELETE FROM turn_results;
+      DELETE FROM match_reports;
+      DELETE FROM rematch_ready;
+    `);
+    log("info", "player_left", { room: room.code, slot });
+    this.broadcast({ type: "peer_left", player: slot });
+    for (const socket of this.ctx.getWebSockets()) {
+      this.sendRoomState(socket);
+    }
+  }
+
+  private closeRoom(): void {
+    this.broadcast({ type: "room_closed" });
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.close(CLOSE_ROOM_CLOSED, "Room closed");
+      } catch {
+        // Already closing.
+      }
+    }
+    this.ctx.storage.sql.exec(`
+      DELETE FROM plans;
+      DELETE FROM turn_results;
+      DELETE FROM match_reports;
+      DELETE FROM rematch_ready;
+      DELETE FROM participants;
+      DELETE FROM fighters;
+      DELETE FROM room;
+    `);
+  }
+
+  private selections(): SelectionRow[] {
+    return this.ctx.storage.sql.exec<SelectionRow>(
+      "SELECT slot, weapon, level_vote, lives_vote, ready FROM fighters ORDER BY slot",
+    ).toArray();
+  }
+
+  private selectionState(): Record<string, unknown> {
+    const room = this.room();
+    const capacity = room?.capacity ?? 2;
+    const levelVotes: number[] = Array(capacity).fill(-1);
+    const livesVotes: number[] = Array(capacity).fill(DEFAULT_MATCH_LIVES);
+    const ready: boolean[] = Array(capacity).fill(false);
+    for (const row of this.selections()) {
+      if (row.slot >= 0 && row.slot < capacity) {
+        levelVotes[row.slot] = Number(row.level_vote);
+        livesVotes[row.slot] = Number(row.lives_vote);
+        ready[row.slot] = Number(row.ready) === 1;
+      }
+    }
+    return {
+      type: "selection_state",
+      phase: room?.phase ?? "waiting",
+      weapons: this.weapons(),
+      level_votes: levelVotes,
+      lives_votes: livesVotes,
+      ready,
+      names: this.names(),
+      connected: room === null ? [] : this.slots(room).map((player) => this.isConnected(player)),
+      capacity,
+    };
+  }
+
   private sendRoomState(ws: WebSocket): void {
     const room = this.room();
     if (room === null) {
       return;
     }
+    const selection = this.selectionState();
     this.send(ws, {
       type: "room_state",
       room: room.code,
       phase: room.phase,
       level: room.level,
+      lives: room.lives,
       seed: room.seed,
       turn: room.turn,
       connected: this.slots(room).map((player) => this.isConnected(player)),
+      seated: this.slots(room).map((player) => this.isSeated(player)),
       weapons: this.weapons(),
       names: this.names(),
       capacity: room.capacity,
+      level_votes: selection.level_votes,
+      lives_votes: selection.lives_votes,
+      ready: selection.ready,
     });
   }
 
@@ -763,6 +1042,12 @@ export class Room extends DurableObject<Env> {
 
   private slots(room: RoomRow): PlayerSlot[] {
     return Array.from({ length: room.capacity }, (_, slot) => slot as PlayerSlot);
+  }
+
+  private isSeated(slot: PlayerSlot): boolean {
+    return this.ctx.storage.sql.exec<{ slot: number }>(
+      "SELECT slot FROM participants WHERE slot = ?", slot,
+    ).toArray().length > 0;
   }
 
   private isConnected(slot: PlayerSlot): boolean {

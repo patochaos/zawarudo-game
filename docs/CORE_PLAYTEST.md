@@ -3,7 +3,7 @@
 ## Product scope
 
 The public demo tests whether a player can read danger, author a plan, understand
-the simultaneous result, and choose to play again. It keeps the eight-second
+the simultaneous result, and choose to play again. It uses a four-second
 planning limit and 0.75-second execution. It adds no fighter, attack or arena.
 
 - Start Duel: two Duelists, first to three hits, against the opponent ladder.

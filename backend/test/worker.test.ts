@@ -5,7 +5,7 @@ import { createRoom, ORIGIN as origin, post } from "./harness";
 describe("room HTTP API", () => {
   it("advertises current and legacy server capabilities", async () => {
     const response = await exports.default.fetch(new Request("https://example.test/health"));
-    expect(await response.json()).toMatchObject({ protocol: 3, capacities: [2, 4], legacy_protocol: 2 });
+    expect(await response.json()).toMatchObject({ protocol: 4, capacities: [2, 4], legacy_protocol: 2 });
   });
 
   it("keeps legacy rooms isolated from current clients without consuming their seats", async () => {
@@ -112,12 +112,12 @@ describe("room HTTP API", () => {
   });
 
   it("names the mismatch when the client speaks a newer protocol", async () => {
-    const response = await post("/rooms", { level: 0, weapon: 0, protocol: 4 });
+    const response = await post("/rooms", { level: 0, weapon: 0, protocol: 5 });
     expect(response.status).toBe(400);
     const body = await response.json<{ error: string; protocol: number }>();
-    expect(body.error).toContain("protocol 3");
-    expect(body.error).toContain("client sent 4");
-    expect(body.protocol).toBe(3);
+    expect(body.error).toContain("protocol 4");
+    expect(body.error).toContain("client sent 5");
+    expect(body.protocol).toBe(4);
   });
 
   it("rate limits repeated join attempts on one room", async () => {

@@ -1,6 +1,17 @@
-// The current wire contract version. Legacy protocol 2 can create two-player rooms, but
-// every participant must match their room protocol to preserve deterministic simulation.
-export const PROTOCOL_VERSION = 3;
+// The current wire contract version. Legacy protocol 2 can create two-player rooms and protocol 3
+// rooms start the moment they fill, but every participant must match their room protocol to
+// preserve deterministic simulation. Protocol 4 adds the selection phase: once every seat is
+// connected, players pick fighters and vote on the arena and match length before the first turn.
+export const PROTOCOL_VERSION = 4;
+export const SUPPORTED_PROTOCOLS: ReadonlySet<number> = new Set([2, 3, 4]);
+export const SELECTION_PROTOCOL = 4;
+
+// Fighters a room accepts. MUST match Roster.ORDER on the client.
+export const ONLINE_WEAPONS: ReadonlySet<number> = new Set([0, 2, 3, 4]);
+// Hits to win a player may vote for. MUST match MatchSetupLayer.MATCH_LIFE_OPTIONS on the client.
+export const MATCH_LIVES_OPTIONS: ReadonlySet<number> = new Set([3, 5, 7]);
+export const DEFAULT_MATCH_LIVES = 5;
+export const MAX_LEVEL = 63;
 
 // The client records at most `movement_tick_budget()` ticks of movement, which is
 // ceil(movement_budget * physics_ticks_per_second) = ceil(0.50 * 60) = 30, and it hard-stops the
@@ -56,7 +67,9 @@ export type ClientMessage =
   | { type: "turn_complete"; turn: number; digest: string }
   | { type: "match_over"; turn: number; winner: PlayerSlot; digest: string }
   | { type: "rematch"; level: number }
-  | { type: "forfeit" };
+  | { type: "forfeit" }
+  | { type: "select"; weapon: number; level: number; lives: number; ready: boolean }
+  | { type: "leave" };
 
 export interface ConnectionAttachment {
   slot: PlayerSlot;
@@ -181,13 +194,25 @@ export function parseClientMessage(text: string): ClientMessage | null {
     };
   }
   if (value.type === "rematch") {
-    if (!isIntegerInRange(value.level, 0, 63)) {
+    if (!isIntegerInRange(value.level, 0, MAX_LEVEL)) {
       return null;
     }
     return { type: "rematch", level: value.level };
   }
   if (value.type === "forfeit") {
     return { type: "forfeit" };
+  }
+  if (value.type === "select") {
+    if (typeof value.weapon !== "number" || !ONLINE_WEAPONS.has(value.weapon)
+        || !isIntegerInRange(value.level, 0, MAX_LEVEL)
+        || typeof value.lives !== "number" || !MATCH_LIVES_OPTIONS.has(value.lives)
+        || typeof value.ready !== "boolean") {
+      return null;
+    }
+    return { type: "select", weapon: value.weapon, level: value.level, lives: value.lives, ready: value.ready };
+  }
+  if (value.type === "leave") {
+    return { type: "leave" };
   }
   return null;
 }

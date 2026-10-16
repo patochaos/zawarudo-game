@@ -49,7 +49,7 @@ describe("Room durable object", () => {
       seed: 1234,
       turn: 1,
       hasGuest: true,
-      protocol: 3,
+      protocol: 4,
       weapons: [2, 4],
       names: ["", ""],
       capacity: 2,
@@ -83,7 +83,7 @@ describe("Room durable object", () => {
     expect(stale.status).toBe(400);
     await expect(stale.json<{ error: string }>()).resolves.toMatchObject({
       error: expect.stringContaining("Protocol version mismatch") as unknown as string,
-      protocol: 3,
+      protocol: 4,
     });
 
     const created = await createRoom(6, 2);

@@ -1,6 +1,6 @@
 # ZAWARUDO: Tactical Knife Duel
 
-**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). **CUSTOM MATCH** picks any arena, the number of fighters, each CPU's skill and the match length. Experiments require `Play.bat -- --dev-tools`.
+**Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have a four-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). **CUSTOM MATCH** picks any arena, the number of fighters, each CPU's skill and the match length. Experiments require `Play.bat -- --dev-tools`.
 
 ### Interception test
 
@@ -13,7 +13,7 @@ This mode uses one jump, 450 px/s² air acceleration, and airborne momentum that
 continues after recorded input ends. Walking brakes automatically; landing also
 restores ground braking. Record **WAIT** (S by default) to brake in the air.
 The CPU contests the crossing and responds to visible projectile threats. Planning
-lasts eight seconds, execution 0.75 seconds, and movement control 0.5 seconds.
+lasts four seconds, execution 0.75 seconds, and movement control 0.5 seconds.
 The knife pair and ground jump retain their authored settings. Interception uses
 fixed test rules; leaving it restores your saved offline tuning.
 
@@ -417,15 +417,23 @@ four-fighter launcher keep the plain presets above.
 ## The loop
 
 ```
-PLANNING (8s, frozen; fixed each turn)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
+PLANNING (4s, frozen; fixed each turn)  ->  COMMITTING (0.25s, locked)  ->  EXECUTING (0.75s, physics)  ->  PLANNING ...
 ```
 
 * Execution begins when both players confirm (after a 0.25s commit beat that
   absorbs late input) **or** when the timer hits zero.
-* Standard matches retain an eight-second planning window throughout the match.
+* Standard matches retain a four-second planning window throughout the match.
   Confirming early still starts execution immediately after the commit beat.
   The optional shrink tuning remains available with a default decrement of zero;
   Fate Trial and Close Camera retain their own authored clocks.
+* Execution plays at 0.35x speed (`execution_playback_speed`). A hit drops to
+  0.15x for 1.4 real seconds and pushes the camera in on the victim, then play
+  eases back up over 1 second (`kill_playback_speed`, `kill_slowmo_duration`,
+  `kill_recover_duration`, `kill_zoom`). All of this is presentation only: the
+  simulation still advances in fixed ticks.
+* One human against one CPU always opens on the arena's left socket. Other
+  versus matches deal opening positions at random from the supported sockets,
+  apart from each other and outside orb blasts (`randomize_spawns`).
 * Nothing is cleared at a phase boundary. Knives are only removed when they hit
   terrain, hit a player, or leave the world.
 
@@ -498,12 +506,13 @@ drawn in world space above the fighters and below the HUD, on wall time, never
 touching simulation, replay or the lockstep digest. Each beat is a palette
 preset (a multiply tint plus an additive lift) with its own return to base:
 
-- **Lock**: confirming a plan swells the fighter into its held stance, drops a
-  short spotlight around it and strikes **DECIDED** beside the body.
-- **Impact**: a hit crushes the frame warm, crops it with a diagonal band
-  through the contact and one hard shadow, and strikes **SNAP** (or
-  **TIME // CUT** on the match-deciding hit). The grade returns in three hard
-  steps. There is no generic white flash.
+- **Lock**: confirming a plan swells the fighter into its held stance. The
+  READY badge and the HUD status carry readiness; the spotlight and
+  **DECIDED** word that used to fire here were cut for clutter.
+- **Impact**: a hit crushes the frame warm and crops it with a diagonal band
+  through the contact and one hard shadow. The HUD banner names who hit whom;
+  no word is struck in the arena. The grade returns in three hard steps. There
+  is no generic white flash.
 - **SUPER**: the three beats above.
 - **Result**: the final world state holds under a subdued grade. The winner
   takes the poised lock stance as a victory pose inside a spotlight; the loser

@@ -31,9 +31,9 @@ func run() -> void:
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")
 	check(game.level_index == Opponents.arena(0) and game.level_name == "CROSSHAIR COURT", "Start Duel must open on the readable walled court")
-	check(game.player_difficulty(1) == game.Difficulty.NOVICE and game.demo_opponent == 0 and game.planning_time_left == 8.0, "first opponent must be the ladder's first rung, Novice skill, with eight-second turns")
+	check(game.player_difficulty(1) == game.Difficulty.NOVICE and game.demo_opponent == 0 and game.planning_time_left == 4.0, "first opponent must be the ladder's first rung, Novice skill, with four-second turns")
 	game._physics_process(0.5)
-	check(game.planning_time_left == 8.0, "the opening wipe must not consume planning time")
+	check(game.planning_time_left == 4.0, "the opening wipe must not consume planning time")
 	game._transition.visible = false
 	game._ui.refresh()
 	check(game._ui._lock_plan.visible and game._ui.help_visible, "first duel must expose lock and basic controls")

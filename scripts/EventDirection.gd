@@ -2,8 +2,11 @@ extends Node2D
 class_name EventDirection
 
 ## Event-driven palette presets, spotlights and impact crops. One grammar for
-## the four theatrical beats: LOCK (a plan is confirmed), IMPACT (a fighter is
-## hit), SUPER (the cut-in's three beats) and RESULT (the final tableau).
+## the three theatrical beats: IMPACT (a fighter is hit), SUPER (the cut-in's
+## three beats) and RESULT (the final tableau). A fourth beat, LOCK (a plan is
+## confirmed, with a spotlight and a DECIDED word), was cut after playtesting:
+## it darkened the whole screen while the opponent was still planning, and the
+## READY badge plus the HUD status already say the same thing.
 ##
 ## Everything here is a cosmetic observer on wall time. It draws in world space
 ## above the fighters and below the HUD layer, and never reads back into the
@@ -15,14 +18,11 @@ class_name EventDirection
 
 const W := 1280.0
 const H := 720.0
-const DISPLAY_FONT := preload("res://assets/kenney/fonts/kenney-future.ttf")
 
 ## mul: multiply colour at full strength. add: additive lift at full strength.
 ## hold: seconds at full strength. fade: seconds back to base. steps: 0 for a
 ## smooth return, otherwise the return happens in that many hard steps.
 const PRESETS := {
-	"lock": {"mul": Color(0.74, 0.68, 0.92), "add": Color(0.015, 0.0, 0.05),
-		"hold": 0.16, "fade": 0.26, "steps": 0},
 	"impact": {"mul": Color(1.0, 0.70, 0.50), "add": Color(0.22, 0.05, 0.0),
 		"hold": 0.09, "fade": 0.20, "steps": 3},
 	"super": {"mul": Color(0.40, 0.24, 0.62), "add": Color(0.06, 0.0, 0.14),
@@ -31,12 +31,11 @@ const PRESETS := {
 		"hold": 0.0, "fade": 0.0, "steps": 0},
 }
 const REDUCED_TIME_SCALE := 0.6
-const SPOT_RADIUS := 118.0
 const TABLEAU_RADIUS := 170.0
 
 var gm
 var reduced_flashes: bool = false
-## Active events: {kind, t, life, hold, fade, steps, at, color, word, player, index}
+## Active events: {kind, t, life, hold, fade, steps, at, color, player, index}
 var _events: Array = []
 var _tableau: Dictionary = {}
 var _mul_rect: ColorRect
@@ -65,22 +64,17 @@ func _blend_rect(mode: int) -> ColorRect:
 
 # ------------------------------------------------------------------ events --
 
-## A confirmed plan: short spotlight on the confirming fighter and a word
-## struck beside the body. Public readiness theatre only.
-func lock_in(player_index: int, at: Vector2, color: Color) -> void:
-	_push("lock", at, color, "DECIDED", player_index)
-
-
-## A fighter is hit: warm crushed grade, a diagonal crop through the impact
-## and the event's own word. Returns to base in hard steps.
-func impact(at: Vector2, color: Color, word: String = "SNAP") -> void:
-	_push("impact", at, color, word, -1)
+## A fighter is hit: warm crushed grade and a diagonal crop through the impact.
+## Returns to base in hard steps. The HUD banner names who hit whom; the word
+## that used to be struck in the arena beside the crop said it a second time.
+func impact(at: Vector2, color: Color) -> void:
+	_push("impact", at, color, -1)
 
 
 ## The SUPER cut-in's beats, timed to the pause GameManager owns: the world
 ## collapses to two values while the panel is up and tears back at release.
 func super_beats(player_index: int, color: Color, duration: float) -> void:
-	var event := _push("super", Vector2(W * 0.5, H * 0.5), color, "", player_index)
+	var event := _push("super", Vector2(W * 0.5, H * 0.5), color, player_index)
 	event["life"] = duration
 	event["hold"] = maxf(0.0, duration - float(PRESETS["super"]["fade"]))
 
@@ -107,12 +101,12 @@ func active_kinds() -> Array:
 	return out
 
 
-func _push(kind: String, at: Vector2, color: Color, word: String, player: int) -> Dictionary:
+func _push(kind: String, at: Vector2, color: Color, player: int) -> Dictionary:
 	var preset: Dictionary = PRESETS[kind]
 	var scale: float = REDUCED_TIME_SCALE if reduced_flashes else 1.0
 	_seq += 1
 	var event := {
-		"kind": kind, "t": 0.0, "at": at, "color": color, "word": word,
+		"kind": kind, "t": 0.0, "at": at, "color": color,
 		"player": player, "index": _seq,
 		"hold": float(preset["hold"]) * scale, "fade": float(preset["fade"]) * scale,
 		"steps": 0 if reduced_flashes else int(preset["steps"]),
@@ -202,14 +196,8 @@ func _draw() -> void:
 		if s <= 0.0:
 			continue
 		match event["kind"]:
-			"lock":
-				_draw_spotlight(event["at"], SPOT_RADIUS, 0.55 * s)
-				_draw_word(event["word"], event["at"] + Vector2(0.0, -96.0), event["color"],
-					36, s * 0.9, event["player"])
 			"impact":
 				_draw_crop(event["at"], s)
-				_draw_word(event["word"], event["at"] + Vector2(0.0, -64.0), event["color"],
-					44, s, -1)
 	if not _tableau.is_empty() and gm != null:
 		_draw_tableau()
 
@@ -259,21 +247,6 @@ func _draw_crop(at: Vector2, s: float) -> void:
 	draw_rect(Rect2(-2400.0, half - 7.0, 4800.0, 7.0), Color(0.0, 0.0, 0.0, 0.85 * s))
 	draw_line(Vector2(-2400.0, -half), Vector2(2400.0, -half), Color(1.0, 0.86, 0.56, 0.9 * s), 2.0)
 	draw_set_transform(Vector2.ZERO)
-
-
-func _draw_word(word: String, at: Vector2, color: Color, size: int, alpha: float, player: int) -> void:
-	if word == "" or alpha <= 0.0:
-		return
-	var width := 420.0
-	var origin := Vector2(clampf(at.x - width * 0.5, 8.0, W - width - 8.0), clampf(at.y, 80.0, H - 40.0))
-	var accent: Color = color.lightened(0.25)
-	draw_string(DISPLAY_FONT, origin + Vector2(3.0, 3.0), word, HORIZONTAL_ALIGNMENT_CENTER,
-		width, size, Color(0.0, 0.0, 0.0, alpha * 0.9))
-	draw_string(DISPLAY_FONT, origin, word, HORIZONTAL_ALIGNMENT_CENTER, width, size,
-		Color(accent.r, accent.g, accent.b, alpha))
-	if player >= 0:
-		draw_line(origin + Vector2(width * 0.5 - 60.0, 8.0), origin + Vector2(width * 0.5 + 60.0, 8.0),
-			Color(accent.r, accent.g, accent.b, alpha * 0.7), 2.0)
 
 
 ## Winner lit, loser held in the real defeat silhouette under a dimmer halo.

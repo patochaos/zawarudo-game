@@ -68,19 +68,31 @@ const BACK_H := 44.0
 class ArenaPlan:
 	extends Control
 
+	## The arena's own rendered layers sit behind the diagram at plan scale,
+	## dimmed so the layout still reads first.
+	const BACKDROP := preload("res://scripts/Backdrop.gd")
+	const ROOM_DIM := Color(0.62, 0.62, 0.66)
+
 	var layout: Dictionary = {}
+	var room_theme: int = 0
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func show_level(index: int, player_count: int) -> void:
 		layout = Levels.build(index, player_count)
+		room_theme = posmod(index, BACKDROP.MID.size())
 		queue_redraw()
 
 	func _draw() -> void:
 		draw_rect(PLAN, Color(0.045, 0.030, 0.075, 1.0))
 		if layout.is_empty():
 			return
+		var grade: Color = BACKDROP.GRADES[room_theme] * ROOM_DIM
+		draw_texture_rect(BACKDROP.FAR[room_theme], _to_plan_rect(BACKDROP.FAR_RECT), false,
+			grade * BACKDROP.FAR_HAZE)
+		draw_texture_rect(BACKDROP.MID[room_theme], _to_plan_rect(BACKDROP.MID_RECT), false, grade)
+		draw_rect(PLAN, Color(0.045, 0.030, 0.075, 0.42))
 		for i in 5:
 			var y := PLAN.position.y + PLAN.size.y * (float(i) + 1.0) / 6.0
 			draw_line(Vector2(PLAN.position.x, y), Vector2(PLAN.end.x, y),
@@ -130,7 +142,10 @@ class ArenaPlan:
 
 	func _to_plan(rect: Rect2) -> Rect2:
 		var clipped := rect.intersection(Rect2(0.0, 0.0, Levels.ARENA_W, Levels.ARENA_H))
-		return Rect2(PLAN.position + clipped.position * PLAN_SCALE, clipped.size * PLAN_SCALE)
+		return _to_plan_rect(clipped)
+
+	func _to_plan_rect(rect: Rect2) -> Rect2:
+		return Rect2(PLAN.position + rect.position * PLAN_SCALE, rect.size * PLAN_SCALE)
 
 	func _to_plan_point(point: Vector2) -> Vector2:
 		return PLAN.position + point * PLAN_SCALE

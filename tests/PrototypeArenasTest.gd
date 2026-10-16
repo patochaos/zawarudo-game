@@ -14,11 +14,12 @@ func _run() -> void:
 		root.add_child(gm)
 		await process_frame
 		gm._sfx.muted = true
+		gm.randomize_spawns = false
 		gm.start_quick_match(false, index, 2)
 		gm.set_physics_process(false)
 		if index == 4:
-			_check(_jump_reaches(gm, Vector2(275, 446), Vector2(195, 276)), "Descent intact left climb is clear")
-			_check(_jump_reaches(gm, Vector2(1005, 446), Vector2(1085, 276)), "Descent intact right climb is clear")
+			_check(_jump_reaches(gm, Vector2(270, 456), Vector2(200, 316)), "Descent intact left climb is clear")
+			_check(_jump_reaches(gm, Vector2(1010, 456), Vector2(1080, 316)), "Descent intact right climb is clear")
 		# Every required climb must survive destruction of all fragile cover.
 		gm.platforms = gm.platforms.filter(func(pf): return int(pf["hp"]) < 0)
 		gm._rebuild_solids()
@@ -39,13 +40,13 @@ func _run() -> void:
 					Vector2(0, dir * 400), false, 0, true, gm.tick_dt(), gm)
 				_check(state[0].y > 680 if dir == -1 else state[0].y < 40,
 					"Descent shaft must wrap in both vertical directions")
-			_check(_jump_reaches(gm, Vector2(310, 596), Vector2(250, 446)), "Descent first stair is reachable")
-			_check(_jump_reaches(gm, Vector2(275, 446), Vector2(195, 276)), "Descent upper passage is reachable")
-			_check(_jump_reaches(gm, Vector2(1005, 446), Vector2(1085, 276)), "Descent right climb is reachable")
+			_check(_jump_reaches(gm, Vector2(330, 596), Vector2(270, 456)), "Descent first stair is reachable")
+			_check(_jump_reaches(gm, Vector2(220, 316), Vector2(300, 176)), "Descent upper passage is reachable")
+			_check(_jump_reaches(gm, Vector2(1010, 456), Vector2(1080, 316)), "Descent right climb is reachable")
 		else:
-			_check(_jump_reaches(gm, Vector2(325, 596), Vector2(250, 476)), "Pulse first stair is reachable")
-			_check(_jump_reaches(gm, Vector2(310, 476), Vector2(375, 316)), "Pulse left inner perch is reachable")
-			_check(_jump_reaches(gm, Vector2(970, 476), Vector2(905, 316)), "Pulse right inner perch is reachable")
+			_check(_jump_reaches(gm, Vector2(325, 596), Vector2(270, 456)), "Pulse first stair is reachable")
+			_check(_jump_reaches(gm, Vector2(290, 456), Vector2(370, 316)), "Pulse left inner perch is reachable")
+			_check(_jump_reaches(gm, Vector2(990, 456), Vector2(910, 316)), "Pulse right inner perch is reachable")
 			for orb in gm.hazards:
 				for p in gm.players:
 					_check(p.position.distance_to(orb.position) > orb.blast_radius + Player.HALF.length(),

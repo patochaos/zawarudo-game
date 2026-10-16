@@ -14,6 +14,7 @@ var survival_windows := 0
 var survival_knife_ids: Array[int] = []
 ## Tests set this to render the pad variant without a controller plugged in.
 var force_pad_prompts := false
+const LESSON_PLANNING_DURATION := 8.0
 const DIALOGUE_FONT := "res://assets/fonts/Rajdhani-SemiBold.ttf"
 const CHIP_FONT := "res://assets/kenney/fonts/kenney-future.ttf"
 ## Prompt icons shown inside the input chips, keyed by the chip's label.
@@ -253,13 +254,15 @@ func begin_attempt() -> void:
 		survival_knife_ids.clear()
 		# A dummy is confirmed explicitly; it never reads or responds to input.
 		gm.team_mode = false
-		gm.planning_duration = 8.0
 		gm.planning_shrink_per_round = 0.0
 		gm.execution_duration = 0.75
 		gm._start_local_match(0, 2, [0, 0], {
 			"roles": ["HUMAN", "DUMMY"], "devices": [gm.KEYBOARD_DEVICE, gm.NO_DEVICE],
 			"match_lives": 7, "difficulty": 0,
 		})
+		# Lessons keep a learner's eight seconds; the match setup above restores
+		# the standard four, so this has to follow it.
+		gm.planning_duration = LESSON_PLANNING_DURATION
 		gm.players[0].position = Vector2(220 if lesson == 0 else 400, 596)
 		gm.players[1].position = Vector2(1060, 596)
 		if lesson == 1:

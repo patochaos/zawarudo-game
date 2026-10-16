@@ -109,20 +109,42 @@ func run() -> void:
 	game._start_online_match(2, 1000, 1, [0, 0, 0, 0])
 	check(game.state == Phase.PLANNING and game.level_index == 2,
 		"An agreed rematch must exit replay instead of stranding that participant")
-	# The host picks the next arena before pressing REMATCH. A guest readying up
-	# first echoes the current arena; that echo must not undo the host's pick.
+	# Online arenas are voted after REMATCH, so the result screen no longer picks one.
 	game.state = Phase.GAME_OVER
 	game._online_waiting_rematch = false
-	var picked: int = posmod(game.level_index + 1, Levels.count())
+	var before: int = game.rematch_level_index
 	game._cycle_rematch_level(1)
-	check(game.rematch_level_index == picked, "Host must be able to cycle the rematch arena")
-	game._on_online_message({"type": "rematch_status", "ready": [1], "level": game.level_index})
-	check(game.rematch_level_index == picked,
-		"A guest's rematch request must not overwrite the host's pending arena pick")
+	check(game.rematch_level_index == before, "The online result screen must not pick the arena")
+	# A completed rematch handshake reopens the custom-match selection screens.
 	var guest = games[1]
 	guest.state = Phase.GAME_OVER
-	guest._on_online_message({"type": "rematch_status", "ready": [0], "level": picked})
-	check(guest.rematch_level_index == picked, "Guests must follow the host's arena pick")
+	guest.online_mode = true
+	guest._on_online_message({"type": "selection_state", "phase": "selecting", "capacity": 4,
+		"weapons": [0, 0, 0, 0], "level_votes": [3, 3, 1, 1], "lives_votes": [7, 5, 5, 5],
+		"ready": [false, true, false, false], "connected": [true, true, true, true],
+		"names": ["HOST", "", "", ""]})
+	check(guest.state == Phase.ONLINE_SELECT and guest._online_roster.visible \
+		and not guest.online_mode, "The selection phase must open the online lineup screen")
+	check(guest._online_pick["level"] == 3 and guest._online_pick["lives"] == 5,
+		"A returning player starts from the votes the room remembers")
+	guest._online_roster._confirm()
+	check(guest._online_setup.visible and guest._online_setup.level == 3,
+		"Confirming the fighter must open the arena vote on the current vote")
+	guest._online_setup._step_row(1)
+	guest._online_setup._adjust(1)
+	check(guest._online_pick["lives"] == 7, "Changing the match length must update the vote")
+	guest._online_setup._start_match()
+	check(guest._online_pick["ready"], "READY must be sent to the room")
+	guest._on_online_message({"type": "match_start", "level": 1, "lives": 7, "seed": 77, "turn": 1,
+		"weapons": [0, 0, 0, 0], "names": []})
+	check(guest.online_mode and guest.hits_to_win == 7 and guest.level_index == 1 \
+		and not guest._online_setup.visible, "The room's counted vote must start the match")
+	# A player leaving between matches sends everyone back to the room code.
+	guest.state = Phase.GAME_OVER
+	guest._on_online_message({"type": "peer_left", "player": 2})
+	check(guest.state == Phase.ONLINE_LOBBY and guest._online_lobby.visible \
+		and "LEFT" in guest._online_lobby._status.text,
+		"A departed player must return the table to the room screen")
 	for entry in games:
 		entry.queue_free()
 	await process_frame

@@ -14,6 +14,12 @@ var gm
 var _target_centre: Vector2 = ARENA * 0.5
 var _target_zoom: float = EXECUTION_ZOOM
 var _settled: bool = false
+## Kill push-in: real seconds left, the victim's position and its zoom. Outside
+## Close Camera the camera is enabled only for this beat and then switches off.
+var _focus_left: float = 0.0
+var _focus_at: Vector2 = ARENA * 0.5
+var _focus_zoom: float = EXECUTION_ZOOM
+var _focus_only: bool = false
 
 
 func _ready() -> void:
@@ -24,11 +30,45 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if gm == null or not enabled:
 		return
+	# Slow motion scales `delta`; the push-in itself should stay brisk.
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	_focus_left = maxf(0.0, _focus_left - real_delta)
+	if _focus_only and _focus_left <= 0.0 and _release_focus_only():
+		return
 	_retarget()
 	var rate: float = 3.2 if _target_zoom > EXECUTION_ZOOM else 11.0
-	var t: float = clampf(delta * rate, 0.0, 1.0)
+	if _focus_left > 0.0:
+		rate = 9.0
+	var t: float = clampf(real_delta * rate, 0.0, 1.0)
 	position = position.lerp(_target_centre, t)
 	zoom = zoom.lerp(Vector2.ONE * _target_zoom, t)
+
+
+## Pushes in on a fresh kill for `seconds` of real time.
+func focus_kill(at: Vector2, at_zoom: float, seconds: float) -> void:
+	if not enabled:
+		reset_view()
+		enabled = true
+		_focus_only = true
+	_focus_at = at
+	_focus_zoom = at_zoom
+	_focus_left = seconds
+
+
+func is_focusing() -> bool:
+	return _focus_left > 0.0
+
+
+## After a borrowed kill push-in, ease back out and switch the camera off. Planning
+## aims in screen space, so it never starts under a leftover zoom.
+func _release_focus_only() -> bool:
+	var planning: bool = gm.state == Phase.PLANNING or gm.state == Phase.COMMITTING
+	if planning or zoom.x <= EXECUTION_ZOOM + 0.01:
+		reset_view()
+		enabled = false
+		_focus_only = false
+		return true
+	return false
 
 
 func reset_view() -> void:
@@ -37,9 +77,18 @@ func reset_view() -> void:
 	_target_centre = position
 	_target_zoom = EXECUTION_ZOOM
 	_settled = false
+	_focus_left = 0.0
 
 
 func _retarget() -> void:
+	if _focus_left > 0.0:
+		_target_zoom = _focus_zoom
+		_target_centre = _clamp_to_arena(_focus_at, _focus_zoom)
+		return
+	if _focus_only:
+		_target_zoom = EXECUTION_ZOOM
+		_target_centre = ARENA * 0.5
+		return
 	var planning: bool = gm.state == Phase.PLANNING or gm.state == Phase.COMMITTING
 	if not planning:
 		_settled = false

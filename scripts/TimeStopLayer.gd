@@ -1,11 +1,11 @@
 extends Node2D
 
-const DISPLAY_FONT := preload("res://assets/kenney/fonts/kenney-future.ttf")
-
 ## Procedural phase punctuation. Planning is the stopped world: a restrained
 ## violet grade, clock marks and suspended gold motes remain visible. Entering
-## either phase adds a short, much stronger pulse so freeze/release reads before
-## the HUD label does. This is cosmetic and never touches simulation time.
+## either phase adds one short pulse so freeze/release reads before the HUD
+## label does. The pulse never crosses the fighters' lanes with geometry or
+## text: the HUD already names the phase, so the arena only needs a change of
+## state, not a second announcement. Cosmetic; never touches simulation time.
 
 const W := 1280.0
 const H := 720.0
@@ -17,9 +17,6 @@ var reduced_flashes: bool = false
 var _phase: int = -1
 var _freeze_flash: float = 0.0
 var _resume_flash: float = 0.0
-var _impact_flash: float = 0.0
-var _impact_at: Vector2 = Vector2.ZERO
-var _impact_color: Color = Color.WHITE
 
 
 func _ready() -> void:
@@ -37,23 +34,14 @@ func phase_changed(next_phase: int) -> void:
 	queue_redraw()
 
 
-func impact_flash(at: Vector2, color: Color) -> void:
-	_impact_at = at
-	_impact_color = color
-	_impact_flash = 0.45 if reduced_flashes else 1.0
-	queue_redraw()
-
-
 func _process(delta: float) -> void:
 	if gm == null:
 		return
-	visible = gm.state in [Phase.PLANNING, Phase.COMMITTING, Phase.EXECUTING] \
-		or _impact_flash > 0.0
+	visible = gm.state in [Phase.PLANNING, Phase.COMMITTING, Phase.EXECUTING]
 	if not visible:
 		return
 	_freeze_flash = maxf(0.0, _freeze_flash - delta / 0.62)
 	_resume_flash = maxf(0.0, _resume_flash - delta / 0.24)
-	_impact_flash = maxf(0.0, _impact_flash - delta / 0.16)
 	queue_redraw()
 
 
@@ -64,8 +52,6 @@ func _draw() -> void:
 		_draw_frozen_world()
 	if _resume_flash > 0.0:
 		_draw_release_pulse(_resume_flash)
-	if _impact_flash > 0.0:
-		_draw_impact(_impact_flash)
 
 
 func _draw_frozen_world() -> void:
@@ -101,23 +87,18 @@ func _draw_frozen_world() -> void:
 
 	if _freeze_flash <= 0.0:
 		return
+	# The freeze is one expanding gold ring over a faint violet wash. The glass
+	# crack, the radial rays, the second ring and the TIME // SUSPENDED title
+	# that used to share this beat were cut after playtesting: they stacked on
+	# the ghosts and aim fans at the exact moment planning begins.
 	var u: float = _freeze_flash
 	var travelled: float = 1.0 - u
 	var radius: float = 42.0 + travelled * 590.0
 	draw_rect(Rect2(0.0, 0.0, W, H), Color(0.30, 0.06, 0.48, 0.11 * u))
 	draw_arc(CLOCK_CENTRE, radius, 0.0, TAU, 96, Color(1.0, 0.83, 0.34, 0.75 * u), 3.0)
-	draw_arc(CLOCK_CENTRE, radius + 10.0, 0.0, TAU, 96, Color(0.75, 0.34, 1.0, 0.35 * u), 1.5)
-	for ray in 18:
-		var angle: float = float(ray) * TAU / 18.0 + sin(float(ray) * 2.17) * 0.10
-		var d := Vector2.from_angle(angle)
-		var inner: float = maxf(0.0, radius - 46.0 - float(ray % 4) * 12.0)
-		draw_line(CLOCK_CENTRE + d * inner, CLOCK_CENTRE + d * radius,
-			Color(1.0, 0.86, 0.46, 0.35 * u), 1.0)
-	var text_col := Color(1.0, 0.86, 0.42, minf(1.0, u * 1.8))
-	draw_string(DISPLAY_FONT, Vector2(390.0, 304.0), "TIME // SUSPENDED",
-		HORIZONTAL_ALIGNMENT_CENTER, 500.0, 28, text_col)
 
 
+## Release is a horizontal sweep from the clock centre over a faint warm wash.
 func _draw_release_pulse(u: float) -> void:
 	var width: float = W * (1.0 - pow(u, 2.0))
 	draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.68, 0.16, 0.10 * u))
@@ -127,17 +108,3 @@ func _draw_release_pulse(u: float) -> void:
 	draw_line(Vector2((W - width * 0.72) * 0.5, CLOCK_CENTRE.y - 9.0),
 		Vector2((W + width * 0.72) * 0.5, CLOCK_CENTRE.y - 9.0),
 		Color(0.80, 0.42, 1.0, 0.55 * u), 2.0)
-	draw_string(DISPLAY_FONT, Vector2(440.0, 304.0), "TIME FLOWS",
-		HORIZONTAL_ALIGNMENT_CENTER, 400.0, 25, Color(1.0, 0.92, 0.66, u))
-
-
-## The palette preset in EventDirection carries the colour of a hit; this keeps
-## only the local ring and rays, so there is no generic white flash.
-func _draw_impact(u: float) -> void:
-	var reach: float = 42.0 + (1.0 - u) * 96.0
-	draw_arc(_impact_at, reach, 0.0, TAU, 36,
-		Color(_impact_color.r, _impact_color.g, _impact_color.b, 0.95 * u), 4.0)
-	for i in 8:
-		var d := Vector2.from_angle(float(i) * TAU / 8.0 + PI * 0.125)
-		draw_line(_impact_at + d * 12.0, _impact_at + d * reach,
-			Color(1.0, 0.96, 0.72, 0.9 * u), 3.0)

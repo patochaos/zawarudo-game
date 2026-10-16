@@ -829,7 +829,7 @@ func refresh() -> void:
 	# A Start Duel result cycles opponents already reached instead of arenas.
 	var cycles: bool = desktop_result and not gm.fate_trial_mode \
 		and not gm.close_camera_mode and not gm.interception_mode \
-		and (not gm.demo_match or gm.ladder_progress() > 0)
+		and (not gm.demo_match or gm.ladder_progress() > 0) and not gm.online_mode
 	_arena_previous_button.visible = cycles
 	_arena_next_button.visible = cycles
 	_replay_button.visible = desktop_result
@@ -851,16 +851,15 @@ func refresh() -> void:
 		# cannot: the gamepad mapping, or who controls the next arena online.
 		var cycle_label := "OPPONENT" if gm.demo_match else "ARENA"
 		var controls := _result_pad_hint(cycles, cycle_label)
-		if gm.online_mode and gm.online_player != 0:
-			controls = "THE HOST CHOOSES THE NEXT ARENA"
+		if gm.online_mode:
+			controls = "REMATCH OPENS THE FIGHTER PICK AND THE ARENA VOTE"
 		var kicker := "" if gm.fate_trial_mode or gm.close_camera_mode else "FIRST TO %d HITS" % gm.hits_to_win
 		var arena_line := "CLOSE CAMERA // KNIFE COURT" if gm.close_camera_mode else \
 			("TRIAL 01 // THE CROSSFIRE" if gm.fate_trial_mode else \
 			"NEXT ARENA   %02d / %02d   //   %s" % [
 			gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name])
-		if gm.online_mode and gm.online_player != 0:
-			arena_line = "HOST ARENA   %d / %d   //   %s" % [
-				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
+		if gm.online_mode:
+			arena_line = "NEXT ARENA   //   PICKED BY VOTE"
 		var score_line: String = gm._score_text()
 		if gm.demo_match:
 			var shown: int = gm.rematch_opponent if gm.rematch_opponent >= 0 else maxi(gm.demo_opponent, 0)

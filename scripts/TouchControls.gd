@@ -203,8 +203,7 @@ func _action_at(position: Vector2) -> String:
 			return "replay"
 		if REMATCH_RECT.has_point(position):
 			return "rematch"
-		if _gm != null and not _gm.interception_mode and (not _gm.online_mode \
-				or (_gm.online_player == 0 and not _gm._online_waiting_rematch)):
+		if _gm != null and not _gm.interception_mode and not _gm.online_mode:
 			if LEVEL_PREV_RECT.has_point(position):
 				return "level_previous"
 			if LEVEL_NEXT_RECT.has_point(position):
@@ -379,8 +378,8 @@ func _draw_touch_result_card() -> void:
 	var prompt := "CHOOSE THE NEXT ARENA, WATCH THE FIGHT, OR RUN IT BACK"
 	if _gm.interception_mode:
 		prompt = "INTERCEPTION · WATCH THE FIGHT OR RUN IT BACK"
-	if _gm.online_mode and _gm.online_player != 0:
-		prompt = "THE HOST CHOOSES THE ARENA · WATCH THE FIGHT OR RUN IT BACK"
+	if _gm.online_mode:
+		prompt = "REMATCH TO VOTE THE NEXT ARENA · OR WATCH THE FIGHT"
 	_surface.draw_string(HUD_FONT, Vector2(330.0, 417.0), prompt,
 		HORIZONTAL_ALIGNMENT_CENTER, 620.0, 13, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.74))
 	_surface.draw_string(HUD_FONT, Vector2(330.0, 465.0),
@@ -424,16 +423,12 @@ func _draw_virtual_stick() -> void:
 
 
 func _draw_result_level_selector() -> void:
-	if _gm == null or _gm.interception_mode:
+	# Online arenas are voted after REMATCH, so there is nothing to pick here.
+	if _gm == null or _gm.interception_mode or _gm.online_mode:
 		return
-	if not _gm.online_mode \
-			or (_gm.online_player == 0 and not _gm._online_waiting_rematch):
-		_draw_rect_button(LEVEL_PREV_RECT, "<", "level_previous", SPECTRAL)
-		_draw_rect_button(LEVEL_NEXT_RECT, ">", "level_next", SPECTRAL)
+	_draw_rect_button(LEVEL_PREV_RECT, "<", "level_previous", SPECTRAL)
+	_draw_rect_button(LEVEL_NEXT_RECT, ">", "level_next", SPECTRAL)
 	var level_caption := "LEVEL %d/%d" % [_gm.rematch_level_index + 1, Levels.count()]
-	if _gm.online_mode:
-		level_caption += "  HOST" if _gm.online_player == 0 \
-			and not _gm._online_waiting_rematch else "  LOCKED"
 	_surface.draw_string(HUD_FONT, Vector2(314.0, 610.0), level_caption,
 		HORIZONTAL_ALIGNMENT_CENTER, 112.0, 12, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.62))
 	_surface.draw_string(HUD_FONT, Vector2(314.0, 636.0), _gm.rematch_level_name,

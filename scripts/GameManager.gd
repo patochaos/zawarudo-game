@@ -47,6 +47,9 @@ const RIDE_TOLERANCE := 3.0
 const SOLIDS_CACHE_LIMIT := 900
 ## Brief presentation-only hit-stop. At 60 Hz this holds roughly three frames.
 const HIT_PAUSE_DURATION := 0.045
+## Shortest opening distance between rivals when spawns are dealt at random.
+const SPAWN_MIN_GAP_DUEL := 480.0
+const SPAWN_MIN_GAP_CROWD := 300.0
 ## Dodging a whole SUPER fan is already its own reward; the meter share stops here.
 const SUPER_DODGE_CREDITS_PER_WINDOW := 3
 
@@ -126,7 +129,7 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export_range(10.0, 120.0, 5.0) var replay_history_seconds: float = 30.0
 
 @export_group("Loop Timing")
-@export var planning_duration: float = 8.0
+@export var planning_duration: float = 4.0
 ## Turns 1-3 use the authored window. Each later turn loses half a second until
 ## this floor. Multi-bot searches intentionally return the best candidate they
 ## have evaluated when the clock expires, so this is a gameplay-quality floor,
@@ -136,6 +139,20 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export var minimum_planning_duration: float = 3.5
 @export var execution_duration: float = 0.75
 @export var commit_delay: float = 0.25
+## Deal versus opening positions from the arena's sockets instead of fixed seats.
+@export var randomize_spawns: bool = true
+## Wall-clock pacing of the action phase. Engine.time_scale slows the fixed
+## physics ticks, effects and animation together, so the simulation still
+## advances one deterministic tick at a time and replays and lockstep agree.
+@export_range(0.1, 1.0, 0.05) var execution_playback_speed: float = 0.35
+## A hit drops to this speed and pushes the camera in on the victim for
+## `kill_slowmo_duration` real seconds, so everyone sees who fell and to what.
+@export_range(0.05, 1.0, 0.05) var kill_playback_speed: float = 0.15
+@export_range(0.0, 3.0, 0.05) var kill_slowmo_duration: float = 1.4
+## Afterwards the action eases back up to `execution_playback_speed` over this
+## many real seconds, so players can re-read the board before it moves at pace.
+@export_range(0.0, 3.0, 0.05) var kill_recover_duration: float = 1.0
+@export_range(1.0, 2.0, 0.05) var kill_zoom: float = 1.35
 
 @export_group("Movement")
 ## Seconds of piloted control per turn. The rest of the window coasts.
@@ -621,6 +638,13 @@ var _event_direction
 var _ui
 var _online_client: OnlineClient
 var _online_lobby: OnlineLobby
+## The custom-match lineup and rules screens, run over the network once every
+## seat is connected (room protocol 4).
+var _online_roster: OnlineRosterLayer
+var _online_setup: OnlineSetupLayer
+## This machine's pending pick. The room echoes it back, but the local copy wins
+## so a fast double press never snaps back to a stale echo.
+var _online_pick := {"weapon": Roster.DUELIST, "level": 0, "lives": 5, "ready": false}
 var _touch_controls: TouchControls
 var _tutorial
 var tutorial_mode: bool = false
@@ -637,6 +661,10 @@ var _telemetry_finished: bool = true
 var hit_freeze_enabled: bool = true
 var reduced_flashes: bool = false
 var _hit_pause_left: float = 0.0
+## Real seconds left in the kill slow-motion beat.
+var _kill_slowmo_left: float = 0.0
+## Real seconds left in the ease back from the kill beat to normal playback.
+var _kill_recover_left: float = 0.0
 var _hit_pause_used_this_execution: bool = false
 var _secret_triple_match: bool = false
 var _settings: Dictionary = {
@@ -662,6 +690,7 @@ var _offline_tuning_layer
 
 
 func _exit_tree() -> void:
+	Engine.time_scale = 1.0
 	for pending_dash in ghost_dash:
 		if pending_dash != null and is_instance_valid(pending_dash):
 			pending_dash.free()
@@ -799,6 +828,28 @@ func _ready() -> void:
 	_online_lobby.cancel_requested.connect(_leave_online)
 	_online_lobby.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_online_lobby.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_online_client.room_lost.connect(_on_online_room_lost)
+
+	_online_roster = OnlineRosterLayer.new()
+	add_child(_online_roster)
+	_online_roster.pick_changed.connect(func(weapon: int):
+		_online_pick["weapon"] = weapon
+		_send_online_pick())
+	_online_roster.lineup_confirmed.connect(func(_lineup: Dictionary): _open_online_setup())
+	_online_roster.canceled.connect(_leave_online)
+	_online_setup = OnlineSetupLayer.new()
+	add_child(_online_setup)
+	_online_setup.vote_changed.connect(func(vote_level: int, vote_lives: int):
+		_online_pick["level"] = vote_level
+		_online_pick["lives"] = vote_lives
+		_send_online_pick())
+	_online_setup.ready_changed.connect(func(is_ready: bool):
+		_online_pick["ready"] = is_ready
+		_send_online_pick())
+	_online_setup.canceled.connect(func(): _online_roster.open())
+	for layer_node in [_online_roster, _online_setup]:
+		layer_node.ui_navigated.connect(func(): _sfx.play("ui_move"))
+		layer_node.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
 	_tuning = TUNING_SCRIPT.new()
 	add_child(_tuning)
@@ -1056,6 +1107,7 @@ func _open_menu() -> void:
 	_tuning.visible = false
 	if _online_lobby != null:
 		_online_lobby.close()
+	_close_online_selection()
 	if _roster != null:
 		_roster.close()
 	if _setup != null:
@@ -1553,16 +1605,111 @@ func _on_online_status(text: String, is_error: bool) -> void:
 
 func _leave_online() -> void:
 	_online_client.disconnect_from_room()
+	_reset_online_session()
+	_online_lobby.close()
+	_open_menu()
+
+
+func _reset_online_session() -> void:
+	if state == Phase.REPLAY:
+		_finish_match_replay()
 	online_mode = false
 	online_player = -1
 	online_room = ""
 	online_peer_connected = false
 	online_peer_lost = false
 	online_match_broken = false
+	_online_waiting_rematch = false
 	_online_connected = [true, true]
 	online_names = []
-	_online_lobby.close()
-	_open_menu()
+	_close_online_selection()
+
+
+## The room or this seat is gone for good (host closed it, or the seat went to
+## someone else). Land back on the lobby with the reason instead of retrying.
+func _on_online_room_lost(reason: String) -> void:
+	if online_room.is_empty() and not online_mode:
+		return
+	_reset_online_session()
+	_ui.visible = false
+	state = Phase.ONLINE_LOBBY
+	_online_lobby.open(_setup.level, int(_online_pick["weapon"]), str(_settings.get("nickname", "")))
+	_online_lobby.set_status(reason, true)
+
+
+func _close_online_selection() -> void:
+	if _online_roster != null:
+		_online_roster.close()
+	if _online_setup != null:
+		_online_setup.close()
+
+
+func _send_online_pick() -> void:
+	_online_client.send_select(int(_online_pick["weapon"]), int(_online_pick["level"]),
+		int(_online_pick["lives"]), bool(_online_pick["ready"]))
+
+
+## Feeds the room's view of every seat to both selection screens and opens the
+## lineup screen the first time the room reaches the selection phase.
+func _on_online_selection(message: Dictionary) -> void:
+	var seats := int(message.get("capacity", 2))
+	var room_weapons: Array = message.get("weapons", [])
+	var votes: Array = message.get("level_votes", [])
+	var lives: Array = message.get("lives_votes", [])
+	var ready: Array = message.get("ready", [])
+	var connected: Array = message.get("connected", [])
+	if message.has("names"):
+		_set_online_names(message["names"], seats)
+	if not connected.is_empty():
+		_online_connected = connected.duplicate()
+	var entering := state != Phase.ONLINE_SELECT
+	if entering:
+		if state == Phase.REPLAY:
+			_finish_match_replay()
+		var me := online_player
+		_online_pick = {
+			"weapon": int(room_weapons[me]) if me < room_weapons.size() else Roster.DUELIST,
+			"level": posmod(int(votes[me]), Levels.count()) if me < votes.size() and int(votes[me]) >= 0 \
+				else _online_lobby.level,
+			"lives": int(lives[me]) if me < lives.size() else DEFAULT_HITS_TO_WIN,
+			"ready": false,
+		}
+		online_mode = false
+		_online_waiting_rematch = false
+		_online_lobby.close()
+		_ui.visible = false
+		state = Phase.ONLINE_SELECT
+	_online_roster.configure_room(online_player, seats, online_names, _online_connected,
+		room_weapons, ready, entering)
+	var lineup := room_weapons.duplicate()
+	if online_player < lineup.size():
+		lineup[online_player] = _online_pick["weapon"]
+	_online_setup.configure_room(online_player, online_names, lineup, votes, lives, ready)
+	if entering:
+		_online_roster.open()
+
+
+func _open_online_setup() -> void:
+	_online_roster.close()
+	_online_setup.open_vote(int(_online_pick["level"]), int(_online_pick["lives"]),
+		bool(_online_pick["ready"]))
+
+
+## Someone left before or between matches; the room is waiting for a full table
+## again, so show the code and seats instead of the selection screens.
+func _return_to_online_room(note: String) -> void:
+	_close_online_selection()
+	if state == Phase.REPLAY:
+		_finish_match_replay()
+	online_mode = false
+	_online_waiting_rematch = false
+	_ui.visible = false
+	state = Phase.ONLINE_LOBBY
+	_online_lobby.visible = true
+	_online_lobby.show_room(online_room, online_player)
+	_online_lobby.update_room(_online_connected, _online_connected.size(), _online_lobby.level,
+		online_names)
+	_online_lobby.set_status(note, true)
 
 
 func _refresh_online_connections() -> void:
@@ -1597,6 +1744,10 @@ func _on_online_message(message: Dictionary) -> void:
 			var server_turn := int(message.get("turn", 1))
 			if server_phase == "desync":
 				_on_online_message({"type": "desync"})
+			elif server_phase == "selecting":
+				var selection := message.duplicate()
+				selection["type"] = "selection_state"
+				_on_online_selection(selection)
 			elif server_phase == "planning":
 				if online_mode and state == Phase.ONLINE_WAIT and server_turn == turn + 1:
 					_begin_planning(false)
@@ -1604,7 +1755,18 @@ func _on_online_message(message: Dictionary) -> void:
 						(_online_waiting_rematch and int(message.get("seed", 0)) != _online_seed)):
 					_start_online_match(int(message.get("level", 0)),
 						int(message.get("seed", 0)), server_turn, message.get("weapons", []),
-						message.get("names", []))
+						message.get("names", []), int(message.get("lives", DEFAULT_HITS_TO_WIN)))
+		"selection_state":
+			if str(message.get("phase", "")) == "selecting":
+				_on_online_selection(message)
+		"peer_left":
+			var left_slot := int(message.get("player", -1))
+			if state in [Phase.ONLINE_SELECT, Phase.GAME_OVER, Phase.REPLAY, Phase.ONLINE_LOBBY]:
+				_return_to_online_room("%s LEFT · WAITING FOR A NEW PLAYER" \
+					% OnlineLobby.seat_tag(left_slot, online_names))
+		"room_closed":
+			_online_client.disconnect_from_room()
+			_on_online_room_lost("THE HOST CLOSED THE ROOM")
 		"peer_status":
 			var peer_slot := int(message.get("player", -1))
 			var connected := bool(message.get("connected", false))
@@ -1619,6 +1781,9 @@ func _on_online_message(message: Dictionary) -> void:
 				if state == Phase.ONLINE_LOBBY:
 					_online_lobby.update_room(_online_connected, _online_connected.size(),
 						_online_lobby.level, online_names)
+				if state == Phase.ONLINE_SELECT:
+					_online_roster.seat_connected = _online_connected.duplicate()
+					_online_roster.refresh_connections()
 				if online_mode and peer_slot != online_player:
 					banner_text = "%s RECONNECTED" % player_title(peer_slot) if connected \
 						else ("%s DISCONNECTED · WAIT FOR RECONNECT OR ESC TO LEAVE" % player_title(peer_slot) \
@@ -1629,7 +1794,7 @@ func _on_online_message(message: Dictionary) -> void:
 			_start_online_match(int(message.get("level", 0)),
 				int(message.get("seed", 0)), int(message.get("turn", 1)),
 				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]),
-				message.get("names", []))
+				message.get("names", []), int(message.get("lives", DEFAULT_HITS_TO_WIN)))
 		"plan_ack":
 			banner_text = "PLAN LOCKED · WAITING FOR PLAYERS"
 			banner_color = PLAYER_COLORS[online_player].lightened(0.3)
@@ -1676,7 +1841,8 @@ func _on_online_message(message: Dictionary) -> void:
 ## `names` carries one nickname per seat; when the message has none, the names
 ## learned in the lobby stay in force.
 func _start_online_match(lvl: int, seed_value: int, server_turn: int,
-		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES], names: Array = []) -> void:
+		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES], names: Array = [],
+		lives: int = DEFAULT_HITS_TO_WIN) -> void:
 	if weapons.size() not in [2, 4] or online_player < 0 or online_player >= weapons.size():
 		_online_lobby.set_status("ROOM RETURNED AN INVALID PLAYER LINEUP", true)
 		return
@@ -1713,12 +1879,13 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	# The saved offline profile is kept intact for the next local match.
 	if offline_tuning != null:
 		offline_tuning.apply_standard()
-	planning_duration = 8.0
+	planning_duration = 4.0
 	planning_shrink_per_round = 0.0
 	execution_duration = 0.75
 	movement_budget = 0.50
 	vs_ai = false
-	hits_to_win = DEFAULT_HITS_TO_WIN
+	# The room's vote; every client receives the same number, so lockstep holds.
+	hits_to_win = clampi(lives, 3, MAX_HITS_TO_WIN)
 	player_weapons.fill(Weapon.KNIVES)
 	for i in weapons.size():
 		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
@@ -1735,6 +1902,7 @@ func _start_online_match(lvl: int, seed_value: int, server_turn: int,
 	online_peer_lost = false
 	online_match_broken = false
 	_online_lobby.close()
+	_close_online_selection()
 	_ui.visible = true
 	_tuning.visible = false
 	_load_level(lvl)
@@ -2230,6 +2398,8 @@ func _load_level(index: int) -> void:
 	platforms = lv["platforms"]
 	zones = lv.get("zones", [])
 	_arena.configure_level(level_index, wrap_x, wrap_y)
+	if _effects != null and _effects.has_method("set_level_theme"):
+		_effects.set_level_theme(_arena.level_theme)
 	_arena.setup_fields(zones)
 	var sp: Array = lv["spawns"]
 	for i in MAX_PLAYERS:
@@ -2237,6 +2407,10 @@ func _load_level(index: int) -> void:
 	respawn_points.clear()
 	for point in lv.get("respawn_points", sp):
 		respawn_points.append(point)
+	if _is_duel_vs_cpu():
+		_seat_human_left()
+	elif _uses_random_spawns(lv):
+		_shuffle_spawns(lv.get("hazards", []))
 	core_spawn_points.clear()
 	for point in lv.get("core_spawns", []):
 		core_spawn_points.append(point)
@@ -2246,6 +2420,96 @@ func _load_level(index: int) -> void:
 	_load_hazards(lv.get("hazards", []))
 	if class_lab:
 		ClassLab.configure_arena(self)
+
+
+## A single human against one CPU always opens on the authored left socket, so
+## the player learns one fixed reading of each arena.
+func _is_duel_vs_cpu() -> bool:
+	if online_mode or player_count != 2 or player_roles.size() < 2:
+		return false
+	var seats: Array = player_roles.slice(0, 2)
+	return seats.has("HUMAN") and seats.has("AI")
+
+
+func _seat_human_left() -> void:
+	var left: Vector2 = spawns[0] if spawns[0].x <= spawns[1].x else spawns[1]
+	var right: Vector2 = spawns[1] if left == spawns[0] else spawns[0]
+	var human := 0 if player_roles[0] == "HUMAN" else 1
+	spawns[human] = left
+	spawns[1 - human] = right
+
+
+## Other versus matches deal opening positions at random. Authored situations
+## (lessons, trials, Close Camera, Interception, the class lab) keep theirs.
+func _uses_random_spawns(lv: Dictionary) -> bool:
+	if not randomize_spawns or not level_override.is_empty() or close_camera_mode:
+		return false
+	if fate_trial_mode or tutorial_mode or interception_mode or class_lab:
+		return false
+	if _practice != null and _practice.active:
+		return false
+	return not lv.get("respawn_points", []).is_empty()
+
+
+## Picks each fighter's opening socket from this board's supported spawn and
+## respawn sockets, keeping rivals apart and out of hazard blasts. One draw from
+## the shared `rng` seeds the deal, so online peers that share the match seed
+## deal the same positions.
+func _shuffle_spawns(hazard_specs: Array) -> void:
+	var deal := RandomNumberGenerator.new()
+	deal.seed = rng.randi()
+	var pool: Array[Vector2] = []
+	var candidates: Array[Vector2] = []
+	for i in player_count:
+		candidates.append(spawns[i])
+	candidates.append_array(respawn_points)
+	for point: Vector2 in candidates:
+		if not pool.has(point) and not _inside_hazard_blast(point, hazard_specs):
+			pool.append(point)
+	if pool.size() < player_count:
+		return
+	var min_gap: float = SPAWN_MIN_GAP_DUEL if player_count <= 2 else SPAWN_MIN_GAP_CROWD
+	var chosen: Array[Vector2] = []
+	for i in player_count:
+		var open: Array[Vector2] = []
+		var best := pool[0]
+		var best_gap := -INF
+		for point: Vector2 in pool:
+			if chosen.has(point):
+				continue
+			var gap := INF
+			for other: Vector2 in chosen:
+				gap = minf(gap, wrapped_distance(point, other))
+			if gap >= min_gap:
+				open.append(point)
+			if gap > best_gap:
+				best_gap = gap
+				best = point
+		chosen.append(open[deal.randi_range(0, open.size() - 1)] if not open.is_empty() else best)
+	for i in player_count:
+		spawns[i] = chosen[i]
+
+
+func wrapped_distance(a: Vector2, b: Vector2) -> float:
+	var delta := b - a
+	if wrap_x and absf(delta.x) > ARENA_W * 0.5:
+		delta.x -= signf(delta.x) * ARENA_W
+	if wrap_y and absf(delta.y) > ARENA_H * 0.5:
+		delta.y -= signf(delta.y) * ARENA_H
+	return delta.length()
+
+
+## An opening socket inside an orb's reach (anywhere along its rail) would let
+## the first knife into that orb decide the round.
+func _inside_hazard_blast(point: Vector2, hazard_specs: Array) -> bool:
+	for spec: Dictionary in hazard_specs:
+		if int(spec.get("min_players", 2)) > player_count:
+			continue
+		var reach: float = float(spec.get("blast_radius", 180.0)) + Player.HALF.length()
+		reach += float(spec.get("motion", {}).get("travel", 0.0))
+		if wrapped_distance(point, spec["home"]) <= reach:
+			return true
+	return false
 
 
 func _load_hazards(specs: Array) -> void:
@@ -2696,9 +2960,48 @@ func replay_time_left() -> float:
 
 # -------------------------------------------------------------- main loop ----
 
+func _process(_delta: float) -> void:
+	Engine.time_scale = presentation_time_scale()
+
+
+## Planning, menus and the SUPER cut-in run at full speed. Only moving time
+## and a fresh kill are slowed.
+func presentation_time_scale() -> float:
+	if state == Phase.EXECUTING and not _super_pause_active():
+		if _kill_slowmo_left > 0.0:
+			return kill_playback_speed
+		if _kill_recover_left > 0.0 and kill_recover_duration > 0.0:
+			var t: float = smoothstep(0.0, 1.0, 1.0 - _kill_recover_left / kill_recover_duration)
+			return lerpf(kill_playback_speed, execution_playback_speed, t)
+		return execution_playback_speed
+	if state == Phase.GAME_OVER and _kill_slowmo_left > 0.0:
+		return kill_playback_speed
+	return 1.0
+
+
+func _begin_kill_beat(at: Vector2) -> void:
+	if kill_slowmo_duration <= 0.0:
+		return
+	_kill_slowmo_left = kill_slowmo_duration
+	_kill_recover_left = 0.0
+	if _camera != null:
+		# Hold the push-in for the slow death; it eases out as play resumes. If
+		# planning starts first, the camera snaps whole so the mouse aims true.
+		_camera.focus_kill(at, kill_zoom, kill_slowmo_duration)
+
+
 func _physics_process(delta: float) -> void:
+	# The physics step is fixed; under time_scale each one spans more real time.
+	# The kill beat is measured in real seconds.
+	var real_delta: float = delta / maxf(Engine.time_scale, 0.001)
+	if _kill_slowmo_left > 0.0:
+		_kill_slowmo_left = maxf(0.0, _kill_slowmo_left - real_delta)
+		if _kill_slowmo_left <= 0.0:
+			_kill_recover_left = kill_recover_duration
+	elif _kill_recover_left > 0.0:
+		_kill_recover_left = maxf(0.0, _kill_recover_left - real_delta)
 	if _feedback != null and _feedback.visible: return
-	# The opening wipe is presentation, not part of the player's eight seconds.
+	# The opening wipe is presentation, not part of the player's planning seconds.
 	if demo_match and state == Phase.PLANNING and _transition.visible: return
 	# Hit-stop pauses wall-clock presentation only. No deterministic tick is
 	# consumed, so offline, replay and lockstep simulation remain identical.
@@ -2714,7 +3017,7 @@ func _physics_process(delta: float) -> void:
 			return
 		Phase.MATCH_SETUP:
 			return
-		Phase.ONLINE_LOBBY:
+		Phase.ONLINE_LOBBY, Phase.ONLINE_SELECT:
 			return
 		Phase.ONLINE_WAIT:
 			if banner_time > 0.0:
@@ -2762,6 +3065,14 @@ func _physics_process(delta: float) -> void:
 			if commit_time_left <= 0.0:
 				_begin_execution()
 		Phase.EXECUTING:
+			# A kill near the end of the window holds the last frame until its
+			# slow-motion beat has played, instead of cutting straight to planning.
+			if exec_tick >= exec_ticks_total:
+				if _kill_slowmo_left <= 0.0:
+					_end_execution()
+				_preview.queue_redraw()
+				_ui.refresh()
+				return
 			# The SUPER pause is a GameManager timer on frame time. No deterministic
 			# simulation tick is consumed until it has run out (or the cut-in was
 			# explicitly cancelled).
@@ -2780,7 +3091,7 @@ func _physics_process(delta: float) -> void:
 					elif state == Phase.EXECUTING:
 						exec_tick += 1
 						# A kill on the final tick must not be undone by ending the window.
-						if exec_tick >= exec_ticks_total:
+						if exec_tick >= exec_ticks_total and _kill_slowmo_left <= 0.0:
 							_end_execution()
 		Phase.GAME_OVER:
 			_poll_game_over_pad()
@@ -3850,10 +4161,10 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 	if hit_freeze_enabled and state == Phase.EXECUTING and not _hit_pause_used_this_execution:
 		_hit_pause_left = HIT_PAUSE_DURATION
 		_hit_pause_used_this_execution = true
-	if _time_stop != null:
-		_time_stop.impact_flash(at, victim.color)
 	if _event_direction != null:
-		_event_direction.impact(at, victim.color, "SNAP")
+		_event_direction.impact(at, victim.color)
+	if state == Phase.EXECUTING:
+		_begin_kill_beat(at)
 	if state == Phase.FREEPLAY:
 		return          # the sandbox keeps no score and never ends
 	_hit_this_execution = true
@@ -3916,7 +4227,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		_finish_match_telemetry()
 		_record_ladder_result(scorer)
 		if _event_direction != null:
-			_event_direction.impact(at, victim.color, "TIME // CUT")
+			_event_direction.impact(at, victim.color)
 			_event_direction.tableau(scorer)
 	else:
 		banner_text = "%s  →  HIT  →  %s" % [player_tag(scorer), player_tag(victim_idx)]
@@ -4894,6 +5205,8 @@ func restart() -> void:
 	winner = -1
 	winning_team = -1
 	team_score = [0, 0]
+	_kill_slowmo_left = 0.0
+	_kill_recover_left = 0.0
 	for i in MAX_PLAYERS:
 		score[i] = 0
 		_last_respawn_choice[i] = -1
@@ -5302,9 +5615,9 @@ func _cycle_rematch_level(direction: int) -> void:
 	if demo_match:
 		_cycle_rematch_opponent(direction)
 		return
+	# Online arenas are voted on the selection screen that a rematch opens.
 	if state != Phase.GAME_OVER or direction == 0 or demo_match \
-			or fate_trial_mode or close_camera_mode or interception_mode \
-			or (online_mode and (online_player != 0 or _online_waiting_rematch)):
+			or fate_trial_mode or close_camera_mode or interception_mode or online_mode:
 		return
 	rematch_level_index = posmod(rematch_level_index + direction, Levels.count())
 	var selected := Levels.build(rematch_level_index)
@@ -5325,6 +5638,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				_roster.handle_joy_button(joy.device, joy.button_index)
 			else:
 				_setup.handle_joy_button(joy.device, joy.button_index)
+		return
+	if state == Phase.ONLINE_SELECT:
+		var pad := event as InputEventJoypadButton
+		if pad != null and pad.pressed:
+			if _online_setup.visible:
+				_online_setup.handle_joy_button(pad.device, pad.button_index)
+			else:
+				_online_roster.handle_joy_button(pad.device, pad.button_index)
 		return
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
@@ -5390,6 +5711,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if state == Phase.ONLINE_LOBBY:
 		_online_lobby.handle_key(k.keycode)
+		return
+	if state == Phase.ONLINE_SELECT:
+		if _online_setup.visible:
+			_online_setup.handle_key(k.keycode)
+		else:
+			_online_roster.handle_key(k.keycode)
 		return
 
 	if state == Phase.FREEPLAY and real_time_mode:
@@ -5648,14 +5975,37 @@ func _rollback(i: int) -> void:
 	var p: Player = players[i]
 	if not p.alive:
 		return
+	# A submitted online plan is already with the server. Editing the local copy
+	# would only make the screen disagree with the turn that will actually run.
+	if online_mode and i == online_player and _online_plan_sent:
+		_undo_banner(i, "PLAN ALREADY SENT · UNDO BEFORE LOCKING")
+		return
+	var had_throw: bool = p.plan.has_shot() or charging[i]
+	var was_locked: bool = p.plan.confirmed
 	p.plan.confirmed = false
 	p.plan.shot_tick = -1
 	p.plan.super_shot = false
 	p.plan.super_volley = -1
 	charging[i] = false
 	_charge_t[i] = 0.0
+	p.queue_redraw()
+	if had_throw:
+		_undo_banner(i, "THROW UNDONE")
+	elif was_locked:
+		_undo_banner(i, "PLAN UNLOCKED")
+	else:
+		_undo_banner(i, "NO THROW TO UNDO · RESET CLEARS THE ROUTE")
 	if _telemetry != null:
 		_telemetry.record("undo", turn, {"player": i + 1})
+
+
+## UNDO used to change the plan silently, which read as a dead button.
+func _undo_banner(i: int, text: String) -> void:
+	banner_text = "%s · %s" % [player_tag(i), text]
+	banner_color = PLAYER_COLORS[i].lightened(0.25)
+	banner_time = 1.1
+	if _sfx != null:
+		_sfx.play("ui_move")
 
 
 ## Throws the movement recording away and refills stamina. The shot goes with
@@ -5721,8 +6071,9 @@ func _confirm(i: int) -> void:
 	p.plan.confirmed = true
 	p.plan.lock_permille = 500 if is_ai(i) else int(round(1000.0
 		* clampf(planning_time_left / maxf(0.001, planning_window_duration), 0.0, 1.0)))
-	if _event_direction != null:
-		_event_direction.lock_in(i, p.position, p.color)
+	# Readiness is public through the READY badge and the HUD status. The
+	# DECIDED spotlight that used to fire here darkened the whole screen while
+	# the opponent was still planning, so it was cut.
 	if _telemetry != null:
 		_telemetry.record("plan_locked", turn, {
 			"player": i + 1,
@@ -6237,7 +6588,7 @@ func start_demo_duel(rung: int = -1) -> void:
 	_abandon_match("new_duel")
 	team_mode = false
 	_tuning.handle_key(KEY_BACKSPACE, false)
-	planning_duration = 8.0
+	planning_duration = 4.0
 	planning_shrink_per_round = 0.0
 	execution_duration = 0.75
 	movement_budget = 0.50

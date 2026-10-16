@@ -44,8 +44,9 @@ class_name Levels
 ## geometry in every count.
 ##
 ## Design constraints for a new level:
-##   * playable band is roughly y 262..620 on non-wrapping levels
-##   * a jump clears 211px, so a step is reachable from a surface 211px below
+##   * playable band is roughly y 120..620 on non-wrapping levels
+##   * a jump clears 211px (Pulse about 176px), so keep climbs near 140px and
+##     stack surfaces at least 140px apart so a climb does not bonk
 ##   * leave an arc that clears mid-field cover, or there is no direct shot
 
 const ARENA_W := 1280.0
@@ -272,6 +273,12 @@ static func wrap_label(lv: Dictionary) -> String:
 	return "WALLED"
 
 # ----------------------------------------------------------- the rotation --
+##
+## Spacing contract (playtest, Oct 2026): stacked surfaces sit 140px apart, so
+## a standing fighter keeps about 76px of headroom and a climb never starts
+## under the ledge it is aiming for. Each arena offers ground plus three raised
+## tiers near 480 / 340 / 200, and climbs are offset sideways so the next step
+## is beside the fighter rather than above it.
 
 ## Every surface is permanent and every important firing lane has a simple,
 ## visible answer: shoot flat through the middle, arc over the centre mast, or
@@ -282,83 +289,87 @@ static func _crosshair_court() -> Dictionary:
 		"name": "CROSSHAIR COURT",
 		"feature": "START HERE // catch a landing with a slow fan, or bank a fast throw off hard cover.",
 		"spawns": [
-			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
-			Vector2(140.0, 296.0), Vector2(1140.0, 296.0),
+			Vector2(290.0, 596.0), Vector2(990.0, 596.0),
+			Vector2(140.0, 176.0), Vector2(1140.0, 176.0),
 		],
 		"respawn_points": [
-			Vector2(120.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1160.0, 596.0),
-			{"at": Vector2(120.0, 296.0), "min_players": 3},
-			{"at": Vector2(1160.0, 296.0), "min_players": 3},
-			Vector2(180.0, 476.0), Vector2(1100.0, 476.0),
-			Vector2(360.0, 386.0), Vector2(920.0, 386.0),
-			Vector2(550.0, 226.0), Vector2(730.0, 226.0),
+			Vector2(290.0, 596.0), Vector2(400.0, 596.0), Vector2(880.0, 596.0),
+			Vector2(990.0, 596.0),
+			Vector2(150.0, 456.0), Vector2(1130.0, 456.0),
+			Vector2(560.0, 456.0), Vector2(720.0, 456.0),
+			Vector2(400.0, 316.0), Vector2(880.0, 316.0),
+			Vector2(560.0, 236.0), Vector2(720.0, 236.0),
+			Vector2(140.0, 176.0), Vector2(1140.0, 176.0),
+			{"at": Vector2(400.0, 176.0), "min_players": 3},
+			{"at": Vector2(880.0, 176.0), "min_players": 4},
 		],
-		"core_spawns": [Vector2(300.0, 460.0), Vector2(640.0, 555.0), Vector2(980.0, 460.0)],
+		"core_spawns": [Vector2(285.0, 440.0), Vector2(640.0, 560.0), Vector2(995.0, 440.0)],
 		"platforms": [
-			# Visible side architecture doubles as permanent P3/P4 spawn support.
-			# A duel cuts it: the fight stays on the two-step climbs and the mast.
-			{"rect": Rect2(0, 320, 240, 16), "hp": -1, "min_players": 3},
-			{"rect": Rect2(1040, 320, 240, 16), "hp": -1, "min_players": 3},
-			# Simple two-step climbs keep every height reachable without a mover.
-			{"rect": Rect2(70, 500, 230, 16), "hp": -1},
-			{"rect": Rect2(980, 500, 230, 16), "hp": -1},
-			{"rect": Rect2(280, 410, 190, 16), "hp": -1},
-			{"rect": Rect2(810, 410, 190, 16), "hp": -1},
-			# The mast blocks the free upper-corner volley but leaves high arcs open.
-			{"rect": Rect2(616, 250, 48, 180), "hp": -1},
-			{"rect": Rect2(500, 250, 280, 16), "hp": -1},
-			{"rect": Rect2(520, 515, 240, 16), "hp": -1},
-			# Crowd-only shelves add landing choices as the number of threats grows.
-			{"rect": Rect2(345, 550, 130, 14), "hp": -1, "min_players": 3},
-			{"rect": Rect2(805, 550, 130, 14), "hp": -1, "min_players": 4},
+			# A three-step stair on each side: low wing, inner landing, high wing.
+			{"rect": Rect2(40, 480, 220, 16), "hp": -1},
+			{"rect": Rect2(1020, 480, 220, 16), "hp": -1},
+			{"rect": Rect2(310, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(790, 340, 180, 16), "hp": -1},
+			{"rect": Rect2(40, 200, 200, 16), "hp": -1},
+			{"rect": Rect2(1040, 200, 200, 16), "hp": -1},
+			# The mast blocks the free middle volley but leaves high arcs open.
+			{"rect": Rect2(520, 480, 240, 16), "hp": -1},
+			{"rect": Rect2(616, 276, 48, 204), "hp": -1},
+			{"rect": Rect2(500, 260, 280, 16), "hp": -1},
+			# Crowd-only perches above the inner landings.
+			{"rect": Rect2(330, 200, 140, 16), "hp": -1, "min_players": 3},
+			{"rect": Rect2(810, 200, 140, 16), "hp": -1, "min_players": 4},
 		],
 		"hazards": [],
 	}
 
 ## Thesis: nothing here is safe for long. Three bridge gates and two low gates
 ## open and close on staggered clocks, so every plan has to include where the
-## floor will be when time stops again. Side rooms stay permanent.
-## Authored for four: the breakable side shelves are crowd landings; a duel
+## floor will be when time stops again. Side towers stay permanent.
+## Authored for four: the breakable top shelves are crowd landings; a duel
 ## cuts them so the gates are the only middle ground.
-## Walled on purpose: the spawns sit 320px apart across the seam, so a side
-## wrap let fighters trade flat throws through the borders and skip the gates.
+## Walled on purpose: a side wrap let fighters trade flat throws through the
+## borders and skip the gates.
 static func _clockwork_gallery() -> Dictionary:
 	return {
 		"name": "CLOCKWORK GALLERY",
 		"feature": "SHUTTERS // every gate opens on a clock. Stand on one when it does and you fall.",
 		"spawns": [
-			Vector2(160.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
+			Vector2(90.0, 596.0), Vector2(1190.0, 596.0),
+			Vector2(90.0, 316.0), Vector2(1190.0, 316.0),
 		],
 		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(120.0, 296.0), Vector2(1160.0, 296.0),
-			Vector2(160.0, 476.0), Vector2(1120.0, 476.0),
-			Vector2(640.0, 196.0),
+			Vector2(90.0, 596.0), Vector2(480.0, 596.0), Vector2(640.0, 596.0),
+			Vector2(800.0, 596.0), Vector2(1190.0, 596.0),
+			Vector2(240.0, 456.0), Vector2(1040.0, 456.0),
+			Vector2(90.0, 316.0), Vector2(1190.0, 316.0),
+			Vector2(240.0, 176.0), Vector2(1040.0, 176.0),
+			Vector2(640.0, 166.0),
 		],
-		"core_spawns": [Vector2(640.0, 380.0), Vector2(200.0, 462.0), Vector2(1080.0, 462.0)],
+		"core_spawns": [Vector2(640.0, 290.0), Vector2(200.0, 440.0), Vector2(1080.0, 440.0)],
 		"platforms": [
-			{"rect": Rect2(0, 320, 240, 16), "hp": -1},
-			{"rect": Rect2(1040, 320, 240, 16), "hp": -1},
-			{"rect": Rect2(60, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(1020, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(560, 220, 160, 16), "hp": -1},
+			# Permanent towers: low wing, outer ledge, high wing.
+			{"rect": Rect2(150, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(950, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(0, 340, 190, 16), "hp": -1},
+			{"rect": Rect2(1090, 340, 190, 16), "hp": -1},
+			{"rect": Rect2(150, 200, 180, 16), "hp": -1},
+			{"rect": Rect2(950, 200, 180, 16), "hp": -1},
+			{"rect": Rect2(560, 190, 160, 16), "hp": -1},
 			# The bridge: three gates on one clock, a third of a period apart.
-			{"rect": Rect2(300, 420, 180, 16), "hp": -1,
+			{"rect": Rect2(400, 330, 150, 16), "hp": -1,
 				"cycle": {"period": 210, "solid": 105, "phase": 0}},
-			{"rect": Rect2(550, 420, 180, 16), "hp": -1,
+			{"rect": Rect2(565, 330, 150, 16), "hp": -1,
 				"cycle": {"period": 210, "solid": 105, "phase": 70}},
-			{"rect": Rect2(800, 420, 180, 16), "hp": -1,
+			{"rect": Rect2(730, 330, 150, 16), "hp": -1,
 				"cycle": {"period": 210, "solid": 105, "phase": 140}},
-			# Low gates under the bridge ends: a landing that will not keep you.
-			{"rect": Rect2(380, 540, 140, 16), "hp": -1,
+			# Low gates beside the towers: a landing that will not keep you.
+			{"rect": Rect2(370, 470, 110, 16), "hp": -1,
 				"cycle": {"period": 210, "solid": 105, "phase": 105}},
-			{"rect": Rect2(760, 540, 140, 16), "hp": -1,
+			{"rect": Rect2(800, 470, 110, 16), "hp": -1,
 				"cycle": {"period": 210, "solid": 105, "phase": 35}},
-			{"rect": Rect2(120, 410, 120, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(1040, 410, 120, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(370, 200, 120, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(790, 200, 120, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [],
 	}
@@ -366,37 +377,39 @@ static func _clockwork_gallery() -> Dictionary:
 ## Thesis: a knife is a trap if it takes long enough to arrive. Two stasis
 ## columns flank the centre pillar; every arc across the hall passes through
 ## one, and anything thrown into a field lingers there for several turns.
-## Authored for four: the low outer shelves seat the crowd; a duel cuts them.
+## Authored for four: small high shelves seat the crowd; a duel cuts them.
 static func _stilled_hall() -> Dictionary:
 	return {
 		"name": "STILLED HALL",
 		"feature": "STASIS // time crawls inside the fields. A knife thrown in stays a threat for turns.",
 		"spawns": [
-			Vector2(180.0, 596.0), Vector2(1100.0, 596.0),
-			Vector2(110.0, 306.0), Vector2(1170.0, 306.0),
+			Vector2(60.0, 596.0), Vector2(1220.0, 596.0),
+			Vector2(250.0, 176.0), Vector2(1030.0, 176.0),
 		],
 		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(480.0, 596.0), Vector2(800.0, 596.0),
-			Vector2(1180.0, 596.0),
-			{"at": Vector2(110.0, 306.0), "min_players": 3},
-			{"at": Vector2(1170.0, 306.0), "min_players": 3},
-			Vector2(220.0, 476.0), Vector2(1060.0, 476.0),
-			Vector2(640.0, 216.0),
+			Vector2(60.0, 596.0), Vector2(400.0, 596.0), Vector2(880.0, 596.0),
+			Vector2(1220.0, 596.0),
+			Vector2(200.0, 456.0), Vector2(1080.0, 456.0),
+			Vector2(75.0, 316.0), Vector2(1205.0, 316.0),
+			Vector2(580.0, 226.0), Vector2(700.0, 226.0),
+			Vector2(250.0, 176.0), Vector2(1030.0, 176.0),
 		],
 		"core_spawns": [Vector2(640.0, 330.0), Vector2(250.0, 440.0), Vector2(1030.0, 440.0)],
 		"platforms": [
-			# High side ledges seat P3/P4; a duel cuts them and fights lower.
-			{"rect": Rect2(0, 330, 220, 16), "hp": -1, "min_players": 3},
-			{"rect": Rect2(1060, 330, 220, 16), "hp": -1, "min_players": 3},
-			{"rect": Rect2(120, 500, 200, 16), "hp": -1},
-			{"rect": Rect2(960, 500, 200, 16), "hp": -1},
+			# Side towers: low wing, outer ledge, high wing.
+			{"rect": Rect2(100, 480, 200, 16), "hp": -1},
+			{"rect": Rect2(980, 480, 200, 16), "hp": -1},
+			{"rect": Rect2(0, 340, 150, 16), "hp": -1},
+			{"rect": Rect2(1130, 340, 150, 16), "hp": -1},
+			{"rect": Rect2(180, 200, 150, 16), "hp": -1},
+			{"rect": Rect2(950, 200, 150, 16), "hp": -1},
 			# The pillar closes the flat lane, so throws arc through the fields.
 			{"rect": Rect2(624, 380, 32, 240), "hp": -1},
-			{"rect": Rect2(520, 240, 240, 16), "hp": -1},
-			{"rect": Rect2(330, 420, 150, 16), "hp": 2},
-			{"rect": Rect2(800, 420, 150, 16), "hp": 2},
-			{"rect": Rect2(300, 560, 120, 14), "hp": -1, "min_players": 3},
-			{"rect": Rect2(860, 560, 120, 14), "hp": -1, "min_players": 4},
+			{"rect": Rect2(530, 250, 220, 16), "hp": -1},
+			{"rect": Rect2(340, 340, 150, 16), "hp": 2},
+			{"rect": Rect2(790, 340, 150, 16), "hp": 2},
+			{"rect": Rect2(380, 200, 100, 14), "hp": -1, "min_players": 3},
+			{"rect": Rect2(800, 200, 100, 14), "hp": -1, "min_players": 4},
 		],
 		"zones": [
 			{"rect": Rect2(440, 250, 170, 330), "time_scale": 0.35},
@@ -406,7 +419,7 @@ static func _stilled_hall() -> Dictionary:
 	}
 
 ## A fair opening with two contested pulse orbs. Both fighters have permanent
-## stairs, an exposed inner perch and fragile cover below the blast footprint.
+## stairs, an exposed inner perch and fragile cover in the middle column.
 ## The ground lane offers a quiet approach; taking height brings the orbs into play.
 ## Lower bulkheads close the ground seam: a spawn-level throw or an orb push no
 ## longer leaves the stage at once. The wrap is open from the side ledges up.
@@ -416,36 +429,34 @@ static func _pulse_chamber() -> Dictionary:
 		"feature": "1v1 HAZARDS // hit an orb with a knife to push fighters and redirect knives. Dark = recharging.",
 		"wrap_x": true,
 		"spawns": [
-			Vector2(220.0, 596.0), Vector2(1060.0, 596.0),
-			Vector2(120.0, 266.0), Vector2(1160.0, 266.0),
+			Vector2(150.0, 456.0), Vector2(1130.0, 456.0),
+			Vector2(100.0, 176.0), Vector2(1180.0, 176.0),
 		],
 		"respawn_points": [
-			Vector2(100.0, 596.0), Vector2(500.0, 596.0),
-			Vector2(760.0, 596.0), Vector2(1180.0, 596.0),
-			Vector2(190.0, 476.0), Vector2(1090.0, 476.0), Vector2(640.0, 446.0),
+			Vector2(330.0, 596.0), Vector2(520.0, 596.0),
+			Vector2(760.0, 596.0), Vector2(950.0, 596.0),
+			Vector2(150.0, 456.0), Vector2(1130.0, 456.0), Vector2(640.0, 446.0),
 			Vector2(420.0, 316.0), Vector2(860.0, 316.0),
-			{"at": Vector2(120.0, 266.0), "min_players": 3},
-			{"at": Vector2(1160.0, 266.0), "min_players": 3},
+			Vector2(100.0, 176.0), Vector2(1180.0, 176.0),
 		],
 		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
 		"platforms": [
 			# Lower bulkheads, flush with the side ledges: the ground lane is
 			# walled while the seam stays open at ledge height and above.
-			{"rect": Rect2(0, 500, 80, 220), "hp": -1},
-			{"rect": Rect2(1200, 500, 80, 220), "hp": -1},
-			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
-			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
-			{"rect": Rect2(330, 340, 180, 16), "hp": -1},
-			{"rect": Rect2(770, 340, 180, 16), "hp": -1},
-			# High side perches seat P3/P4 above the orbs; a duel cuts them.
-			{"rect": Rect2(0, 290, 240, 16), "hp": -1, "min_players": 3},
-			{"rect": Rect2(1040, 290, 240, 16), "hp": -1, "min_players": 3},
+			{"rect": Rect2(0, 480, 80, 240), "hp": -1},
+			{"rect": Rect2(1200, 480, 80, 240), "hp": -1},
+			{"rect": Rect2(80, 480, 220, 16), "hp": -1},
+			{"rect": Rect2(980, 480, 220, 16), "hp": -1},
+			{"rect": Rect2(340, 340, 160, 16), "hp": -1},
+			{"rect": Rect2(780, 340, 160, 16), "hp": -1},
+			# High side perches straddle the seam above the orbs.
+			{"rect": Rect2(0, 200, 250, 16), "hp": -1},
+			{"rect": Rect2(1030, 200, 250, 16), "hp": -1},
 			# Central high ground is exposed to either player's loaded orb.
 			{"rect": Rect2(550, 470, 180, 16), "hp": -1},
-			{"rect": Rect2(440, 555, 120, 16), "hp": 2},
-			{"rect": Rect2(720, 555, 120, 16), "hp": 2},
-			{"rect": Rect2(250, 415, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(920, 415, 110, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(580, 330, 120, 16), "hp": 2},
+			{"rect": Rect2(300, 200, 100, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(880, 200, 100, 14), "hp": 2, "min_players": 4},
 		],
 		"hazards": [
 			{
@@ -459,7 +470,7 @@ static func _pulse_chamber() -> Dictionary:
 				"recharge_windows": 2,
 			},
 			{
-				"home": Vector2(640.0, 255.0),
+				"home": Vector2(640.0, 150.0),
 				"motion": {"axis": Vector2.DOWN, "travel": 90.0, "period": 300, "phase": 0.0},
 				"blast_radius": 140.0,
 				"min_players": 4,
@@ -468,8 +479,8 @@ static func _pulse_chamber() -> Dictionary:
 	}
 
 ## A four-corner vertical loop over a hole in the world. P1/P2 start on the
-## split floor and P3/P4 on high permanent perches.
-## Offset side islands make the full climb indestructible; inner breakable steps
+## split floor and P3/P4 on the upper side walkways.
+## Offset side stairs make the full climb indestructible; inner breakable steps
 ## offer faster diagonals. Duels leave the upper firing lane open; a hanging
 ## centre pillar separates the extra high spawns in three/four-player matches.
 static func _endless_descent() -> Dictionary:
@@ -482,45 +493,46 @@ static func _endless_descent() -> Dictionary:
 		"skip_ground": true,
 		# On the solid parts of the floor, either side of the hole.
 		"spawns": [
-			Vector2(350.0, 596.0), Vector2(930.0, 596.0),
-			Vector2(160.0, 276.0), Vector2(1120.0, 276.0),
+			Vector2(340.0, 596.0), Vector2(940.0, 596.0),
+			Vector2(150.0, 316.0), Vector2(1130.0, 316.0),
 		],
 		"respawn_points": [
-			Vector2(120.0, 596.0), Vector2(340.0, 596.0),
-			Vector2(940.0, 596.0), Vector2(1160.0, 596.0),
-			Vector2(130.0, 276.0), Vector2(1150.0, 276.0),
-			Vector2(160.0, 446.0), Vector2(250.0, 446.0),
-			Vector2(1030.0, 446.0), Vector2(1120.0, 446.0),
+			Vector2(100.0, 596.0), Vector2(340.0, 596.0),
+			Vector2(940.0, 596.0), Vector2(1180.0, 596.0),
+			Vector2(150.0, 316.0), Vector2(1130.0, 316.0),
+			Vector2(210.0, 456.0), Vector2(1070.0, 456.0),
+			Vector2(330.0, 176.0), Vector2(950.0, 176.0),
 		],
-		"core_spawns": [Vector2(490.0, 440.0), Vector2(640.0, 510.0), Vector2(790.0, 440.0)],
+		"core_spawns": [Vector2(470.0, 440.0), Vector2(640.0, 560.0), Vector2(810.0, 440.0)],
 		"platforms": [
 			# The gate sits directly below the HUD, but its opening continues to the
 			# real top edge. Bodies and knives wrap only once they leave the screen.
 			{"rect": Rect2(0, STAGE_TOP, 360, 16), "hp": -1}, # top gate, gap 360..920
 			{"rect": Rect2(920, STAGE_TOP, 360, 16), "hp": -1},
-			# Safe high-corner spawn perches, with enough headroom below the ceiling.
-			{"rect": Rect2(70, 300, 160, 16), "hp": -1},
-			{"rect": Rect2(1050, 300, 160, 16), "hp": -1},
 			{"rect": Rect2(0, 620, 430, 70), "hp": -1},      # floor, gap 430..850
 			{"rect": Rect2(850, 620, 430, 70), "hp": -1},
 			# Lower bulkheads close the ground shortcut. The only side passages
-			# are above these walls, reached by the permanent two-step climb.
-			{"rect": Rect2(0, 330, 70, 390), "hp": -1},
-			{"rect": Rect2(1210, 330, 70, 390), "hp": -1},
-			# Offset from the starting bodies: a held outward jump can clear the
-			# edge instead of hitting a ceiling directly above the spawn.
-			{"rect": Rect2(120, 470, 170, 16), "hp": -1},
-			{"rect": Rect2(990, 470, 170, 16), "hp": -1},
+			# are above these walls, along the walkways flush with their tops.
+			{"rect": Rect2(0, 340, 70, 380), "hp": -1},
+			{"rect": Rect2(1210, 340, 70, 380), "hp": -1},
+			{"rect": Rect2(70, 340, 160, 16), "hp": -1},
+			{"rect": Rect2(1050, 340, 160, 16), "hp": -1},
+			# Offset from the starting bodies: a held outward jump lands here
+			# instead of hitting a ceiling directly above the spawn.
+			{"rect": Rect2(120, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(980, 480, 180, 16), "hp": -1},
+			{"rect": Rect2(260, 200, 140, 16), "hp": -1},
+			{"rect": Rect2(880, 200, 140, 16), "hp": -1},
 			# Faster inner stairs can be destroyed to reopen diagonal knife lanes.
-			{"rect": Rect2(330, 385, 140, 16), "hp": 2},
-			{"rect": Rect2(810, 385, 140, 16), "hp": 2},
+			{"rect": Rect2(380, 340, 120, 16), "hp": 2},
+			{"rect": Rect2(780, 340, 120, 16), "hp": 2},
 			# Anchored to the top gate and touching the centre beam: it blocks the
 			# P3/P4 opening line but leaves a vertical portal on either side.
-			{"rect": Rect2(620, STAGE_TOP, 40, 277), "hp": -1, "min_players": 3},
-			{"rect": Rect2(540, 335, 200, 16), "hp": 3},
-			{"rect": Rect2(575, 545, 130, 14), "hp": 2},     # the tempting perch
-			{"rect": Rect2(445, 485, 110, 14), "hp": 2, "min_players": 3},
-			{"rect": Rect2(725, 485, 110, 14), "hp": 2, "min_players": 4},
+			{"rect": Rect2(620, STAGE_TOP, 40, 212), "hp": -1, "min_players": 3},
+			{"rect": Rect2(540, 270, 200, 16), "hp": 3},
+			{"rect": Rect2(575, 480, 130, 14), "hp": 2},     # the tempting perch
+			{"rect": Rect2(440, 480, 90, 14), "hp": 2, "min_players": 3},
+			{"rect": Rect2(750, 480, 90, 14), "hp": 2, "min_players": 4},
 		],
 	}
 

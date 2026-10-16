@@ -7,9 +7,15 @@ class_name OnlineClient
 signal room_ready(code: String, player: int)
 signal message_received(message: Dictionary)
 signal status_changed(text: String, is_error: bool)
+## The seat or the whole room is gone for good; reconnecting cannot bring it back.
+signal room_lost(reason: String)
 
 const API_URL := "https://zawarudo-rooms.patochaos.workers.dev"
-const PROTOCOL_VERSION := 3
+const PROTOCOL_VERSION := 4
+## Close codes the room uses for a seat it released and a room the host closed.
+## MUST match CLOSE_SEAT_LOST / CLOSE_ROOM_CLOSED in backend/src/room.ts.
+const CLOSE_SEAT_LOST := 4003
+const CLOSE_ROOM_CLOSED := 4004
 const HEARTBEAT_SECONDS := 20.0
 const RECONNECT_SECONDS := 1.5
 
@@ -67,11 +73,14 @@ func join_room(code: String, weapon: int = 0, nickname: String = "") -> void:
 		status_changed.emit("COULD NOT START JOIN REQUEST", true)
 
 
+## Leaving says so first: before a match the room frees the seat for someone else,
+## and a host leaving closes the room instead of stranding the guests in it.
 func disconnect_from_room() -> void:
 	_manual_close = true
 	if _request_kind != RequestKind.NONE:
 		_http.cancel_request()
 	if _peer != null and _peer.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		_peer.send_text(JSON.stringify({"type": "leave"}))
 		_peer.close(1000, "Leaving room")
 	_peer = null
 	room_code = ""
@@ -92,6 +101,11 @@ func send_turn_complete(turn: int, digest: String) -> bool:
 
 func send_match_over(turn: int, winner: int, digest: String) -> bool:
 	return _send({"type": "match_over", "turn": turn, "winner": winner, "digest": digest})
+
+
+## One message carries the whole pick, so the room never sees half of a change.
+func send_select(weapon: int, level: int, lives: int, ready: bool) -> bool:
+	return _send({"type": "select", "weapon": weapon, "level": level, "lives": lives, "ready": ready})
 
 
 func send_rematch(level: int) -> bool:
@@ -135,7 +149,17 @@ func _process(delta: float) -> void:
 			_heartbeat_left = HEARTBEAT_SECONDS
 	elif ready == WebSocketPeer.STATE_CLOSED:
 		var was_open := _socket_was_open
+		var close_code := _peer.get_close_code()
 		_peer = null
+		if close_code in [CLOSE_SEAT_LOST, CLOSE_ROOM_CLOSED]:
+			_manual_close = true
+			room_code = ""
+			_token = ""
+			player_slot = -1
+			_socket_was_open = false
+			_pending_messages.clear()
+			room_lost.emit("THE HOST CLOSED THE ROOM" if close_code == CLOSE_ROOM_CLOSED 				else "YOUR SEAT WAS GIVEN TO ANOTHER PLAYER")
+			return
 		_socket_was_open = false
 		if not _manual_close:
 			_reconnect_at = Time.get_ticks_msec() * 0.001 + RECONNECT_SECONDS

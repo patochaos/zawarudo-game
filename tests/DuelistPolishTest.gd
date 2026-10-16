@@ -16,7 +16,7 @@ func _run() -> void:
 	await process_frame
 	game._sfx.muted = true
 	game.start_quick_match(false, 0, 2)
-	_check(game._planning_duration_for_turn(1) == 8.0 and game._planning_duration_for_turn(30) == 8.0, "Planning remains eight seconds")
+	_check(game._planning_duration_for_turn(1) == 4.0 and game._planning_duration_for_turn(30) == 4.0, "Planning remains four seconds")
 	var plan: PlayerPlan = game.players[0].plan
 	for tick in 18:
 		game._pilot_step(0, 1, tick == 0, tick < 9)

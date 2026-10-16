@@ -10,11 +10,37 @@ class_name Arena
 ## pointing along its rail. That three-way colour split is the only thing a player
 ## has to learn to read the arena, and the moving read has to survive execution,
 ## when every planning overlay is stripped away.
+##
+## Wrap openings wear a rendered portal frame along exactly the span the
+## geometry leaves open, and a mover rides a rendered rail with a stop past each
+## end of its sweep. Both are decoration beside collision: the rects decide.
 
 const INDESTRUCTIBLE := -1
 const STAGE_TOP := Levels.STAGE_TOP
 const OBSERVATORY_MOVING := preload("res://assets/art/arenas/pendulum/moving.png")
 const OBSERVATORY_BREAKABLE := preload("res://assets/art/arenas/pendulum/breakable.png")
+## Portal frames, their looping interior and the mover rails, rendered by
+## tools/blender/build_portal_rail_kit.py; the sheet layouts are documented there.
+const PORTAL_FRAME_V := preload("res://assets/art/arenas/pendulum/portal-frame-v.png")
+const PORTAL_FRAME_H := preload("res://assets/art/arenas/pendulum/portal-frame-h.png")
+const PORTAL_LOOP_V := preload("res://assets/art/arenas/pendulum/portal-loop-v.png")
+const PORTAL_LOOP_H := preload("res://assets/art/arenas/pendulum/portal-loop-h.png")
+const RAIL_V := preload("res://assets/art/arenas/pendulum/rail-v.png")
+const RAIL_H := preload("res://assets/art/arenas/pendulum/rail-h.png")
+const PORTAL_WIDTH := 12.0
+const PORTAL_CAP := 12.0
+const PORTAL_SEGMENT := 72.0
+const PORTAL_CHANNEL := 8.0
+const PORTAL_LOOP_FRAMES := 6
+const PORTAL_LOOP_FPS := 10.0
+const RAIL_STOP := 16.0
+const RAIL_SEGMENT := 64.0
+## Rendered damage states replace drawn crack lines: intact, first hit, last hit.
+const BREAKABLE_FACES := [
+	OBSERVATORY_BREAKABLE,
+	preload("res://assets/art/arenas/pendulum/breakable-cracked.png"),
+	preload("res://assets/art/arenas/pendulum/breakable-broken.png"),
+]
 ## Indexed by arena: Crosshair Court, Clockwork Gallery (foundry iron), Stilled
 ## Hall (sanctum limestone), Pulse Chamber, Endless Descent.
 const SOLID_TEXTURES := [
@@ -50,13 +76,33 @@ var zones: Array = []
 var level_theme: int = 0
 var wrap_x: bool = false
 var wrap_y: bool = false
+## Cosmetic clock for the portal interior. Like the backdrop's air it advances
+## only while time runs and resets with the arena; it never reaches the simulation.
+var portal_time: float = 0.0
+var _portal_frame: int = 0
 
 
 func configure_level(index: int, horizontal_wrap: bool, vertical_wrap: bool) -> void:
 	level_theme = posmod(index, HARD_ACCENTS.size())
 	wrap_x = horizontal_wrap
 	wrap_y = vertical_wrap
+	portal_time = 0.0
+	_portal_frame = 0
 	queue_redraw()
+
+
+func _process(delta: float) -> void:
+	if not (wrap_x or wrap_y):
+		return
+	# The match owner is the parent; the loop only runs while its time runs.
+	var gm: Node = get_parent()
+	if gm == null or not ("state" in gm) or not (gm.state in [Phase.EXECUTING, Phase.FREEPLAY]):
+		return
+	portal_time += delta
+	var frame: int = int(portal_time * PORTAL_LOOP_FPS) % PORTAL_LOOP_FRAMES
+	if frame != _portal_frame:
+		_portal_frame = frame
+		queue_redraw()
 
 
 func setup(p: Array) -> void:
@@ -72,6 +118,9 @@ func setup_fields(z: Array) -> void:
 func _draw() -> void:
 	for zone in zones:
 		_draw_stasis(zone["rect"], float(zone["time_scale"]))
+	for pf in platforms:
+		if pf.has("motion"):
+			_draw_mover_rail(pf)
 	for pf in platforms:
 		var r: Rect2 = pf["rect"]
 		if r.position.x < -1.0 or r.position.x >= 1280.0:
@@ -164,21 +213,57 @@ func _draw_travel_marks(r: Rect2, motion: Dictionary) -> void:
 		draw_line(at + wing - d * 4.0, at + d * 4.0, MOVER_MARK, 1.6, true)
 
 
+## The rail a lift or sideways platform rides: the segment tiled along the
+## whole sweep, from the piece's authored home to the far end of its travel,
+## with a stop just past each end. It is drawn behind the platform, so the
+## chevrons and the violet lip on the face keep the moving read.
+func _draw_mover_rail(pf: Dictionary) -> void:
+	var r: Rect2 = pf["rect"]
+	var motion: Dictionary = pf["motion"]
+	var axis: Vector2 = motion.get("axis", Vector2.DOWN)
+	if axis.is_zero_approx():
+		return
+	var home: Vector2 = pf.get("home", r.position)
+	var ends: Array = Mover.travel_ends(motion)
+	var lo: Vector2 = home + Vector2(minf(ends[0].x, ends[1].x), minf(ends[0].y, ends[1].y))
+	var hi: Vector2 = home + Vector2(maxf(ends[0].x, ends[1].x), maxf(ends[0].y, ends[1].y)) + r.size
+	if absf(axis.y) >= absf(axis.x):
+		_draw_rail(true, Vector2((lo.x + hi.x) * 0.5 - RAIL_STOP * 0.5, lo.y), hi.y - lo.y)
+	else:
+		_draw_rail(false, Vector2(lo.x, (lo.y + hi.y) * 0.5 - RAIL_STOP * 0.5), hi.x - lo.x)
+
+
+func _draw_rail(vertical: bool, origin: Vector2, length: float) -> void:
+	var sheet: Texture2D = RAIL_V if vertical else RAIL_H
+	var along: Vector2 = Vector2.DOWN if vertical else Vector2.RIGHT
+	var stop := Vector2(RAIL_STOP, RAIL_STOP)
+	draw_texture_rect_region(sheet, Rect2(origin - along * RAIL_STOP, stop),
+		Rect2(Vector2.ZERO, stop))
+	draw_texture_rect_region(sheet, Rect2(origin + along * length, stop),
+		Rect2(along * (RAIL_STOP + RAIL_SEGMENT), stop))
+	var offset := 0.0
+	while offset < length:
+		var piece: float = minf(RAIL_SEGMENT, length - offset)
+		draw_texture_rect_region(sheet, _strip_rect(vertical, origin, offset, piece, RAIL_STOP),
+			_strip_rect(vertical, Vector2.ZERO, RAIL_STOP, piece, RAIL_STOP))
+		offset += piece
+
+
+## Intact cover shows the authored face; the first hit swaps in the cracked
+## render and the last remaining hit the broken one, so damage reads from the
+## silhouette as well as from the pips and the reddening tint.
+static func breakable_face(hp: int, max_hp: int) -> Texture2D:
+	if hp >= max_hp:
+		return BREAKABLE_FACES[0]
+	if hp <= 1:
+		return BREAKABLE_FACES[2]
+	return BREAKABLE_FACES[1]
+
+
 func _draw_breakable(r: Rect2, hp: int, max_hp: int) -> void:
 	var wear: float = 1.0 - float(hp) / float(maxi(max_hp, 1))
-	_draw_material_platform(r, OBSERVATORY_BREAKABLE,
+	_draw_material_platform(r, breakable_face(hp, max_hp),
 		BREAK_TOP.lerp(BREAK_TOP_BROKEN, wear), Color.WHITE.lerp(Color(1.0, 0.40, 0.30), wear))
-
-	# cracks deepen with damage
-	if wear > 0.01:
-		var n := int(round(wear * 3.0)) + 1
-		for i in n:
-			var t: float = (float(i) + 0.5) / float(n)
-			var cx: float = r.position.x + r.size.x * t
-			draw_line(Vector2(cx - 4.0, r.position.y + 2.0), Vector2(cx + 3.0, r.end.y - 1.0),
-				Color(0.04, 0.03, 0.04, 0.8), 1.5)
-			draw_line(Vector2(cx + 3.0, r.position.y + r.size.y * 0.5),
-				Vector2(cx + 9.0, r.end.y - 1.0), Color(0.04, 0.03, 0.04, 0.5), 1.0)
 
 	# remaining hits, as pips above the piece
 	var pip := 5.0
@@ -197,7 +282,7 @@ func _draw_material_platform(r: Rect2, texture: Texture2D, lip: Color,
 	# Art stays inside collision. Deep bases get quiet masonry below one ledge;
 	# end caps retain their physical width on every authored platform length.
 	var moving: bool = texture == OBSERVATORY_MOVING
-	var base := Color("302217") if texture == OBSERVATORY_BREAKABLE else Color("141b29")
+	var base := Color("302217") if texture in BREAKABLE_FACES else Color("141b29")
 	draw_rect(r, base * tint)
 	if moving and r.size.y > 32.0:
 		# Tall shutters need a mechanical face and full-height motion identity.
@@ -256,37 +341,86 @@ func _draw_hard_side_boundaries() -> void:
 				HARD_INK, 2.0)
 
 
-## Cyan dashed seams appear only where both horizontal edges are actually open.
-## Solid side architecture interrupts the seam, so the cue never promises a
-## portal through a wall that collision will reject.
+## Portal frames appear only along the spans where both horizontal edges are
+## actually open. Solid side architecture ends the frame, so the cue never
+## promises a portal through a wall that collision will reject.
 func _draw_horizontal_portals() -> void:
-	for y in range(int(STAGE_TOP), 621, 12):
-		if _point_blocked(Vector2(1.0, float(y))) \
-				or _point_blocked(Vector2(1279.0, float(y))):
-			continue
-		var glow := Color(0.28, 0.95, 1.0, 0.78)
-		draw_line(Vector2(1.0, float(y)), Vector2(8.0, float(y)), glow, 3.0)
-		draw_line(Vector2(1272.0, float(y)), Vector2(1279.0, float(y)), glow, 3.0)
-		if y % 24 == 0:
-			draw_line(Vector2(4.0, float(y) - 4.0), Vector2(9.0, float(y)), glow, 1.5)
-			draw_line(Vector2(1276.0, float(y) - 4.0), Vector2(1271.0, float(y)), glow, 1.5)
+	for span: Vector2 in _open_spans(1.0, 1279.0, true, STAGE_TOP, 620.0):
+		_draw_portal_frame(true, Vector2(0.0, span.x), span.y - span.x, 0)
+		_draw_portal_frame(true, Vector2(1280.0 - PORTAL_WIDTH, span.x), span.y - span.x, 1)
 
 
-## Vertical wrap is marked as one paired aperture: only x positions open at the
-## authored ceiling AND floor receive the matching top/bottom portal rail.
+## Vertical wrap is marked as one paired aperture: only x spans open at the
+## authored ceiling AND floor receive the matching top/bottom portal frame.
 func _draw_vertical_portal() -> void:
-	for x in range(16, 1265, 12):
-		if _point_blocked(Vector2(float(x), STAGE_TOP + 1.0)) \
-				or _point_blocked(Vector2(float(x), 621.0)):
+	for span: Vector2 in _open_spans(STAGE_TOP + 1.0, 621.0, false, 0.0, 1280.0):
+		_draw_portal_frame(false, Vector2(span.x, STAGE_TOP), span.y - span.x, 0)
+		_draw_portal_frame(false, Vector2(span.x, 720.0 - PORTAL_WIDTH), span.y - span.x, 1)
+
+
+## One rendered frame along an open span: a cap at each end, the segment tiled
+## between them and the interior loop inside the channel. `variant` picks the
+## left/top sheet (0) or the right/bottom sheet (1), each lit from the stage.
+func _draw_portal_frame(vertical: bool, origin: Vector2, length: float, variant: int) -> void:
+	if length <= 0.0:
+		return
+	var frame: Texture2D = PORTAL_FRAME_V if vertical else PORTAL_FRAME_H
+	var loop: Texture2D = PORTAL_LOOP_V if vertical else PORTAL_LOOP_H
+	var across: Vector2 = Vector2.RIGHT if vertical else Vector2.DOWN
+	var sheet: Vector2 = across * PORTAL_WIDTH * float(variant)
+	var cap: float = minf(PORTAL_CAP, length * 0.5)
+	draw_texture_rect_region(frame, _strip_rect(vertical, origin, 0.0, cap, PORTAL_WIDTH),
+		_strip_rect(vertical, sheet, 0.0, cap, PORTAL_WIDTH))
+	draw_texture_rect_region(frame, _strip_rect(vertical, origin, length - cap, cap, PORTAL_WIDTH),
+		_strip_rect(vertical, sheet, PORTAL_CAP * 2.0 + PORTAL_SEGMENT - cap, cap, PORTAL_WIDTH))
+	var loop_cell: Vector2 = across * PORTAL_CHANNEL * float(_portal_frame)
+	var offset: float = cap
+	while offset < length - cap:
+		var piece: float = minf(PORTAL_SEGMENT, length - cap - offset)
+		draw_texture_rect_region(frame, _strip_rect(vertical, origin, offset, piece, PORTAL_WIDTH),
+			_strip_rect(vertical, sheet, PORTAL_CAP, piece, PORTAL_WIDTH))
+		draw_texture_rect_region(loop,
+			_strip_rect(vertical, origin + across * 2.0, offset, piece, PORTAL_CHANNEL),
+			_strip_rect(vertical, loop_cell, 0.0, piece, PORTAL_CHANNEL), Color(1.0, 1.0, 1.0, 0.9))
+		offset += piece
+
+
+## A rect `length` long starting `offset` into a strip that runs down (vertical)
+## or right from `origin`, `width` across.
+static func _strip_rect(vertical: bool, origin: Vector2, offset: float, length: float,
+		width: float) -> Rect2:
+	if vertical:
+		return Rect2(origin + Vector2(0.0, offset), Vector2(width, length))
+	return Rect2(origin + Vector2(offset, 0.0), Vector2(length, width))
+
+
+## The spans of `from`..`to` left open along two probe lines at once, by the
+## rule `_point_blocked` applies to a single point: a probe at `line_a` (and
+## again at `line_b`) crosses the visible rects, and a coordinate counts as
+## open only when neither probe lands inside one. `vertical` probes run down a
+## fixed x and return y spans; otherwise they run along a fixed y and return x.
+func _open_spans(line_a: float, line_b: float, vertical: bool, from: float, to: float) -> Array:
+	var blocked: Array = []
+	for pf: Dictionary in platforms:
+		var r: Rect2 = pf["rect"]
+		if r.position.x < 0.0 or r.position.x >= 1280.0:
 			continue
-		var glow := Color(0.30, 0.96, 1.0, 0.82)
-		draw_line(Vector2(float(x), STAGE_TOP),
-			Vector2(float(x) + 8.0, STAGE_TOP), glow, 3.0)
-		draw_line(Vector2(float(x), 716.0), Vector2(float(x) + 8.0, 716.0), glow, 3.0)
-		if x % 24 == 16:
-			draw_line(Vector2(float(x) + 2.0, STAGE_TOP + 5.0),
-				Vector2(float(x) + 6.0, STAGE_TOP), glow, 1.5)
-			draw_line(Vector2(float(x) + 2.0, 721.0), Vector2(float(x) + 6.0, 716.0), glow, 1.5)
+		for line in [line_a, line_b]:
+			if vertical and line >= r.position.x and line < r.end.x:
+				blocked.append(Vector2(r.position.y, r.end.y))
+			elif not vertical and line >= r.position.y and line < r.end.y:
+				blocked.append(Vector2(r.position.x, r.end.x))
+	blocked.sort()
+	var spans: Array = []
+	var cursor: float = from
+	for b: Vector2 in blocked:
+		if b.x > cursor:
+			spans.append(Vector2(cursor, minf(b.x, to)))
+		cursor = maxf(cursor, b.y)
+		if cursor >= to:
+			return spans
+	spans.append(Vector2(cursor, to))
+	return spans
 
 
 func _point_blocked(point: Vector2) -> bool:

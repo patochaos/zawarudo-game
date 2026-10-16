@@ -25,7 +25,7 @@ func _run() -> void:
 	_check(lobby.capacity == 4 and lobby.level == 1,
 		"joining must use the server capacity and arena, not the local host selections")
 	_check("3/4 CONNECTED" in lobby._occupancy.text and "P3 WAITING" in lobby._occupancy.text \
-		and "P4 READY" in lobby._occupancy.text, "all four lobby slots must be represented accurately")
+		and "P4 JOINED" in lobby._occupancy.text, "all four lobby slots must be represented accurately")
 	_check(not lobby._capacity_button.visible and not lobby._create.visible,
 		"room settings must be fixed after joining")
 	lobby.update_room([true, true, true, true], 4, 1)

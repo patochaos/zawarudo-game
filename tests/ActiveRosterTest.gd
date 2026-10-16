@@ -19,9 +19,11 @@ func _run() -> void:
 		game._roster._normalize()
 		_check(game._roster.weapons == [0, 0, 0, 0], "Stale local picks become Duelist")
 		game._online_lobby.open(0, weapon)
-		game._online_lobby._cycle_fighter(1)
-		game._online_lobby._cycle_fighter(-1)
-		_check(game._online_lobby.weapon == Roster.DUELIST, "Online selection excludes benched kits")
+		_check(game._online_lobby.weapon == Roster.DUELIST, "Online lobby excludes benched kits")
+		game._online_roster.configure_room(0, 2, [], [true, true], [weapon, weapon], [], true)
+		game._online_roster._cycle_fighter(0, 1)
+		_check(game._online_roster.local_weapon() == Roster.DUELIST,
+			"Online selection excludes benched kits")
 		game._start_local_match(0, 2, [weapon, weapon], {})
 		_check(game.player_weapons == [0, 0, 0, 0], "Local entry rejects benched kits")
 		game._start_freeplay(0, [weapon, weapon])
@@ -33,7 +35,6 @@ func _run() -> void:
 		game._start_online_match(0, 42, 1, [0, weapon])
 		_check(not game.online_mode and game._online_lobby.visible,
 			"An older online lineup must not begin a mismatched simulation")
-	_check(game._online_lobby._fighter_buttons.size() == 1, "Online lobby exposes one fighter")
 	game._start_online_match(0, 42, 1, [0, 0])
 	_check(game.online_mode and game.player_weapons == [0, 0, 0, 0],
 		"A Duelist-only online lineup can start")

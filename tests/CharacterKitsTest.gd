@@ -113,7 +113,7 @@ func _run() -> void:
 	game.players[1].plan.power = 1.0
 	game._spawn_player_attack(game.players[1])
 	var orb = game.shock_orbs[0]
-	orb.position = Vector2(760.0, 280.0)
+	orb.position = Vector2(880.0, 280.0)
 	orb.prev_pos = orb.position
 	orb.vel = Vector2.ZERO
 	orb.age_ticks = orb.arm_ticks

@@ -115,23 +115,14 @@ func _test_tutorial_launch() -> void:
 	game.hit_freeze_enabled = true
 	game.state = Phase.EXECUTING
 	game._on_player_hit(1, game.players[1].position, 0)
-	_check(game._hit_pause_left > 0.0 and game._time_stop._impact_flash > 0.0,
-		"a hit must trigger both presentation hit-stop and the impact flash")
+	_check(game._hit_pause_left > 0.0 and "impact" in game._event_direction.active_kinds(),
+		"a hit must trigger both presentation hit-stop and the impact crop")
 	game._open_menu()
 	game._menu._activate(game._menu.ROW_ONLINE)
 	_check(game.state == Phase.ONLINE_LOBBY and game._online_lobby.visible,
 		"the restored Online row must open the existing private-room lobby")
 	_check(game._transition.visible and game._transition._title == "PRIVATE PLANS",
 		"opening Online must receive the same authored transition as local modes")
-	var initial_online_level: int = game._online_lobby.level
-	game._online_lobby._cycle_level(1)
-	game._online_lobby._cycle_fighter(1)
-	_check(game._online_lobby.level == posmod(initial_online_level + 1, Levels.count()) \
-		and game._online_lobby.weapon == game._online_lobby.FIGHTER_ROSTER[0],
-		"the online lobby must expose every arena and roster fighter before room creation")
-	_check("HOST ARENA" in game._online_lobby._level_label.text \
-		and "DUELIST" in game._online_lobby._fighter_label.text,
-		"the online lobby must explain which room settings the player is choosing")
 	game._online_lobby._sanitize_code("abci12z9")
 	_check(game._online_lobby._code_input.text == "ABC2Z9",
 		"the lobby must normalize room codes and remove ambiguous characters")

@@ -1,6 +1,8 @@
 import { exports } from "cloudflare:workers";
 import type { PlayerPlanPayload } from "../src/protocol";
-import { PROTOCOL_VERSION } from "../src/protocol";
+// Lockstep tests run on protocol 3 rooms, which start the moment they fill. Protocol 4 adds a
+// selection phase first; selection.test.ts covers it.
+export const LOCKSTEP_PROTOCOL = 3;
 
 export const ORIGIN = "https://zawarudo-pi.vercel.app";
 
@@ -41,7 +43,7 @@ export async function post(path: string, body: Record<string, unknown>): Promise
 }
 
 export async function createRoom(level = 1, weapon = 0, capacity = 2): Promise<CreatedRoom> {
-  const response = await post("/rooms", { level, weapon, capacity, protocol: PROTOCOL_VERSION });
+  const response = await post("/rooms", { level, weapon, capacity, protocol: LOCKSTEP_PROTOCOL });
   if (response.status !== 201) {
     throw new Error(`create failed: ${response.status} ${await response.text()}`);
   }
@@ -49,7 +51,7 @@ export async function createRoom(level = 1, weapon = 0, capacity = 2): Promise<C
 }
 
 export async function joinRoom(room: string, weapon = 0): Promise<string> {
-  const response = await post(`/rooms/${room}/join`, { weapon, protocol: PROTOCOL_VERSION });
+  const response = await post(`/rooms/${room}/join`, { weapon, protocol: LOCKSTEP_PROTOCOL });
   if (response.status !== 200) {
     throw new Error(`join failed: ${response.status} ${await response.text()}`);
   }

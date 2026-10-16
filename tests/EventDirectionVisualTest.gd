@@ -1,6 +1,6 @@
 extends SceneTree
-## Captures the Gate 3 beats: lock-in spotlight, impact crop, the SUPER
-## anticipation and tear-away, and the final tableau. Run windowed:
+## Captures the Gate 3 beats: impact crop, the SUPER anticipation and
+## tear-away, and the final tableau. Run windowed:
 ##   godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/EventDirectionVisualTest.gd --quit-after 600
 const MAIN := preload("res://scenes/Main.tscn")
 const Capture := preload("res://tests/VisualCaptureHelper.gd")
@@ -39,12 +39,10 @@ func run() -> void:
 	for tick in 12:
 		game._pilot_step(0, 1, tick == 0, true)
 	game._confirm(0)
-	ed._process(0.06)
-	await snap("lock")
 
 	ed.clear()
 	game.state = Phase.EXECUTING
-	ed.impact(game.players[1].position, game.players[1].color, "SNAP")
+	ed.impact(game.players[1].position, game.players[1].color)
 	ed._process(0.04)
 	await snap("impact")
 

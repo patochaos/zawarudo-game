@@ -7,7 +7,7 @@ route. Improve authoring, readability and understanding before expanding the kit
 
 ## Implemented
 
-- Fixed eight-second standard planning window; early confirmation remains fast.
+- Fixed four-second standard planning window; early confirmation remains fast.
   Optional shrinking-clock tuning defaults to zero. Authored special-mode clocks
   retain their existing behavior.
 - Compact local-player timelines: recorded movement, throw tick, movement budget

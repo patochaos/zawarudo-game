@@ -2,15 +2,18 @@
 
 Project: https://patochaos.itch.io/zawarudo
 
-Current release: **0.4.1-names.2**. Web and Windows use the existing
-`html5` and `windows` channels. This release is a copy pass over 0.4.1-names.1:
-player-facing text, the Windows README and the project notes were rewritten in
-plainer prose, with no change to gameplay. 0.4.1-names.1 added optional
-nicknames for private online rooms, a CPU that works toward a firing spot when
-its rival is out of reach, a walled Clockwork Gallery with a ceiling on every
-non-wrapping arena, and a planning ghost that walks in its real pose.
+Current release: **0.4.2-pacing.1**. Web and Windows use the existing
+`html5` and `windows` channels. This release answers the October playtest:
+platforms are spaced 140px apart with three raised tiers on every arena,
+planning turns last four seconds, the action phase plays at 0.35x speed, a kill
+slows to 0.15x with a camera push-in and then eases back, versus openings are
+dealt at random (a single human against one CPU always starts on the left), and
+UNDO reports what it did. Online rooms add a selection phase where players pick
+fighters and vote on the arena and match length; it needs the protocol 4
+backend, which also still accepts older clients. 0.4.1-names.2 was a copy pass
+over 0.4.1-names.1.
 
-Published exports and their file hashes are in `build/itch/0.4.1-names.2/`.
+Published exports and their file hashes are in `build/itch/0.4.2-pacing.1/`.
 
 `Build.bat` creates unpacked exports in `build/itch/web` and `build/itch/windows`.
 When ZIPs are requested, package each directory's contents as:
@@ -34,8 +37,8 @@ When ZIPs are requested, package each directory's contents as:
 After creating the itch.io project page and installing/authenticating butler:
 
 ```powershell
-butler push "build/itch/0.4.1-names.2/web" patochaos/zawarudo:html5 --userversion 0.4.1-names.2
-butler push "build/itch/0.4.1-names.2/windows" patochaos/zawarudo:windows --userversion 0.4.1-names.2
+butler push "build/itch/0.4.2-pacing.1/web" patochaos/zawarudo:html5 --userversion 0.4.2-pacing.1
+butler push "build/itch/0.4.2-pacing.1/windows" patochaos/zawarudo:windows --userversion 0.4.2-pacing.1
 ```
 
 On the itch.io edit page, mark the `html5` channel as playable in the browser.

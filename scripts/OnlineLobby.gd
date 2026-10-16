@@ -17,68 +17,38 @@ const ROOM_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const NAME_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-"
 const MAX_NAME_LENGTH := 12
 const FIGHTER_ROSTER := Roster.ORDER
-## Compact copy of the local roster grid: the whole cast on screen at once,
-## sized for the one fighter this machine is choosing.
-const TILE_W := 110.0
-const TILE_H := 92.0
-const TILE_GAP := 12.0
-## The portraits are square and framed for a 264 px plate. At this size the
-## tile has to crop to the head or it reads as a dark smudge.
-const TILE_FACE := Rect2(0.22, 0.05, 0.56, 0.56)
-const TILE_Y := 256.0
-const TILE_ORIGIN_X := 640.0 - TILE_W / 2.0
-
-
-class FighterGrid:
-	extends Control
-
-	var chosen: int = Roster.DUELIST
-
-	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func apply(weapon: int) -> void:
-		chosen = weapon
-		queue_redraw()
-
-	func _draw() -> void:
-		for i in Roster.ORDER.size():
-			var weapon: int = Roster.ORDER[i]
-			var rect := Rect2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP),
-				TILE_Y, TILE_W, TILE_H)
-			var picked := weapon == chosen
-			var cut := 10.0
-			var panel := PackedVector2Array([
-				Vector2(rect.position.x + cut, rect.position.y),
-				Vector2(rect.end.x, rect.position.y),
-				Vector2(rect.end.x, rect.end.y - cut),
-				Vector2(rect.end.x - cut, rect.end.y),
-				Vector2(rect.position.x, rect.end.y),
-				Vector2(rect.position.x, rect.position.y + cut),
-			])
-			draw_colored_polygon(panel, Color(0.05, 0.035, 0.09, 1.0))
-			var face := Rect2(TILE_FACE.position,
-				Vector2(TILE_FACE.size.x, TILE_FACE.size.y * rect.size.y / rect.size.x))
-			var uvs := PackedVector2Array()
-			for point: Vector2 in panel:
-				uvs.append(face.position + (point - rect.position) / rect.size * face.size)
-			draw_colored_polygon(panel, Color.WHITE, uvs, Roster.portrait(weapon))
-			if not picked:
-				draw_colored_polygon(panel, Color(0.031, 0.016, 0.055, 0.40))
-			for step in 5:
-				var t := float(step) / 4.0
-				draw_rect(Rect2(rect.position.x, rect.end.y - 38.0 + t * 18.0,
-					rect.size.x, 5.0), Color(0.028, 0.014, 0.050, 0.08 + t * 0.50))
-			# The caption plate follows the cut so the name never spills past it.
-			draw_colored_polygon(PackedVector2Array([
-				Vector2(rect.position.x, rect.end.y - 22.0),
-				Vector2(rect.end.x, rect.end.y - 22.0),
-				Vector2(rect.end.x - cut, rect.end.y),
-				Vector2(rect.position.x, rect.end.y),
-			]), Color(0.028, 0.014, 0.050, 0.92))
-			draw_polyline(panel + PackedVector2Array([panel[0]]),
-				GOLD if picked else Color(0.30, 0.24, 0.40, 0.9),
-				2.4 if picked else 1.0, true)
+## Room codes and names are read off one screen and typed on another, so they use
+## the hyperlegible face: the display face draws 0/O, 8/B and 2/Z too alike.
+const CODE_FONT := preload("res://assets/fonts/AtkinsonHyperlegible-Regular.ttf")
+const CODE_SPACING := 10
+const BROWSER_COPY_STATE := "__zawarudoCopy"
+## Async Clipboard API first, then the older execCommand path, which some
+## embedding iframes still allow. Either way the outcome lands in a window flag
+## that _process reads back.
+const BROWSER_COPY_SCRIPT := """(function (flag, text) {
+	window[flag] = "pending";
+	function fallback() {
+		try {
+			var area = document.createElement("textarea");
+			area.value = text;
+			area.setAttribute("readonly", "");
+			area.style.position = "fixed";
+			area.style.opacity = "0";
+			document.body.appendChild(area);
+			area.select();
+			var copied = document.execCommand("copy");
+			document.body.removeChild(area);
+			window[flag] = copied ? "ok" : "fail";
+		} catch (error) {
+			window[flag] = "fail";
+		}
+	}
+	if (navigator.clipboard && window.isSecureContext) {
+		navigator.clipboard.writeText(text).then(function () { window[flag] = "ok"; }, fallback);
+	} else {
+		fallback();
+	}
+})("%s", %s);"""
 
 
 class LobbyChrome:
@@ -112,9 +82,9 @@ class LobbyChrome:
 			draw_rect(Rect2(390.0, 266.0, 500.0, 88.0),
 				Color(VIOLET.r, VIOLET.g, VIOLET.b, 0.62), false, 2.0)
 		else:
-			draw_line(Vector2(390.0, 489.0), Vector2(570.0, 489.0),
+			draw_line(Vector2(390.0, 349.0), Vector2(570.0, 349.0),
 				Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 1.0)
-			draw_line(Vector2(710.0, 489.0), Vector2(890.0, 489.0),
+			draw_line(Vector2(710.0, 349.0), Vector2(890.0, 349.0),
 				Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 1.0)
 
 var level: int = 0
@@ -133,17 +103,13 @@ var _room_caption: Label
 var _join_divider: Label
 var _status: Label
 var _status_rule: ColorRect
-var _level_label: Label
-var _fighter_label: Label
-var _fighter_grid: FighterGrid
-var _fighter_buttons: Array[Button] = []
-var _fighter_captions: Array[Label] = []
-var _level_left: Button
-var _level_right: Button
 var _create: Button
 var _join: Button
 var _copy: Button
 var _chrome: LobbyChrome
+## Seconds left to hear back from the browser about a clipboard write. Zero means
+## no copy is pending.
+var _copy_wait: float = 0.0
 
 
 func _ready() -> void:
@@ -166,63 +132,47 @@ func _ready() -> void:
 	# premise.
 	_name_caption = _label(Vector2(425.0, 190.0), 110.0, 12, VIOLET)
 	_name_caption.text = "YOUR NAME //"
-	_name_input = _text_input(Vector2(545.0, 180.0), Vector2(310.0, 34.0), 16,
-		MAX_NAME_LENGTH, "OPTIONAL · SHOWN TO YOUR PLAYERS")
+	_name_input = _text_input(Vector2(545.0, 180.0), Vector2(310.0, 34.0), 17,
+		MAX_NAME_LENGTH, "OPTIONAL")
 	_name_input.tooltip_text = "Letters, digits, spaces, _ and - only. Saved on this device."
 	_name_input.text_changed.connect(_sanitize_name_input)
 	_name_input.text_submitted.connect(func(_text): _code_input.grab_focus())
 
-	_create = _button(Vector2(360.0, 398.0), Vector2(360.0, 54.0),
+	_create = _button(Vector2(360.0, 258.0), Vector2(360.0, 54.0),
 		"01   CREATE PRIVATE ROOM", true)
 	_create.pressed.connect(func(): create_requested.emit(level, weapon, capacity))
-	_capacity_button = _button(Vector2(734.0, 398.0), Vector2(186.0, 54.0), "4 PLAYERS  ›")
+	_capacity_button = _button(Vector2(734.0, 258.0), Vector2(186.0, 54.0), "4 PLAYERS  ›")
 	_capacity_button.tooltip_text = "Choose a 2-player duel or 4-player free-for-all. The match starts when the room is full."
 	_capacity_button.pressed.connect(func():
 		capacity = 2 if capacity == 4 else 4
 		_refresh_choices())
 
-	_join_divider = _label(Vector2(300.0, 468.0), 680.0, 13, DIM)
+	_join_divider = _label(Vector2(300.0, 328.0), 680.0, 13, DIM)
 	_join_divider.text = "OR JOIN AN EXISTING ROOM"
 
-	_code_input = _text_input(Vector2(360.0, 500.0), Vector2(356.0, 54.0), 23, 6,
+	_code_input = _text_input(Vector2(360.0, 360.0), Vector2(356.0, 54.0), 28, 6,
 		"6-CHARACTER CODE")
+	_code_input.add_theme_font_override("font", _spaced_code_font())
+	_code_input.tooltip_text = "Codes never use 0, O, 1 or I."
 	_code_input.text_changed.connect(_sanitize_code)
 	_code_input.text_submitted.connect(func(_text): _request_join())
 
-	_join = _button(Vector2(734.0, 500.0), Vector2(186.0, 54.0), "02   JOIN", true)
+	_join = _button(Vector2(734.0, 360.0), Vector2(186.0, 54.0), "02   JOIN", true)
 	_join.pressed.connect(_request_join)
 
 	_room_caption = _label(Vector2(330.0, 235.0), 620.0, 13, DIM)
 	_room_caption.text = "ROOM CODE // SHARE WITH YOUR PLAYERS"
 	_room_caption.visible = false
-	_room_label = _label(Vector2(390.0, 276.0), 500.0, 42, VIOLET)
+	_room_label = _label(Vector2(390.0, 276.0), 500.0, 50, VIOLET)
+	_room_label.add_theme_font_override("font", _spaced_code_font())
 	_room_label.visible = false
 	_copy = _button(Vector2(500.0, 386.0), Vector2(280.0, 46.0), "COPY ROOM CODE", true)
 	_copy.visible = false
-	_copy.pressed.connect(func():
-		DisplayServer.clipboard_set(_room_label.text)
-		set_status("CODE COPIED // SHARE WITH YOUR PLAYERS", false))
+	_copy.pressed.connect(copy_room_code)
 	# Wider than the other copy lines: four full-length nicknames have to fit.
-	_occupancy = _label(Vector2(260.0, 512.0), 760.0, 15, TEXT)
+	_occupancy = _label(Vector2(260.0, 452.0), 760.0, 15, TEXT)
 	_occupancy.visible = false
 
-	_fighter_label = _label(Vector2(300.0, 228.0), 680.0, 13, VIOLET)
-	_fighter_grid = FighterGrid.new()
-	_fighter_grid.size = Vector2(1280.0, 720.0)
-	add_child(_fighter_grid)
-	for i in Roster.ORDER.size():
-		var tile := _tile_button(Vector2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP), TILE_Y))
-		tile.pressed.connect(_pick_fighter.bind(i))
-		_fighter_buttons.append(tile)
-		var caption := _label(Vector2(TILE_ORIGIN_X + float(i) * (TILE_W + TILE_GAP),
-			TILE_Y + TILE_H - 20.0), TILE_W, 11, TEXT)
-		caption.text = Roster.short_name(Roster.ORDER[i])
-		_fighter_captions.append(caption)
-	_level_left = _button(Vector2(348.0, 364.0), Vector2(52.0, 32.0), "‹")
-	_level_left.pressed.connect(func(): _cycle_level(-1))
-	_level_label = _label(Vector2(410.0, 358.0), 460.0, 13, GOLD)
-	_level_right = _button(Vector2(880.0, 364.0), Vector2(52.0, 32.0), "›")
-	_level_right.pressed.connect(func(): _cycle_level(1))
 	_status_rule = ColorRect.new()
 	_status_rule.position = Vector2(430.0, 562.0)
 	_status_rule.size = Vector2(420.0, 2.0)
@@ -247,6 +197,7 @@ func open(selected_level: int, selected_weapon: int = 0, saved_name: String = ""
 	_name_input.text = nickname
 	_code_input.text = ""
 	_code_input.editable = true
+	_copy_wait = 0.0
 	_create.visible = true
 	_join_divider.visible = true
 	_join.visible = true
@@ -272,7 +223,7 @@ func show_room(code: String, player: int) -> void:
 	_code_input.visible = false
 	_room_caption.visible = true
 	_room_label.visible = true
-	_copy.visible = player == 0
+	_copy.visible = true
 	_set_choices_visible(false)
 	_room_label.text = code
 	_chrome.set_room_active(true)
@@ -291,13 +242,15 @@ func update_room(connected: Array, room_capacity: int, selected_level: int,
 	capacity = room_capacity
 	level = selected_level
 	_refresh_choices()
+	# Anyone in the room can share the code when a seat opens up again.
+	_copy.visible = _room_label.visible
 	var slots := PackedStringArray()
 	var count := 0
 	for i in capacity:
 		var present := i < connected.size() and bool(connected[i])
 		if present:
 			count += 1
-		slots.append("%s %s" % [seat_tag(i, names), "READY" if present else "WAITING"])
+		slots.append("%s %s" % [seat_tag(i, names), "JOINED" if present else "WAITING"])
 	var seats := "  ·  ".join(slots)
 	# Long nicknames step the font down rather than spilling past the frame.
 	_occupancy.add_theme_font_size_override("font_size", 15 if seats.length() <= 64 else 12)
@@ -341,70 +294,78 @@ func handle_key(code: int) -> bool:
 	# field keeps the arrows for the caret; Enter hands focus to the code field.
 	if _name_input.visible and _name_input.has_focus():
 		return false
-	# The room-code field owns the letter keys, so the grid answers to arrows only.
-	if code in [KEY_LEFT, KEY_RIGHT] and _fighter_grid.visible:
-		_cycle_fighter(-1 if code == KEY_LEFT else 1)
-		return true
 	if code in [KEY_ENTER, KEY_KP_ENTER] and _code_input.visible:
 		_request_join()
 		return true
 	return false
 
 
-func _cycle_fighter(direction: int) -> void:
-	weapon = Roster.step(weapon, direction)
-	ui_navigated.emit()
-	_refresh_choices()
-
-
-func _pick_fighter(tile: int) -> void:
-	if weapon == Roster.ORDER[tile]:
-		return
-	weapon = Roster.ORDER[tile]
-	ui_navigated.emit()
-	_refresh_choices()
-
-
-func _cycle_level(direction: int) -> void:
-	level = posmod(level + direction, Levels.count())
-	_refresh_choices()
-
-
 func _refresh_choices() -> void:
 	_capacity_button.text = "%d PLAYERS  ›" % capacity
-	_fighter_label.text = "YOUR FIGHTER // %s  ·  %s" % [
-		Roster.full_name(weapon), str(Roster.entry(weapon)["kit"])]
-	_fighter_grid.apply(weapon)
-	_level_label.text = "HOST ARENA // %02d OF %02d  ·  %s" % [
-		level + 1, Levels.count(), Levels.build(level)["name"]]
 
 
-## Once the room exists the fighter is fixed on the server, so the grid comes
-## down and the label alone records what this machine chose.
+## Fighters and the arena are chosen once everyone is in the room, so before it
+## exists the only settings are the name and the room size.
 func _set_choices_visible(can_edit: bool) -> void:
 	_capacity_button.visible = can_edit
 	_name_caption.visible = can_edit
 	_name_input.visible = can_edit
-	for tile in _fighter_buttons:
-		tile.visible = can_edit
-	for caption in _fighter_captions:
-		caption.visible = can_edit
-	_fighter_grid.visible = can_edit
-	_level_left.visible = can_edit
-	_level_right.visible = can_edit
-	_fighter_label.visible = true
-	_level_label.visible = true
-	# Once the room exists the grid comes down and the two choices collapse into
-	# a pair of summary lines under the room code.
-	_fighter_label.position.y = 228.0 if can_edit else 452.0
-	_level_label.position.y = 358.0 if can_edit else 478.0
+
+
+## Copies the code and reports what really happened. A browser can refuse the
+## write (an embedding page without clipboard permission, or no user gesture),
+## and claiming success then leaves whatever was copied before on the clipboard.
+func copy_room_code() -> void:
+	var code := _room_label.text
+	if code.is_empty():
+		return
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval(BROWSER_COPY_SCRIPT % [BROWSER_COPY_STATE, JSON.stringify(code)], true)
+		_copy_wait = 2.0
+		set_status("COPYING…", false)
+		return
+	DisplayServer.clipboard_set(code)
+	_report_copy(DisplayServer.clipboard_get().strip_edges() == code)
+
+
+func _process(delta: float) -> void:
+	if _copy_wait <= 0.0:
+		return
+	var result = JavaScriptBridge.eval("window.%s || ''" % BROWSER_COPY_STATE, true)
+	if result == "ok" or result == "fail":
+		_copy_wait = 0.0
+		_report_copy(result == "ok")
+		return
+	_copy_wait -= delta
+	if _copy_wait <= 0.0:
+		_report_copy(false)
+
+
+func _report_copy(copied: bool) -> void:
+	if copied:
+		set_status("CODE %s COPIED // SHARE WITH YOUR PLAYERS" % _room_label.text, false)
+	else:
+		set_status("COPY BLOCKED // TELL YOUR PLAYERS THE CODE %s" % _room_label.text, true)
+
+
+## The code face with extra room between letters, so six characters read as six.
+static func _spaced_code_font() -> FontVariation:
+	var spaced := FontVariation.new()
+	spaced.base_font = CODE_FONT
+	spaced.spacing_glyph = CODE_SPACING
+	return spaced
 
 
 func _sanitize_code(value: String) -> void:
 	var clean := ""
+	var dropped_lookalike := false
 	for character in value.to_upper():
 		if character in ROOM_ALPHABET:
 			clean += character
+		elif character in "0O1I":
+			dropped_lookalike = true
+	if dropped_lookalike:
+		set_status("CODES NEVER USE 0, O, 1 OR I // CHECK THAT LETTER", true)
 	if clean == value:
 		return
 	_code_input.set_block_signals(true)
@@ -447,6 +408,7 @@ func _text_input(pos: Vector2, box: Vector2, font_size: int, max_length: int,
 	input.max_length = max_length
 	input.placeholder_text = placeholder
 	input.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	input.add_theme_font_override("font", CODE_FONT)
 	input.add_theme_font_size_override("font_size", font_size)
 	input.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
 	input.add_theme_color_override("font_placeholder_color", Color(0.45, 0.49, 0.58))
@@ -479,28 +441,6 @@ func _label(pos: Vector2, width: float, size: int, color: Color) -> Label:
 	label.add_theme_constant_override("shadow_offset_y", 3)
 	add_child(label)
 	return label
-
-
-## A hit target laid over a tile the grid already drew. It contributes a hover
-## wash and nothing else, so the portrait underneath stays visible.
-func _tile_button(pos: Vector2) -> Button:
-	var button := Button.new()
-	button.position = pos
-	button.size = Vector2(TILE_W, TILE_H)
-	button.focus_mode = Control.FOCUS_NONE
-	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var clear := StyleBoxEmpty.new()
-	button.add_theme_stylebox_override("normal", clear)
-	button.add_theme_stylebox_override("pressed", clear)
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.16)
-	hover.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.75)
-	hover.set_border_width_all(1)
-	button.add_theme_stylebox_override("hover", hover)
-	button.mouse_entered.connect(func(): ui_navigated.emit())
-	button.pressed.connect(func(): ui_accepted.emit())
-	add_child(button)
-	return button
 
 
 func _button(pos: Vector2, dimensions: Vector2, text: String, primary: bool = false) -> Button:

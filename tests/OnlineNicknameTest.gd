@@ -59,7 +59,7 @@ func run() -> void:
 		"connected": [true, false, false, false], "names": ["PATO CHAOS", "", "", ""]})
 	game._on_online_message({"type": "peer_status", "player": 2, "connected": true, "name": "RIVAL"})
 	var occupancy: String = lobby._occupancy.text
-	check("PATO CHAOS READY" in occupancy and "P2 WAITING" in occupancy and "RIVAL READY" in occupancy,
+	check("PATO CHAOS JOINED" in occupancy and "P2 WAITING" in occupancy and "RIVAL JOINED" in occupancy,
 		"Occupancy must show nicknames where known and seat numbers elsewhere: %s" % occupancy)
 
 	game._start_online_match(1, 777, 1, [0, 0, 0, 0], ["PATO CHAOS", "", "RIVAL", ""])

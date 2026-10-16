@@ -273,7 +273,7 @@ func _test_menu_and_online_boundary() -> void:
 		"authored lessons must remain playable with standard rules")
 	game._open_menu()
 	game._on_menu_online()
-	_check(game.planning_duration == 8.0 and game.knives_per_shot == 2,
+	_check(game.planning_duration == 4.0 and game.knives_per_shot == 2,
 		"entering the online lobby must restore standard rules")
 	_check(not game.offline_tuning.set_value("knives_per_shot", 3),
 		"the online lobby must reject tuning mutations")

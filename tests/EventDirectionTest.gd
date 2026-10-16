@@ -24,18 +24,15 @@ func _run() -> void:
 	var ed = game._event_direction
 	var digest: String = game._online_state_digest()
 
-	# Lock-in.
+	# Lock-in is quiet: readiness is the badge and the HUD status, not a beat.
 	game._confirm(0)
-	check("lock" in ed.active_kinds(), "confirming a plan starts the lock preset")
 	ed._process(0.05)
-	check(not ed.current_mul().is_equal_approx(Color.WHITE), "the lock preset tints the world")
-	check(game._online_state_digest() == digest, "lock theatre leaves the digest alone")
-	ed._process(1.0)
 	check(ed.active_kinds().is_empty() and ed.current_mul().is_equal_approx(Color.WHITE),
-		"the lock preset returns to base")
+		"confirming a plan starts no palette event")
+	check(game._online_state_digest() == digest, "confirming leaves the digest alone")
 
 	# Impact returns in hard steps.
-	ed.impact(Vector2(640.0, 360.0), Color.GOLD, "SNAP")
+	ed.impact(Vector2(640.0, 360.0), Color.GOLD)
 	var life: float = float(ed._events[0]["life"])
 	var seen := {}
 	var t := 0.0

@@ -47,7 +47,7 @@ func run() -> void:
 		and game.air_jumps_for(0) == 0 and game.air_jumps_for(1) == 0
 		and game.jump_impulse_for(0) == 780.0 and game.movement_gravity() == 1400.0,
 		"fixed test movement must override the local profile only for this mode")
-	check(game.planning_time_left == 8.0 and game.execution_duration == 0.75
+	check(game.planning_time_left == 4.0 and game.execution_duration == 0.75
 		and game.movement_budget == 0.5 and game.knives_per_shot == 2,
 		"Interception must retain the authored turn timing and knife pair")
 	check(game.core_announced and not game.core_active
