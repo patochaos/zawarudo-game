@@ -105,6 +105,16 @@ func _run() -> void:
 	check(ed.current_mul().is_equal_approx(Color.WHITE) and ed._tableau.is_empty(),
 		"leaving the result clears the tableau")
 
+	# A rematch leaves the result screen too: the next match must not play
+	# under the previous result's faded grade and winner spotlight.
+	ed.tableau(0)
+	ed._process(0.5)
+	game._request_rematch()
+	ed._process(0.0)
+	check(game.state == Phase.PLANNING and ed._tableau.is_empty()
+		and ed.current_mul().is_equal_approx(Color.WHITE) and not ed._mul_rect.visible,
+		"a rematch clears the result tableau and its palette")
+
 	root.remove_child(game)
 	game.free()
 	await process_frame

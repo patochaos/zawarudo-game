@@ -4786,6 +4786,11 @@ func restart() -> void:
 	_secret_triple_match = false
 	if _super_freeze != null:
 		_cancel_super_cutin()
+	# The result tableau holds its subdued grade and winner spotlight until the
+	# result screen is left; a rematch leaves it too, or the next match plays
+	# under the previous match's faded palette.
+	if _event_direction != null:
+		_event_direction.clear()
 	_replay_frames.clear()
 	_replay_terminal_frame.clear()
 	_replay_frame_index = 0
