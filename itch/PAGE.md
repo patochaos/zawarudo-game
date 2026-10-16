@@ -16,7 +16,7 @@
 - **Platforms:** Windows, HTML5
 - **Inputs:** Keyboard, Mouse; touch controls retained
 - **Multiplayer:** Private online rooms (separate playtest route)
-- **Player count:** 1 against CPU; 2 online
+- **Player count:** 1 against CPU; 2 or 4 online
 - **Average session:** A few minutes
 - **Accessibility:** Rebindable controls, reduced flashes, high-contrast previews,
   separate voice/effects volume
@@ -49,7 +49,7 @@ the next one.
 - **Read the result:** slow last-turn review and full-match replay
 - **Play again:** rematch immediately or try the Standard CPU
 - **Make it readable:** rebindable keys, high-contrast previews, reduced flashes and separate voice/effects volume
-- **Test with a friend:** private online rooms; both players must use the same build
+- **Test with a friend:** private online rooms; every player must use the same build
 
 This demo asks one question: did planning a move and watching it collide make
 you want another match? Use **Send Feedback** in the menu or results to prepare
@@ -116,7 +116,7 @@ Features:
 - One Duelist kit focused on movement prediction and persistent knives
 - A focused duel against the CPU, with instant rematches
 - Three playable lessons with the same eight-second planning clock
-- Private online 1v1 rooms
+- Private online rooms for 2 or 4 players
 - Keyboard and mouse, gamepad, and landscape touch controls
 
 #indiegame #godot #fightinggame
