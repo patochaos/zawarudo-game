@@ -12,6 +12,8 @@ var completed := false
 var between_turns := false
 var survival_windows := 0
 var survival_knife_ids: Array[int] = []
+## Tests set this to render the pad variant without a controller plugged in.
+var force_pad_prompts := false
 var _panel: Panel
 var _title: Label
 var _host_name: Label
@@ -169,18 +171,27 @@ func show_briefing(message: String = "") -> void:
 	_panel.visible = true
 	_hint.visible = false
 	_title.text = TITLES[lesson]
-	var move_keys: String = gm._menu._keys_text("right")
-	var jump_keys: String = gm._menu._keys_text("jump")
+	var move_keys := _prompt(gm._menu._keys_text("right"), "left stick")
+	var jump_keys := _prompt(gm._menu._keys_text("jump"), "A")
+	var lock_keys := _prompt("Left Shift", "Start")
+	var throw_keys := _prompt("left-click", "R2")
 	# One beat per line. The clock rule is told once, on the first lesson.
 	var instructions: Array[String] = [
-		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with Left Shift, and time resumes.\n\nEight seconds per attempt. When the clock runs out, whatever you planned happens. Even nothing." % [HOST_NAME, move_keys],
-		"Oh? The fool across from you is approaching the marked ledge.\nLet him. I reveal his route this once.\nAim at the gold ring on his landing ghost.\nHold left-click to three-quarters, release, LOCK.\nHe will leap into your knife. If this were chess, I would call it checkmate.",
+		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with %s, and time resumes.\n\nEight seconds per attempt. When the clock runs out, whatever you planned happens. Even nothing." % [HOST_NAME, move_keys, lock_keys],
+		"Oh? The fool across from you is approaching the marked ledge.\nLet him. I reveal his route this once.\nAim at the gold ring on his landing ghost.\nHold %s to three-quarters, release, LOCK.\nHe will leap into your knife. If this were chess, I would call it checkmate." % throw_keys,
 		"Two knives already hang in the air. Mine.\nHold %s to leap the low one from the left.\nThe one from the right waits for your landing.\nAt the next freeze, read it and land elsewhere.\nSurvive both turns, and I may consider you a human worth stepping on." % jump_keys,
 	]
 	_body.text = message if not message.is_empty() else instructions[lesson]
 	_action.text = "ENTER  PLAYTIME IS OVER. FIGHT." if completed and lesson == 2 else ("ENTER  NEXT LESSON" if completed else "ENTER  TIME RESUMES · 8s")
 	if between_turns: _action.text = "ENTER  NEXT TURN · 8s"
 	_markers.queue_redraw()
+
+## Keyboard name plus the fixed pad control when a pad is connected, so the
+## briefing never advertises a stick nobody is holding.
+func _prompt(keys: String, pad_control: String) -> String:
+	if force_pad_prompts or not Input.get_connected_joypads().is_empty():
+		return "%s / %s" % [keys, pad_control]
+	return keys
 
 func advance() -> void:
 	if not active or gm.state != Phase.TUTORIAL: return

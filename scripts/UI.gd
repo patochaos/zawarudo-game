@@ -786,7 +786,8 @@ func refresh() -> void:
 		% [gm.planning_duration, gm.execution_duration, "OFF" if gm._sfx.muted else "on", pads]
 
 	if gm._practice != null and gm._practice.active:
-		_hint_p2.text = "EIGHT SECONDS PER TURN · REPEAT ANY LESSON"
+		_hint_p2.text = "GAMEPAD  STICK MOVE · A JUMP · R2 THROW · START LOCK · B UNDO  ·  EIGHT SECONDS PER TURN" \
+			if gm._pads[0] >= 0 else "EIGHT SECONDS PER TURN · REPEAT ANY LESSON"
 	var planning: bool = gm.state == Phase.PLANNING and not gm.close_camera_mode
 	var practice_active: bool = gm._practice != null and gm._practice.active
 	var plan_locked: bool = gm.players[gm._keyboard_player()].plan.confirmed

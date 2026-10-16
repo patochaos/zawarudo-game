@@ -2368,7 +2368,18 @@ func _assign_pads() -> void:
 		if device >= 0 and device in list and not is_ai(i):
 			_pads[i] = device
 			claimed = true
-	if not claimed and players.size() > 1:
+	if claimed:
+		return
+	# A lone person against AI or a dummy (LEARN TO PLAY, the ladder from the
+	# menu) gets the first pad alongside the keyboard. The old P2 split only
+	# makes sense when a second person could be holding that pad.
+	var humans: Array[int] = []
+	for i in mini(players.size(), player_roles.size()):
+		if player_roles[i] == "HUMAN":
+			humans.append(i)
+	if humans.size() == 1:
+		_pads[humans[0]] = list[0]
+	elif players.size() > 1:
 		_pads[1] = list[0]
 
 
