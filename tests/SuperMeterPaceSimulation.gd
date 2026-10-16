@@ -68,7 +68,7 @@ func _run() -> void:
 	for level in levels:
 		for sample in _samples:
 			await _run_match(game, level, 1000 * (level + 1) + sample)
-	_print_report()
+	_print_report(game)
 	game.free()
 	quit(0)
 
@@ -127,7 +127,12 @@ func _plan_all(game) -> void:
 		game.players[i].plan.lock_permille = 500
 
 
-func _print_report() -> void:
+func _print_report(game) -> void:
+	# The AI locks with a half share and rarely dodges, so it is the slow end.
+	# An active human turn is the pace that matters for the five-to-six target.
+	var active: float = game.super_charge_early_lock * 0.8 		+ game.super_charge_per_window_travel + game.super_charge_per_throw 		+ game.super_charge_per_clash + game.super_charge_per_dodge
+	print("ACTIVE HUMAN TURN (quick lock, full route, full throw, one clash, one dodge): %.3f meter, %.1f turns per fill" % [
+		active, 1.0 / maxf(0.0001, active)])
 	var turns: float = float(maxi(1, _fighter_turns))
 	print("SUPER PACE: %d fighter-turns, %d fills, %.1f turns per fill" % [
 		_fighter_turns, _fills, float(_gap_turns) / float(maxi(1, _fills))])
