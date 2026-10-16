@@ -14,8 +14,7 @@ var survival_windows := 0
 var survival_knife_ids: Array[int] = []
 ## Tests set this to render the pad variant without a controller plugged in.
 var force_pad_prompts := false
-## Swap this for a dedicated dialogue face once one is added under assets/fonts.
-const DIALOGUE_FONT := "res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"
+const DIALOGUE_FONT := "res://assets/fonts/Rajdhani-SemiBold.ttf"
 const CHIP_FONT := "res://assets/kenney/fonts/kenney-future.ttf"
 ## Prompt icons shown inside the input chips, keyed by the chip's label.
 const CHIP_ICONS := {
@@ -118,8 +117,8 @@ func _ready() -> void:
 	_body.scroll_active = false
 	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_body.add_theme_font_override("normal_font", load(DIALOGUE_FONT))
-	_body.add_theme_font_size_override("normal_font_size", 21)
-	_body.add_theme_constant_override("line_separation", 6)
+	_body.add_theme_font_size_override("normal_font_size", 23)
+	_body.add_theme_constant_override("line_separation", 2)
 	_body.add_theme_color_override("default_color", Color(0.93, 0.94, 0.98))
 	_panel.add_child(_body)
 	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -201,7 +200,7 @@ func show_briefing(message: String = "") -> void:
 	var throw_keys := _prompt("LEFT-CLICK", "R2")
 	# One beat per line. The clock rule is told once, on the first lesson.
 	var instructions: Array[String] = [
-		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with %s, and time resumes.\n\nEight seconds per attempt. When the clock runs out, whatever you planned happens. Even nothing." % [HOST_NAME, move_keys, lock_keys],
+		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with %s, and time resumes.\n\nEight seconds per attempt. Then whatever you planned happens. Even nothing." % [HOST_NAME, move_keys, lock_keys],
 		"Oh? The fool across from you is approaching the marked ledge.\nLet him. I reveal his route this once.\nAim at the gold ring on his landing ghost.\nHold %s to three-quarters, release, LOCK.\nHe will leap into your knife. If this were chess, I would call it checkmate." % throw_keys,
 		"Two knives already hang in the air. Mine.\nHold %s to leap the low one from the left.\nThe one from the right waits for your landing.\nAt the next freeze, read it and land elsewhere.\nSurvive both turns, and I may consider you a human worth stepping on." % jump_keys,
 	]
