@@ -2,7 +2,7 @@ extends Node2D
 class_name Effects
 
 ## Short-lived execution feedback: impact sparks, platform shatters, kill bursts.
-## Purely cosmetic — nothing here touches the simulation, and it is driven by
+## Purely cosmetic: nothing here touches the simulation, and it is driven by
 ## real time so it does not consume execution ticks.
 
 enum Kind { SPARK, SHATTER, KILL, CLASH, AFTERMATH, EXPLOSION, DUST }
@@ -179,7 +179,7 @@ func _sprite(f: Dictionary, texture: Texture2D, diameter: float, alpha: float,
 	draw_set_transform(Vector2.ZERO)
 
 
-## Deterministic radial scatter — the seed keeps each effect stable frame to
+## Deterministic radial scatter. The seed keeps each effect stable frame to
 ## frame without needing a random call during _draw.
 func _burst(f: Dictionary, u: float, n: int, reach: float, size: float) -> void:
 	var base: float = float(f["seed"]) * 0.7391

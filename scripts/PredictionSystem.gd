@@ -68,7 +68,7 @@ static func predict_arrow(start_pos: Vector2, start_vel: Vector2, cfg, duration:
 		var next: Vector2 = st[0]
 		vel = st[1]
 		var raw: Vector2 = st[2]
-		# Tested unwrapped — colliders carry seam copies. Material is retained so
+		# Tested unwrapped, since colliders carry seam copies. Material is retained so
 		# the preview banks from HARD exactly where runtime does, while breakable
 		# cover remains a terminal impact.
 		var at_tick: int = -1 if start_tick < 0 else start_tick + i + 1

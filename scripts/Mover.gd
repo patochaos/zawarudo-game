@@ -12,7 +12,7 @@ class_name Mover
 ## The wave is a triangle, not a sine. Integer arithmetic only, so two browsers
 ## in a lockstep room cannot drift apart on a transcendental; and a constant
 ## speed with a hard turnaround is far easier to read out of a single stopped
-## frame than an easing curve — the player can see the rail, the two ends and
+## frame than an easing curve: the player can see the rail, the two ends and
 ## the current point, and estimate the rest.
 ##
 ## Motion dictionary:

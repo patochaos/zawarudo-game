@@ -1,4 +1,4 @@
-# Duelist sprite, next pass — prompts
+# Duelist sprite, next pass: prompts
 
 The current frames (`art_source/sprites/duelist-polished-v2`) were generated with
 an image tool that is no longer available. These prompts target the same packer

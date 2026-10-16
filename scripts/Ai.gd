@@ -5,7 +5,7 @@ class_name Ai
 ##
 ## It knows exactly what a human knows: the world state, where every arrow is
 ## and where it is going, and its own plan. It does NOT read the human's plan.
-## Instead it guesses — it plays out three hypotheses for what the opponent
+## Instead it guesses: it plays out three hypotheses for what the opponent
 ## might do this window (hold, run left, run right) and prefers the shot that
 ## covers the most of them. That is the same prediction problem the game asks a
 ## human to solve, which is the point.
@@ -47,14 +47,15 @@ const VELOCITY_WITHHOLD_SCORE := -220.0
 const LATE_HIT_FADE_TICKS := 12.0
 const LATE_HIT_FLOOR := 0.15
 ## Out of reach: no full-power probe throw reaches a hypothesis before the
-## window ends. Then a route is also judged by how soon a throw from where it
-## ends could arrive, so the CPU works toward a firing spot instead of
-## wandering on the tiebreak and lobbing knives that arrive turns later.
-const REACH_PROBE_ELEVATIONS := [5.0, 20.0, 35.0, 50.0]
+## window ends. Then a route that ends where such a throw exists is worth
+## taking, so the CPU steps into a firing spot instead of wandering on the
+## tiebreak and lobbing knives that arrive turns later.
+const REACH_PROBE_ELEVATIONS := [-40.0, -15.0, 8.0, 25.0, 45.0]
 const PROBE_HIT_RADIUS := 40.0        # near enough for the refined search to land
-const TRAVEL_SAMPLE_PX := 32.0
-const BLOCKED_DETOUR_TICKS := 30.0
-const ENGAGE_WEIGHT := 1.0           # score per tick of arrival past the window
+const ENGAGE_BONUS := 40.0
+## A knife that comes back off HARD terrain and crosses the thrower's own
+## route is a plan to get hit; nothing a near miss offers is worth that.
+const SELF_HIT_SCORE := -900.0
 
 var done: bool = false
 ## Per-opponent weights (see Opponents.NEUTRAL_STYLE). Neutral unless the slot
@@ -82,7 +83,7 @@ var _wide: Vector2 = Vector2.ZERO
 
 
 ## Segment vs a body box, wrap-aware, allocation-free. This runs tens of
-## thousands of times per turn — building an array of seam copies here was
+## thousands of times per turn, and building an array of seam copies here was
 ## costing more than the collision maths.
 func _hits_body(a: Vector2, b: Vector2, centre: Vector2) -> bool:
 	var r := Rect2(centre - Player.HALF, Player.SIZE)
@@ -135,11 +136,10 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 	# Stasis fields and cover can put the rival beyond anything that lands this
 	# window. Measured with the real flight, so a knife that would crawl through
 	# a field for two turns does not count as reach.
-	var horizon: float = float(_horizon())
 	var out_of_reach: bool = not _gm.uses_dashblade(_idx) and not _gm.interception_mode \
-		and _arrival_from(_me.position) > horizon
+		and not _in_reach_from(_me.position)
 
-	# Rank movements by safety first — this part is cheap enough to do at once.
+	# Rank movements by safety first. This part is cheap enough to do at once.
 	var scored: Array = []
 	for m in move_options:
 		var ticks: int = budget if m[2] < 0 else mini(m[2], budget)
@@ -161,14 +161,13 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		var engage_value: float = 0.0
 		if _gm.uses_dashblade(_idx):
 			engage_value = -_gm.wrap_delta(path[path.size() - 1], _foe.position).length() * 0.22
-		elif out_of_reach:
-			# A projectile kit that cannot land anything this window moves toward
-			# a spot a throw could land from, not merely toward the rival: a wall
-			# or a stasis field between the two is part of the distance.
-			engage_value = -ENGAGE_WEIGHT * maxf(0.0,
-				_arrival_from(path[path.size() - 1]) - horizon)
+		elif out_of_reach and _in_reach_from(path[path.size() - 1]):
+			# A projectile kit that cannot land anything this window prefers a
+			# route that ends where the next throw can: over the pillar's line,
+			# out of a stasis field, onto the ledge with a view.
+			engage_value = ENGAGE_BONUS
 		# Safety usually ties across candidates, and only the top few get a shot
-		# search — without a tiebreak the list order alone decides, so the jump
+		# search. Without a tiebreak the list order alone decides, so the jump
 		# options were never even considered. The jitter also makes the AI
 		# harder to read, which matters in a game about prediction.
 		# INTERCEPTION gives the player a consistent intention to read. Its
@@ -482,19 +481,25 @@ func _threat_paths() -> Array:
 			continue
 		var pos: Vector2 = a.position
 		var vel: Vector2 = a.vel
+		var ricochets: int = a.ricochet_count
 		var pts := PackedVector2Array()
 		pts.append(pos)
 		for t in _gm.exec_ticks():
 			var st := Arrow.step_state(pos, vel, _dt, _gm, a.clashed)
 			var nxt: Vector2 = st[0]
 			vel = st[1]
-			var blocked := false
-			for r in _gm.solids_at(_gm.world_tick + t + 1):
-				if Arrow.seg_hits_rect(pos, st[2], r):
-					blocked = true
+			# A forceful knife banks off HARD terrain and stays live, so a throw
+			# into the pillar is a threat on the way back, not a dead knife.
+			var contact := _first_platform_impact(pos, st[2], _gm.world_tick + t + 1)
+			if not contact.is_empty():
+				var normal: Vector2 = contact[1]
+				if not Arrow.can_ricochet_velocity(vel, normal, contact[2], _gm, ricochets):
 					break
-			if blocked:
-				break
+				vel = vel.bounce(normal) * _gm.knife_ricochet_retention
+				ricochets += 1
+				pos = pos.lerp(st[2], float(contact[0])) + normal * 2.0
+				pts.append(pos)
+				continue
 			pos = nxt
 			pts.append(pos)
 		out.append(pts)
@@ -534,12 +539,12 @@ func _danger(path: PackedVector2Array, threats: Array) -> float:
 	for pts in threats:
 		var n: int = mini(pts.size(), path.size()) - 1
 		for t in n:
-			# a step that crossed a seam is a teleport, not a sweep — testing it
+			# a step that crossed a seam is a teleport, not a sweep. Testing it
 			# as one segment would flag the whole width of the arena as lethal
 			if pts[t].distance_squared_to(pts[t + 1]) > 40000.0:
 				continue
 			if _hits_body(pts[t], pts[t + 1], path[t]):
-				# earlier hits are worse — less chance the world saves you
+				# earlier hits are worse: less chance the world saves you
 				return 1.0 + float(n - t) / float(maxi(n, 1))
 	return 0.0
 
@@ -592,7 +597,7 @@ func _velocity_dash_danger(path: PackedVector2Array) -> float:
 
 
 ## A projectile launched directly down the line of a plausible incoming dash is
-## not pressure—it is ammunition for The Rook's moving guard. Range includes
+## not pressure. It is ammunition for The Rook's moving guard. Range includes
 ## both bodies closing during the dash, and angular risk falls to zero for real
 ## over/under shots which can bypass the narrow front surface.
 func _velocity_front_parry_risk(origin: Vector2, projectile_direction: Vector2,
@@ -719,6 +724,8 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 	var covered := [false, false, false]
 	var hit_ticks := [-1, -1, -1]
 	var closest := 1e9
+	var self_hit := false
+	var own_path: PackedVector2Array = candidate.get("path", PackedVector2Array())
 	# The foe prediction ends with the window; past it the hypothesis is frozen
 	# where it stopped, which is a guess about the next turn, not a fact.
 	var horizon: int = _horizon()
@@ -727,20 +734,30 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 		var knife_dir: Vector2 = launch_vel.normalized()
 		var pos: Vector2 = launch + knife_dir * 22.0
 		var vel: Vector2 = launch_vel
+		var ricochets := 0
 		for t in FLIGHT_CAP:
 			var st := Arrow.step_state(pos, vel, _dt, _gm)
 			var nxt: Vector2 = st[0]
 			vel = st[1]
 			var raw: Vector2 = st[2]
-			var blocked := false
-			for r2 in _gm.solids_at(_gm.world_tick + fire_tick + t + 1):
-				if Arrow.seg_hits_rect(pos, raw, r2):
-					blocked = true
+			var world_t: int = fire_tick + t
+			# HARD terrain returns a forceful knife exactly as the runtime does;
+			# the flight goes on, so a bank can still cover a hypothesis, and a
+			# throw into the wall beside the thrower is seen coming straight back.
+			var contact := _first_platform_impact(pos, raw, _gm.world_tick + world_t + 1)
+			if not contact.is_empty():
+				var normal: Vector2 = contact[1]
+				if not Arrow.can_ricochet_velocity(vel, normal, contact[2], _gm, ricochets):
 					break
-			if blocked:
+				vel = vel.bounce(normal) * _gm.knife_ricochet_retention
+				ricochets += 1
+				pos = pos.lerp(raw, float(contact[0])) + normal * 2.0
+				continue
+			if t >= Arrow.SELF_HIT_GRACE_TICKS and not own_path.is_empty() \
+					and _hits_body(pos, raw, own_path[clampi(world_t, 0, own_path.size() - 1)]):
+				self_hit = true
 				break
 
-			var world_t: int = fire_tick + t
 			for h in _futures.size():
 				var f: PackedVector2Array = _futures[h]
 				var fi: int = clampi(world_t, 0, f.size() - 1)
@@ -770,12 +787,36 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 			var f: PackedVector2Array = _futures[h]
 			hit_value += _late_hit_value(hit_ticks[h] - horizon, f[f.size() - 1])
 	var score := hit_value * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2
+	if self_hit:
+		score += SELF_HIT_SCORE
 	var parry_risk := _velocity_front_parry_risk(origin, dir,
 		_gm.knife_launch_velocity(dir, power).length(), fire_tick, candidate)
 	if parry_risk > 0.0:
 		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
 	return {"score": score, "velocity_parry_risk": parry_risk, "knife_hits": hits,
-		"late_hits": late_hits, "closest": closest, "hit_ticks": hit_ticks}
+		"late_hits": late_hits, "closest": closest, "hit_ticks": hit_ticks,
+		"self_hit": self_hit}
+
+
+## Earliest swept contact of `a -> b` with the terrain standing at `abs_tick`,
+## as [fraction, outward normal, platform]; empty when the segment is clear.
+## Walks the platforms directly so the material comes with the hit without
+## building a collider list for every tick of every candidate knife.
+func _first_platform_impact(a: Vector2, b: Vector2, abs_tick: int) -> Array:
+	var first: Array = []
+	for pf: Dictionary in _gm.platforms:
+		if pf.has("cycle") and not _gm.platform_present_at(pf, abs_tick):
+			continue
+		if pf.has("motion"):
+			var impact := Arrow.segment_rect_impact(a, b, _gm.platform_rect_at(pf, abs_tick))
+			if not impact.is_empty() and (first.is_empty() or impact[0] < first[0]):
+				first = [impact[0], impact[1], pf]
+			continue
+		for rect: Rect2 in pf["rects"]:
+			var impact := Arrow.segment_rect_impact(a, b, rect)
+			if not impact.is_empty() and (first.is_empty() or impact[0] < first[0]):
+				first = [impact[0], impact[1], pf]
+	return first
 
 
 ## The last tick the foe prediction covers.
@@ -794,107 +835,77 @@ func _late_hit_value(late_ticks: int, foe_pos: Vector2) -> float:
 	return maxf(LATE_HIT_FLOOR, 1.0 - reaction / LATE_HIT_FADE_TICKS)
 
 
-## How many ticks the kit's best full-power probe throw from `origin` needs
-## to reach a foe hypothesis, flown with the real integrators so stasis
-## fields, the pillar in between and the world edge all count. A throw that
-## never arrives is charged the ground it still had to cover, priced along the
-## straight line to the target at the clock of every field on the way, plus a
-## detour when a wall blocks that line. At or under the horizon, a hit is on
-## the table this window.
-func _arrival_from(origin: Vector2) -> float:
+## Whether a full-power probe shot from `origin` reaches a foe hypothesis
+## before the window ends. Flown with the kit's real integrator, so a stasis
+## field, the pillar in between and the world edge all count. Only the knife
+## feels a field; the lance and the corona cross at their own pace.
+func _in_reach_from(origin: Vector2) -> bool:
 	var horizon: int = _horizon()
-	var best := INF
 	if _futures.is_empty():
-		return best
+		return true
 	var targets := PackedVector2Array()
 	for f in _futures:
 		targets.append(f[f.size() - 1])
-	if _gm.uses_shock(_idx):
-		var pace: float = maxf(_gm.shock_plasma_speed_for_power(1.0) * _dt, 1.0)
+	var shock: bool = _gm.uses_shock(_idx)
+	var chakram: bool = _gm.uses_chakram(_idx)
+	var radius: float = ShockPlasma.COLLISION_RADIUS if shock else 0.0
+	var probes: Array = []
+	if shock:
 		for target in targets:
-			var direction := plasma_launch_direction(_gm, origin, target,
-				1.0 if _idx % 2 == 0 else -1.0)
-			var pos: Vector2 = Player.shoulder_at(origin) + direction * 24.0
-			var bolt: Vector2 = direction * _gm.shock_plasma_speed_for_power(1.0)
-			var reach_left: float = _gm.shock_plasma_range_for_power(1.0)
-			var flown := 0
-			for t in FLIGHT_CAP:
-				var flight := ShockPlasma.step_state(pos, bolt, _dt, _gm)
-				var raw: Vector2 = flight[0]
-				bolt = flight[1]
-				var step: float = pos.distance_to(raw)
-				if reach_left < step or _segment_blocked(pos, raw, t, ShockPlasma.COLLISION_RADIUS):
-					break
-				reach_left -= step
-				flown = t + 1
-				pos = _gm.wrap_point(raw)
-				if _gm.wrap_delta(pos, target).length() <= PROBE_HIT_RADIUS:
-					best = minf(best, float(flown))
-					break
-				if flown == horizon:
-					best = minf(best, float(flown) + _travel_cost(pos, target, pace, false))
-				if not _gm.world_bounds.has_point(pos):
-					break
-			if best <= float(horizon):
-				return best
-			best = minf(best, float(flown) + _travel_cost(pos, target, pace, false))
-		return best
-	var full_pace: float = maxf(_gm.arrow_speed_max * _dt, 1.0)
-	var launch: Vector2 = origin + Vector2(0.0, -6.0)
-	for side in _sides():
-		for elev in REACH_PROBE_ELEVATIONS:
-			var ang: float = elev if side > 0 else 180.0 - elev
-			var dir := Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
-			var vel: Vector2 = _gm.knife_launch_velocity(dir, 1.0)
-			var pos: Vector2 = launch + vel.normalized() * 22.0
-			var flown := 0
-			var arrived := false
-			for t in FLIGHT_CAP:
+			probes.append(plasma_launch_direction(_gm, origin, target,
+				1.0 if _idx % 2 == 0 else -1.0))
+	else:
+		for side in _sides():
+			for elev in REACH_PROBE_ELEVATIONS:
+				if elev < 0.0 and origin.y >= _foe.position.y - 60.0:
+					continue
+				var ang: float = elev if side > 0 else 180.0 - elev
+				probes.append(Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang))))
+	var disc = Chakram.new() if chakram else null
+	var reached := false
+	for direction: Vector2 in probes:
+		var pos: Vector2
+		var vel: Vector2
+		var reach_left := INF
+		if shock:
+			pos = Player.shoulder_at(origin) + direction * 24.0
+			vel = direction * _gm.shock_plasma_speed_for_power(1.0)
+			reach_left = _gm.shock_plasma_range_for_power(1.0)
+		elif chakram:
+			pos = Player.shoulder_at(origin) + direction * 24.0
+			vel = _gm.chakram_launch_velocities(direction, 1.0)[0]
+		else:
+			vel = _gm.knife_launch_velocity(direction, 1.0)
+			pos = origin + Vector2(0.0, -6.0) + vel.normalized() * 22.0
+		for t in horizon:
+			var raw: Vector2
+			if shock:
+				var flight := ShockPlasma.step_state(pos, vel, _dt, _gm)
+				raw = flight[0]
+				vel = flight[1]
+			elif chakram:
+				vel.x *= maxf(0.0, 1.0 - disc.outbound_drag * _dt)
+				vel.y += disc.outbound_gravity * _dt
+				raw = pos + vel * _dt
+			else:
 				var st := Arrow.step_state(pos, vel, _dt, _gm)
 				vel = st[1]
-				if _segment_blocked(pos, st[2], t, 0.0):
-					break
-				pos = st[0]
-				flown = t + 1
-				for target in targets:
-					if _gm.wrap_delta(pos, target).length() <= PROBE_HIT_RADIUS:
-						arrived = true
-						best = minf(best, float(flown))
-				if arrived:
-					break
-				if flown == horizon:
-					for target in targets:
-						best = minf(best, float(flown) + _travel_cost(pos, target, full_pace, true))
-				if not _gm.world_bounds.has_point(pos):
-					break
-			if best <= float(horizon):
-				return best
-			if not arrived:
-				for target in targets:
-					best = minf(best, float(flown) + _travel_cost(pos, target, full_pace, true))
-	return best
-
-
-## Ticks a projectile already at `from` would still need to cover the straight
-## line to `target`, sampled through every stasis field on the way, plus a
-## detour when a solid blocks the line.
-func _travel_cost(from: Vector2, target: Vector2, pace: float, stasis: bool) -> float:
-	var delta: Vector2 = _gm.wrap_delta(from, target)
-	var length: float = delta.length()
-	var cost := 0.0
-	if stasis and length > 0.0:
-		var samples: int = maxi(1, int(ceil(length / TRAVEL_SAMPLE_PX)))
-		var step: float = length / float(samples)
-		for i in samples:
-			var at: Vector2 = _gm.wrap_point(from + delta * ((float(i) + 0.5) / float(samples)))
-			cost += step / (pace * _gm.time_scale_at(at))
-	else:
-		cost = length / pace
-	for solid: Rect2 in _gm.solids_at(_gm.world_tick):
-		var impact := Arrow.segment_rect_impact(from, from + delta, solid)
-		if not impact.is_empty() and float(impact[0]) > 0.01 and float(impact[0]) < 0.99:
-			return cost + BLOCKED_DETOUR_TICKS
-	return cost
+				raw = st[2]
+			var step: float = pos.distance_to(raw)
+			if reach_left < step or _segment_blocked(pos, raw, t, radius):
+				break
+			reach_left -= step
+			pos = _gm.wrap_point(raw)
+			for target in targets:
+				if _gm.wrap_delta(pos, target).length() <= PROBE_HIT_RADIUS:
+					reached = true
+			if reached or not _gm.world_bounds.has_point(pos):
+				break
+		if reached:
+			break
+	if disc != null:
+		disc.free()
+	return reached
 
 
 func _segment_blocked(from: Vector2, to: Vector2, t: int, radius: float) -> bool:
@@ -938,7 +949,7 @@ func _style_shot_value(res: Dictionary, fire_tick: int, power: float, side: int)
 ## Eclipse cannot be evaluated as a reskinned dagger. DECREE is walked through
 ## the real corona integrator for the remaining execution window, including its
 ## drag, gravity, HARD bank and consecration. ABSOLUTION separately traces every
-## callable corona—including its real platform skid—toward this movement
+## callable corona (including its real platform skid) toward this movement
 ## candidate and wins only when the returning formation beats a new threat.
 func _fire_chakram(origin: Vector2, side: int, elev: float, power: float,
 		fire_tick: int, candidate: Dictionary = {}) -> Dictionary:
@@ -1135,8 +1146,14 @@ func _fire_shock(origin: Vector2, fire_tick: int,
 	# from across the arena that were never going to land.
 	var out_of_reach: bool = not establish_orb \
 		and distance > _gm.shock_plasma_range_for_power(1.0)
+	# The combo blast does not spare its owner. Standing inside it when the
+	# lance lands trades the point for a reset, which is no plan either.
+	var self_blast: bool = combo_ready and candidate.has("path") \
+		and _gm.wrap_delta(_route_point(candidate["path"], fire_tick), target).length() \
+			<= _gm.shock_combo_radius
 	var blocked: bool = false if establish_orb else \
-		(out_of_reach or _line_blocked(origin, target, ShockPlasma.COLLISION_RADIUS, fire_tick))
+		(out_of_reach or self_blast \
+		or _line_blocked(origin, target, ShockPlasma.COLLISION_RADIUS, fire_tick))
 	var payoff := 520.0 if establish_orb else (1600.0 if combo_ready else 1000.0)
 	return {"score": (payoff if not blocked else 0.0) \
 		- distance * 0.035 - float(fire_tick) * 0.2,
@@ -1181,7 +1198,12 @@ func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
 		# AI plan shots that never arrive and then score them as though they had.
 		var bolt: Vector2 = direction * _gm.shock_plasma_speed_for_power(1.0)
 		var reach_left: float = _gm.shock_plasma_range_for_power(1.0)
-		for t in mini(72, _gm.exec_ticks() - fire_tick):
+		var hit_ticks := [-1, -1, -1]
+		var horizon: int = _horizon()
+		# The lance is fast enough to land a few ticks into the next window
+		# from a late release; those count, discounted by the warning the foe
+		# gets, the same as a knife.
+		for t in FLIGHT_CAP:
 			var flight := ShockPlasma.step_state(pos, bolt, _dt, _gm)
 			var raw: Vector2 = flight[0]
 			bolt = flight[1]
@@ -1200,18 +1222,32 @@ func _shock_plasma_solution(origin: Vector2, fire_tick: int) -> Dictionary:
 				var fi := clampi(world_t, 0, future.size() - 1)
 				if not covered[h] and _hits_body(pos, raw, future[fi]):
 					covered[h] = true
-				closest = minf(closest, _gm.wrap_delta(raw, future[fi]).length())
+					hit_ticks[h] = world_t
+				if world_t <= horizon:
+					closest = minf(closest, _gm.wrap_delta(raw, future[fi]).length())
 			if blocked:
 				break
 			pos = _gm.wrap_point(raw)
-		var hits := 0
-		for did_hit in covered:
-			if did_hit:
-				hits += 1
-		var score := float(hits) * 1100.0 - closest * 0.06 - float(fire_tick) * 0.2
+			if not _gm.world_bounds.has_point(pos):
+				break
+		var hit_value := 0.0
+		for h in covered.size():
+			if not covered[h]:
+				continue
+			if hit_ticks[h] <= horizon:
+				hit_value += 1.0
+			else:
+				var future: PackedVector2Array = _futures[h]
+				hit_value += _late_hit_value(hit_ticks[h] - horizon, future[future.size() - 1])
+		var score := hit_value * 1100.0 - closest * 0.06 - float(fire_tick) * 0.2
 		if score > float(best["score"]):
-			best = {"score": score, "target": target}
+			best = {"score": score, "target": target, "closest": closest}
 	return best
+
+
+## Where a route stands at `tick`, clamped to its ends.
+func _route_point(path: PackedVector2Array, tick: int) -> Vector2:
+	return path[clampi(tick, 0, path.size() - 1)]
 
 
 func _shock_combo_opportunity(orb) -> Dictionary:

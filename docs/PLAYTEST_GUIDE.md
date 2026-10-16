@@ -43,7 +43,7 @@ Include a screenshot or recording if it helps explain a confusing outcome.
 
 Logging stays on your device until you share it. Options can disable logging,
 and the feedback form lets you exclude the report. A browser closed abruptly
-may leave an `in_progress` checkpoint rather than a confirmed abandonment.
+may leave an `in_progress` checkpoint instead of a confirmed abandonment.
 
 ## Developer access
 

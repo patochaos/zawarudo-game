@@ -205,7 +205,7 @@ func sim_free(dt: float, dir: int, jump: bool, jump_held: bool, drop: bool = fal
 
 
 ## Replays tick `t` of the recorded plan. Past the end of the recording the
-## player simply coasts — momentum and gravity, no input.
+## player simply coasts: momentum and gravity, no input.
 ##
 ## `from_tick` is the absolute world tick this step departs from; it is what the
 ## moving geometry is projected against. -1 means "resolve against the world
@@ -237,7 +237,7 @@ func sim_step(dt: float, t: int, from_tick: int = -1) -> void:
 
 ## Returns [velocity, on_ground, drop_ticks, drop_from_y]. Opening a drop costs
 ## the ground contact immediately, so the same tick cannot also be spent on a
-## jump — down and up are one button, and asking for both is asking for down.
+## jump. Down and up are one button, and asking for both is asking for down.
 ##
 ## A drop can only be opened from a surface. Whether there is actually anything
 ## to fall through is settled by `step_state`: if the body is standing on
@@ -353,7 +353,7 @@ static func step_state(pos: Vector2, vel: Vector2, on_ground: bool, dir: int, ju
 
 ## Transparent to a drop in progress: thin enough to be a ledge rather than a
 ## floor, and sitting at or above the surface the drop started from. The height
-## test is what keeps the immunity from carrying past a second ledge — anything
+## test is what keeps the immunity from carrying past a second ledge. Anything
 ## below the one you left is still solid, so a drop always lands somewhere.
 static func _is_open_ledge(r: Rect2, drop_from_y: float) -> bool:
 	return r.size.y <= DROP_THROUGH_MAX_THICKNESS and r.position.y <= drop_from_y + 1.0
@@ -889,7 +889,7 @@ func _draw() -> void:
 	if on_ground:
 		draw_circle(Vector2(0.0, HALF.y + 2.0), 15.0, Color(0, 0, 0, 0.28))
 
-	# invulnerability shield — arrows pass straight through this turn
+	# invulnerability shield: arrows pass straight through this turn
 	if is_invulnerable():
 		var r := 34.0
 		draw_circle(Vector2.ZERO, r, Color(color.r, color.g, color.b, 0.10))

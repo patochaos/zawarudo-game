@@ -1,4 +1,4 @@
-# Gilded Executor — 3D production contract
+# Gilded Executor: 3D production contract
 
 Status: model sheet V1 and Blender scene prepared. No 3D mesh is approved yet.
 
@@ -22,7 +22,7 @@ The generated turnaround is construction guidance, not permission to redesign th
 
 ## Production gates
 
-### Gate A — base model
+### Gate A: base model
 
 - Clean full-body mesh in neutral A-pose.
 - Correct silhouette from front, profile and gameplay camera.
@@ -31,21 +31,21 @@ The generated turnaround is construction guidance, not permission to redesign th
 
 Approval test: the untextured silhouette must be recognizable at 128 px and must not look like the technical polygon prototype.
 
-### Gate B — topology and materials
+### Gate B: topology and materials
 
 - Deformation-ready topology at shoulders, elbows, hips and knees.
 - Coat tails have enough geometry for controlled secondary motion.
 - Cel-shaded materials limited to ivory, black, gold, skin and hair families.
 - Shared palette controls support freeze-frame hue changes without repainting textures.
 
-### Gate C — rig
+### Gate C: rig
 
 - Humanoid rig with IK/FK arms and legs.
 - Dedicated controls for coat tails, collar, hair locks and clock ornament.
 - Weapon hand and shoulder anchors exported as named markers.
 - No root motion; gameplay position remains authoritative in Godot.
 
-### Gate D — animation slice
+### Gate D: animation slice
 
 First delivery contains only:
 
@@ -57,7 +57,7 @@ First delivery contains only:
 
 Animation is rendered at fixed frame indices. Godot selects frames from simulation state and `world_tick`; Blender animation playback never controls gameplay.
 
-### Gate E — sprite export
+### Gate E: sprite export
 
 - Orthographic render with transparent background.
 - 128 px target fighter height for the first readability pass.

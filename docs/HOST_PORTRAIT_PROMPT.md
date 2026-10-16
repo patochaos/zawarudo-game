@@ -19,7 +19,7 @@ automatically; the gold time-stop rings and plate stay behind it.
 ## Prompt (Google Gemini)
 
 ```text
-Anime character portrait, head and shoulders, three-quarter view facing slightly to the right, looking at the viewer with a smug, superior half-smile that shows one small fang. Cel-shaded illustration with clean black lineart, flat colors and two-tone shading, in the style of a 1990s–2010s shonen fighting anime. Square image, transparent background, no text, no watermark.
+Anime character portrait, head and shoulders, three-quarter view facing slightly to the right, looking at the viewer with a smug, superior half-smile that shows one small fang. Cel-shaded illustration with clean black lineart, flat colors and two-tone shading, in the style of a 1990s-2010s shonen fighting anime. Square image, transparent background, no text, no watermark.
 
 The character: a tall, aristocratic vampire lord who can stop time. Pale skin. Thick swept-back golden-blond hair in large sharp spikes that flare up and back. Narrow crimson eyes with small pupils, heavy angled eyebrows. On his forehead a dark green headband with a small red heart-shaped ornament at the centre. He wears an orange-yellow high-collared jacket with the collar flared open, a black tank top underneath, and a small green heart-shaped clasp at the chest. Earrings shaped like small hearts. Confident, theatrical, villainous, charismatic.
 
@@ -42,7 +42,7 @@ photorealism, no soft painterly blur, no muted colours, no extra characters
 
 - Generator: Google Gemini, run by the user on 2026-10-14 with the prompt above.
   Gemini returned a 2048 x 2048 JPG with the checkerboard painted into the
-  pixels rather than a real alpha channel.
+  pixels instead of a real alpha channel.
 - Conversion: a one-off Godot script flood-filled light, unsaturated pixels
   inward from the image border (the black outline stops the fill), eroded one
   pixel of grey fringe, resized to 1254 x 1254 with Lanczos and saved the PNG.

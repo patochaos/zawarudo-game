@@ -159,7 +159,7 @@ func _test_thick_ground_is_not_a_door() -> void:
 
 
 ## The drop is part of the recording, so the ghost and the executed body have to
-## end in the same place — the same contract every other input obeys.
+## end in the same place, the same contract every other input obeys.
 func _test_planned_drop_replays() -> void:
 	var gm = GAME_MANAGER.new()
 	var rects: Array[Rect2] = [Rect2(-100.0, 100.0, 200.0, 16.0), Rect2(-100.0, 400.0, 200.0, 100.0)]

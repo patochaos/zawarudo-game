@@ -1,4 +1,4 @@
-# Core-loop demo — 0.3.0-core-playtest.1
+# Core-loop demo 0.3.0-core-playtest.1
 
 ## Product scope
 

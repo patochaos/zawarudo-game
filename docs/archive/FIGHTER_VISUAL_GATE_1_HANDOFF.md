@@ -7,7 +7,7 @@
 - Starting branch: detached worktree HEAD; `codex/fighter-visual-slice` pointed
   at the starting commit
 - Starting commit: `476977bde02af24182cddfdaacbc5bba2e0fdced`
-- Production gate: Gate 1 — visual contract and silhouette proof
+- Production gate: Gate 1, visual contract and silhouette proof
 - Status: complete
 
 ## Required reading

@@ -1,4 +1,4 @@
-# SUPER and impact art — September 4, 2026 (copy revised October 14, 2026)
+# SUPER and impact art, September 4, 2026 (copy revised October 14, 2026)
 
 SUPER uses an original Blender-rendered temporal dial with five blade facets,
 followed by the existing fighter portrait and, since the Gate 3 pass, the

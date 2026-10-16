@@ -1,4 +1,4 @@
-# The Pulse — canonical character specification
+# The Pulse: canonical character specification
 
 **Class Lab prototype available:** a harmless timed carrier that splits into two daggers. See [Class Lab](../CLASS_LAB.md) for current experimental rules and controls. The mechanics below document the preserved original kit, which remains benched outside the lab.
 
@@ -44,7 +44,7 @@ brutal magic.
 4. **Set the beat, hit the beat.** The orb is a visible promise; the straight
    plasma note is the payoff. Every effect must explain that relationship.
 5. **Defiance under control.** Her punk identity comes from tailoring, stance
-   and refusal to please—not graffiti, weapon clutter or random destruction.
+   and refusal to please, not from graffiti, weapon clutter or random destruction.
 
 ## Physical design
 
@@ -60,7 +60,7 @@ brutal magic.
 - Combat focus opens the eyes and sets the jaw. Enjoyment appears as a small
   sharp grin, never a wild laugh, bulging stare or open-mouthed mania.
 
-### Hair — strict identity rule
+### Hair: strict identity rule
 
 - Short black-violet bob ending at the jaw.
 - Heavy blunt fringe broken into crisp geometric points.
@@ -121,7 +121,7 @@ text, graffiti, dozens of pins, chains or torn fabric.
 - Huge black and black-cherry platform boots rise to mid-calf.
 - Three substantial chrome buckle straps cross each boot.
 - Faceted chrome soles are deep, heavy and architectural, with a stable broad
-  footprint rather than a conventional heel.
+  footprint instead of a conventional heel.
 - Acid-chartreuse piping appears only along the upper edge and one sole seam.
 - Boots must look capable of landing from a jump and anchoring recoil.
 
@@ -157,7 +157,7 @@ butterfly lobes, a cape, tail, antennae or insect abdomen.
 The baton is the sole handheld weapon and the visible source of her straight
 plasma note.
 
-- Exactly one baton, approximately 75 cm long—roughly shoulder to mid-thigh on
+- Exactly one baton, approximately 75 cm long, roughly shoulder to mid-thigh on
   her body.
 - Straight near-black shaft with narrow chrome bevels.
 - Faceted chrome diamond butt cap.
@@ -217,7 +217,7 @@ familiars.
 
 Acid chartreuse is a precise visual sting, never a full-body neon wash. Keep
 black cherry warmer and darker than the purple wing glass. Team color belongs
-in outlines and markers rather than replacing her personal palette.
+in outlines and markers and never replaces her personal palette.
 
 ## Silhouette and arena-scale rules
 
@@ -226,7 +226,7 @@ in outlines and markers rather than replacing her personal palette.
   boots.
 - Primary body shape is a small sharp hourglass nested inside a much larger wing
   diamond.
-- At 720p wide-camera scale, keep her visible body approximately **46–49 logical
+- At 720p wide-camera scale, keep her visible body approximately **46-49 logical
   pixels tall**, foot-anchored to the existing collision body. Wings may extend
   outside the collision silhouette.
 - At tiny scale preserve: acid forehead slash, white torso shard, burgundy
@@ -283,7 +283,7 @@ sound accidental. She treats combat like a live set with terrible supporting
 musicians: opponents miss cues, projectiles arrive off-beat and the arena needs
 her to impose a cleaner arrangement.
 
-Her rebellion is cold rather than chaotic. She dislikes institutions, heroic
+Her rebellion is cold, never chaotic. She dislikes institutions, heroic
 branding and compulsory sweetness, but she still practices obsessively and
 maintains every piece of equipment. Compliments receive suspicion; disrespect
 receives a demonstration. She genuinely enjoys beautiful timing and can briefly
@@ -339,7 +339,7 @@ Sample tone (directional, not mandatory final copy):
 - An ordinary projectile or orb lifetime expiry triggers a compact owner-safe
   four-point pressure glyph.
 - The small pop is clearly weaker and less dense than the plasma combo.
-- Nearby weapons bend away on clean radial vectors rather than vanishing.
+- Nearby weapons bend away on clean radial vectors instead of vanishing.
 - Do not fill the area with smoke, debris, fire or electrical arcs.
 
 ### Plasma combo
@@ -436,7 +436,7 @@ Reject an image or animation if any of the following is true:
 - rendering leaves the roster's flamboyant high-fashion anime/manga language for
   pastel storybook fantasy, generic magical-girl idol art, photorealism or 3D.
 
-## Reusable AI prompt — full character
+## Reusable AI prompt: full character
 
 ```text
 One original adult female anime fighting-game character named THE PULSE, visual
@@ -519,7 +519,7 @@ Before accepting a Pulse asset, answer yes to all of these:
    construction?
 8. Are the straight plasma line, delayed orb arming, small pop and large combo
    visually distinct and mechanically honest?
-9. Does she feel controlled and punk rather than manic, princess-like or bubbly?
+9. Does she feel controlled and punk, with nothing manic, princess-like or bubbly?
 10. Does the result belong beside The Duelist, The Rook and The Eclipse in the
     same flamboyant high-fashion anime/manga roster?
 

@@ -14,7 +14,7 @@ var _only_player_count := 0
 ## Restrict the matrix to one arena. Every match is seeded from its own
 ## (level, sample, pairing) triple and never reads another match's state, so
 ## splitting by arena across parallel processes gives byte-identical totals to
-## one serial run — it just uses more than the single core this is otherwise
+## one serial run. It just uses more than the single core this is otherwise
 ## pinned to. -1 runs the whole matrix.
 var _only_level := -1
 var _report := {

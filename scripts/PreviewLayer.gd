@@ -18,7 +18,7 @@ const RETICLE_PULSE := preload("res://assets/kenney/reticles/pulse.png")
 func _draw() -> void:
 	if gm == null:
 		return
-	# Free play is continuous, so there is no ghost and nothing is frozen — just
+	# Free play is continuous, so there is no ghost and nothing is frozen, just
 	# the knife fan, so you can still see where you are pointing and how hard.
 	if gm.state == Phase.FREEPLAY:
 		var me: Player = gm.players[0]
@@ -46,13 +46,13 @@ func _draw() -> void:
 	# Where the moving world will be when this window closes is public and
 	# knowable, so it is drawn rather than left as a memory test.
 	_draw_kinetics()
-	# Knives already in the air are public information — they were fired in the
+	# Knives already in the air are public information. They were fired in the
 	# open. Only the pending plan is secret.
 	_draw_existing_arrows()
 	for p in gm.players:
 		if p.alive and not gm.hides_plan(p.index):
 			_draw_player_preview(p)
-	# Readiness is public even when the plan behind it is not — knowing the
+	# Readiness is public even when the plan behind it is not. Knowing the
 	# opponent is done is what lets a short turn feel like a race rather than a
 	# wait. Drawn in world space, over the fighter, so it survives a camera that
 	# has pushed in past the HUD.
@@ -256,7 +256,7 @@ func _draw_sprite_ghost(at: Vector2, p: Player, skin: FighterSkin, alpha: float,
 
 ## One shot per turn. While the shot is still yours to place, the reticle tracks
 ## the aim and the arc updates live. The moment it is fired the reticle vanishes
-## and only the committed path remains — rollback brings the reticle back.
+## and only the committed path remains. Rollback brings the reticle back.
 ##
 ## `origin` is the point on the piloted path the bow releases from: the ghost's
 ## live head while you are still placing the shot, or the pinned tick once you
@@ -643,7 +643,7 @@ func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
 	var body := weapon_col if live else Color(weapon_col.r, weapon_col.g, weapon_col.b, 0.55)
 	var tip := shoulder
 	if mode == 0:
-		# The lance falls, but only its opening tenth is public—enough to read the
+		# The lance falls, but only its opening tenth is public, enough to read the
 		# ballistic bend without revealing its complete range or impact.
 		var launch: Vector2 = dir * gm.shock_plasma_speed_for_power(power)
 		var flight: Dictionary = PredictionSystem.predict_plasma(
@@ -750,7 +750,7 @@ func _draw_dash_preview(p: Player, origin: Vector2, base: Color,
 			draw_polyline(panel + PackedVector2Array([panel[0]]),
 				Color(0.76, 1.0, 1.0, 0.62 if live else 0.34), 1.5, true)
 
-	# The extra body is the promised post-dash position—not a projectile head.
+	# The extra body is the promised post-dash position, not a projectile head.
 	_draw_destination(end, p)
 	_draw_ghost_figure(end, p, 1.0 if live else 0.66)
 	draw_circle(end, 35.0, Color(0.18, 0.92, 1.0, 0.10 if live else 0.05))
@@ -1061,7 +1061,7 @@ func _draw_trajectory(path: PackedVector2Array, col: Color, live: bool, end_mark
 
 ## Splits a path wherever it jumped across a wrapping seam. A body moves at most
 ## a few pixels per tick and an arrow a couple of dozen, so any gap this large is
-## a wrap, not motion — drawing through it would streak a line across the arena.
+## a wrap, not motion. Drawing through it would streak a line across the arena.
 const SEAM_JUMP_SQ := 40000.0    # (200 px)^2
 
 

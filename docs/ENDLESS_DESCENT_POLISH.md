@@ -1,4 +1,4 @@
-# Endless Descent — 1v1 layout and art, September 6, 2026
+# Endless Descent: 1v1 layout and art, September 6, 2026
 
 The layout was tested before editing using the production AI planner, actual
 execution ticks, rendered early exchanges and targeted movement probes. These
@@ -41,7 +41,7 @@ are cleared without consuming a simulation tick. Seeds: 90210, 90347, 90484,
 
 Reports: `previews/descent-{baseline,candidate,polished}.json`. Early execution
 captures: `previews/descent-<label>-turn<1..4>.png`. First-hit turn in this harness
-is sampled after the turn transition; compare consistently rather than treating
+is sampled after the turn transition; compare consistently instead of treating
 it as an exact event tick. Wrap counters are large position-displacement samples.
 `EndlessDescentRoutes.gd` measures the actual opening jump with `Player.step_state`.
 The saved comparison reports were reconstructed from each run's per-match

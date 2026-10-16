@@ -329,8 +329,8 @@ func finish_window() -> void:
 	gm._telemetry.record("lesson_result", gm.turn, {"lesson": lesson + 1, "success": success})
 	completed = success
 	var messages: Array[String] = [
-		"Your ghost became flesh.\nThe ghost previews. EXECUTE delivers.\nEven a human can learn this. Next: put a knife on that route.",
-		"You threw at a spot where nobody stood yet. That is the whole game.\nIn a real duel his route is hidden.\nRead his feet. Guess the landing.",
+		"Your ghost became flesh.\nWhat the ghost walked, your body walked.\nEven a human can learn this. Next: put a knife on that route.",
+		"You threw at a spot where nobody stood yet, and he walked into it.\nIn a real duel his route is hidden.\nRead his feet. Guess the landing.",
 		"Two knives, two turns, zero holes in you.\nA safe jump can still have a terrible landing. Read the threat at every freeze.\nThe playtime service is now over.\nGo fight the CPU, first to three hits. Do not embarrass me.",
 	]
 	var retries: Array[String] = [

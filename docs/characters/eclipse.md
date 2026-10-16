@@ -1,4 +1,4 @@
-# The Eclipse — canonical character specification
+# The Eclipse: canonical character specification
 
 **Class Lab prototype available:** one destructible corona following a fixed out-and-back route. See [Class Lab](../CLASS_LAB.md) for current experimental rules and controls. The mechanics below document the preserved original kit, which remains benched outside the lab.
 
@@ -34,7 +34,7 @@ contradiction between apparent compassion and effortless ruthlessness.
 2. **Counterfeit divinity.** The permanent crown is a generator; the dangerous
    halos are infinitely reproduced claims of holiness.
 3. **Ceremony instead of exertion.** He places and recalls weapons with liturgical
-   gestures rather than athletic throws.
+   gestures instead of athletic throws.
 4. **Orbit as territory.** Every deployed corona changes the composition of the
    arena and remains visually connected to him through shared circular grammar.
 
@@ -102,7 +102,7 @@ without reproducing a real religion's garments or symbols.
 - No crown, rosary, prayer beads, rings on every finger or recognizable sacred
   jewelry.
 
-## Permanent aureole — never thrown
+## Permanent aureole, never thrown
 
 The aureole is part of The Eclipse's permanent silhouette and the generator for
 his weapons. It is not a projectile.
@@ -118,7 +118,7 @@ his weapons. It is not a projectile.
 The Eclipse is **never halo-less**. Never remove, throw, enlarge, blade or stack
 the permanent aureole.
 
-## Generated corona — persistent chakram
+## Generated corona: persistent chakram
 
 Each attack generates a new dangerous corona from the aureole without consuming
 or replacing it.
@@ -158,14 +158,14 @@ and dissolves into the permanent aureole. It does not remain stacked behind him.
 
 Wine, pearl and rose gold must remain distinct from The Duelist's warm ivory and
 antique gold. The inner glow is a hairline accent, not a neon aura. Player-team
-colors belong in outlines and markers rather than replacing the sacred palette.
+colors belong in outlines and markers and never replace the sacred palette.
 
 ## Silhouette and arena-scale rules
 
 - Exclusive silhouette anchors: smooth circular aureole around the shaved head,
   pearl double-crescent mantle and two long straight stole ribbons.
 - Primary form: tall narrow column with wide lower trouser hems.
-- At 720p wide-camera scale, keep his visible body approximately **50–53 logical
+- At 720p wide-camera scale, keep his visible body approximately **50-53 logical
   pixels tall**, foot-anchored to the existing 32×48 collision body. The aureole
   may extend above and beside the head without changing collision.
 - A generated corona is a separate, unmistakable ring roughly one third of the
@@ -183,7 +183,7 @@ weapon coronas are away from him.
 
 ## Movement and pose language
 
-The Eclipse appears to ascend through faith rather than jump through effort. His
+The Eclipse appears to ascend through faith instead of jumping through effort. His
 real movement remains mechanically honest, but the acting hides exertion behind
 ceremony.
 
@@ -317,8 +317,8 @@ remain unchanged.
 - Character select: full narrow silhouette with one bladed corona floating away
   from his open hand while the permanent aureole remains visible.
 - SUPER cut-in: severe low-angle bust, two-finger benediction in foreground,
-  smooth aureole behind the head and three forming coronas framed around—not
-  stacked directly behind—it.
+  smooth aureole behind the head and three forming coronas framed around it, not
+  stacked directly behind it.
 - His smile should remain small. Wide grins, exposed teeth and manic eyes destroy
   the character.
 - Do not crop every circular element concentrically; offset coronas create the
@@ -361,7 +361,7 @@ Reject an image or animation if any of the following is true:
 - rendering leaves the game's flamboyant high-fashion anime/manga language for
   photorealism, generic fantasy or military sci-fi.
 
-## Reusable AI prompt — full character
+## Reusable AI prompt: full character
 
 ```text
 One original male anime fighting-game character named THE ECLIPSE, visual
@@ -429,7 +429,7 @@ Before accepting an Eclipse asset, answer yes to all of these:
 5. Are all dangerous coronas separate, larger and exactly twelve-bladed?
 6. Can several coronas coexist without stacking or removing his permanent crown?
 7. Are the pearl crescent mantle and exactly two straight stole ribbons present?
-8. Does he cast with open liturgical gestures rather than physical exertion?
+8. Does he cast with open liturgical gestures and no visible physical exertion?
 9. Do outbound, holding, destruction and independent return states remain
    mechanically honest?
 10. Is the result original flamboyant anime/manga game art without recognizable

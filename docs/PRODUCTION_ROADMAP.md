@@ -1,4 +1,4 @@
-# ZAWARUDO — Production roadmap
+# ZAWARUDO: Production roadmap
 
 **Current public demo:** [Core playtest](CORE_PLAYTEST.md) defines the focused
 0.3.0 entry flow, timed lessons, readability, feedback and observation gates.
@@ -6,7 +6,7 @@ The experiment and art-production notes below remain development context.
 
 **Experimental Class Lab:** the menu now offers redesigned Rook (lance), Pulse (delayed split), and Eclipse (fixed return) against CPU in planning or real time. Normal roster stays Duelist-only. See [Class Lab](CLASS_LAB.md).
 
-**Current roster scope — September 4, 2026:** Duelist only. Rook, Pulse and
+**Current roster scope, September 4, 2026:** Duelist only. Rook, Pulse and
 Eclipse are benched, with code and assets preserved. Their production work
 below is deferred while we focus on prediction and projectile placement.
 
@@ -28,8 +28,8 @@ event-driven presentation in Godot.
 
 ## Current handoff
 
-The maintenance pass of 2026-08-21 — retired-feature removal, the online
-protocol 2 pin, the forfeit path and the CI hardening — is written up in
+The maintenance pass of 2026-08-21 (retired-feature removal, the online
+protocol 2 pin, the forfeit path and the CI hardening) is written up in
 [`HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md`](archive/HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md),
 together with the open backlog and the acceptance commands. Read it before
 picking up new work.
@@ -43,7 +43,7 @@ picking up new work.
 - Treat every new character, shader and cut-in as a cosmetic observer.
 - Use pre-rendered 3D for match characters. Do not use live 3D viewports in
   normal combat.
-- Use apparent 8–12 fps stepped character animation over the 60 Hz simulation.
+- Use apparent 8-12 fps stepped character animation over the 60 Hz simulation.
 - Keep the stick renderer behind a feature flag until the first vertical slice
   passes gameplay, replay, online and Web verification.
 - Build one complete fighter before producing the second.
@@ -59,7 +59,7 @@ These rules cannot change as a side effect of the art pass:
 - No root motion, shared visual RNG, `Engine.time_scale` changes or visual code
   writing into `Player`, `PlayerPlan` or `GameManager` state.
 
-## Gate 0 — Recoverable baseline
+## Gate 0: Recoverable baseline
 
 Goal: preserve a known-good version before changing the renderer.
 
@@ -74,7 +74,7 @@ Goal: preserve a known-good version before changing the renderer.
 Exit criteria: green verification, reference captures and a recoverable commit.
 No final character production starts before this gate passes.
 
-## Gate 1 — Visual contract and silhouette proof
+## Gate 1: Visual contract and silhouette proof
 
 Goal: prove scale, readability and integration with cheap greybox art.
 
@@ -92,7 +92,7 @@ Goal: prove scale, readability and integration with cheap greybox art.
 Exit criteria:
 
 - Two fighters are distinguishable as black silhouettes at normal match scale.
-- Art may occupy roughly 56×82–64×92 logical pixels while collision remains
+- Art may occupy roughly 56×82-64×92 logical pixels while collision remains
   exactly 32×48.
 - Hand/weapon and muzzle differ by at most 1 px in the eight principal aim
   sectors.
@@ -102,7 +102,7 @@ Exit criteria:
 - All existing tests remain green at 1280×720, 1024×576 and 1600×900, including
   touch and Web.
 
-## Gate 2 — Fighter A vertical slice
+## Gate 2: Fighter A vertical slice
 
 Goal: prove the complete Blender → sprites → Godot production line with The
 Gilded Executor.
@@ -119,7 +119,7 @@ Gilded Executor.
 Exit criteria: every state works in a real match, with no foot sliding, root
 motion, dishonest launch origin or visible Web performance regression.
 
-## Gate 3 — Event direction
+## Gate 3: Event direction
 
 Goal: create one reusable theatrical grammar instead of isolated effects.
 
@@ -142,7 +142,7 @@ and `EventDirectionTest` / `EventDirectionVisualTest`.
 `_super_pause_active`); `SuperFreezeFrame` is a pure observer that animates for
 the same length and can still be cancelled to release the pause early.
 
-## Gate 4 — Fighter B and UI identity
+## Gate 4: Fighter B and UI identity
 
 Goal: reuse the proven contract for The Violet Witness.
 
@@ -154,14 +154,14 @@ Goal: reuse the proven contract for The Violet Witness.
 Exit criteria: both fighters remain distinct in grayscale, high contrast and
 small-scale views while sharing one technical contract.
 
-## Gate 5 — UX validation and candidate build
+## Gate 5: UX validation and candidate build
 
 Run observed tests with players unfamiliar with the project.
 
 - At least 4 of 5 understand plan → lock → execute from the onboarding.
 - At least 4 of 5 can explain the cause of their last hit.
 - Touch aiming does not hide the action.
-- Repeated SUPERS remain exciting rather than disruptive.
+- Repeated SUPERS stay exciting and do not become disruptive.
 - Accessibility variants preserve information.
 - Replay, online lockstep and Web retain the Gate 0 baseline.
 

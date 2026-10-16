@@ -24,7 +24,7 @@ changed.
 
 The host chooses the rematch arena; all four players must request a rematch.
 Planning remains private until all four plans arrive. A planning timeout submits
-that PC's current plan, rather than bypassing the other players.
+that PC's current plan instead of bypassing the other players.
 
 ## Nicknames
 

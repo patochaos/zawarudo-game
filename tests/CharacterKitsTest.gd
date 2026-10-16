@@ -369,7 +369,7 @@ func _test_eclipse_absolution_and_ai(game) -> void:
 
 
 ## The orb field used to be unbounded in both directions: nothing capped how many
-## could be live, and an uncollected orb held its square for 360 execution ticks —
+## could be live, and an uncollected orb held its square for 360 execution ticks,
 ## eight planning phases. The two orbs the AI keeps came from a planner constant
 ## a human was never bound by, so the field a person could build was strictly
 ## larger than anything the balance matrix ever measured.

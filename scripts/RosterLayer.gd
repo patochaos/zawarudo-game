@@ -3,7 +3,7 @@ class_name RosterLayer
 
 ## The lineup screen: four slots, each one independently a human seat, a CPU or
 ## an open seat. Nothing about the match is decided here except who is fighting
-## and as whom — rules and arena live on MatchSetupLayer, the screen after this.
+## and as whom. Rules and arena live on MatchSetupLayer, the screen after this.
 ##
 ## A fighter is cycled inside its own slot rather than given a column of its
 ## own, so the cast can grow past four without the screen changing shape. Each
@@ -31,7 +31,7 @@ enum SlotKind { OPEN, PLAYER, CPU }
 
 const DIFFICULTY_NAMES := ["NOVICE", "STANDARD", "RUTHLESS"]
 
-## A slot's control tile walks one list — the human seat, the three CPU presets,
+## A slot's control tile walks one list: the human seat, the three CPU presets,
 ## then the open seat. Who holds a slot and how hard they play is a single
 ## decision, so there is no second control to go hunting for.
 const ROLE_PLAYER := 0
@@ -616,7 +616,7 @@ func _release(slot: int) -> void:
 
 
 ## A pad takes the first open seat, or the first human seat still waiting for a
-## device — which is how the host hands a controller to a specific column.
+## device, which is how the host hands a controller to a specific column.
 func _join(device: int) -> void:
 	var target := -1
 	for i in MAX_SLOTS:

@@ -1,4 +1,4 @@
-# The Rook — canonical character specification
+# The Rook: canonical character specification
 
 **Class Lab prototype available:** a single lance with one fragile-cover penetration. See [Class Lab](../CLASS_LAB.md) for current experimental rules and controls. The mechanics below document the preserved original kit, which remains benched outside the lab.
 
@@ -41,8 +41,8 @@ runway-level theatrical style and siege-engine physical force.
 ## Physical design
 
 - Adult woman, visually late twenties to mid-thirties.
-- Tall, approximately 7.5 heads, with heroic rather than naturalistic
-  proportions.
+- Tall, approximately 7.5 heads, with heroic proportions instead of
+  naturalistic ones.
 - Broad shoulders, visibly muscular upper arms and back, strong abdominal core,
   sturdy waist, powerful glutes, thick athletic thighs and developed calves.
 - Built like a heavyweight athlete or powerlifter, not a dehydrated bodybuilder.
@@ -55,15 +55,15 @@ runway-level theatrical style and siege-engine physical force.
 - She should remain stylish and feminine without shrinking her shoulders,
   waist, arms or legs.
 
-### Hair — strict identity rule
+### Hair: strict identity rule
 
 - Dark auburn hair with copper highlights.
 - The front and crown sweep upward into one enormous sculptural vertical crest,
   like a wind-caught flame or piece of runway headwear.
 - One thick long braid falls over **her left shoulder** and reaches the upper
   abdomen.
-- The sides are tightly controlled so the crest stays graphic rather than
-  becoming loose, fluffy hair.
+- The sides are tightly controlled so the crest stays graphic and never
+  becomes loose, fluffy hair.
 
 The crest is not a mohawk, helmet plume, ordinary ponytail or mass of radial
 spikes. The braid and crest must appear together.
@@ -136,7 +136,7 @@ shields or generic rectangle. Its crescent-rim profile is character-exclusive.
 
 Normal art should show the scale relationship honestly. If the full lance
 cannot fit in a portrait crop, show enough of the three-ring butt or spearhead
-to identify it rather than silently shortening the weapon.
+to identify it instead of silently shortening the weapon.
 
 ## Palette
 
@@ -152,7 +152,7 @@ to identify it rather than silently shortening the weapon.
 
 Cyan is an energy accent, never a large costume fill. Gold is structural, not
 glitter. Navy and near-black must remain visibly distinct under normal lighting.
-Player-team colors belong in outlines, markers and VFX rather than replacing the
+Player-team colors belong in outlines, markers and VFX and never replace the
 canonical orange/cyan identity.
 
 ## Silhouette and arena-scale rules
@@ -161,7 +161,7 @@ canonical orange/cyan identity.
   tower shield and long lance with three counterweight rings.
 - Primary body shape: broad upper torso and powerful legs, never an hourglass
   reduced to a narrow waist.
-- At 720p wide-camera scale, keep her visible body approximately **50–53 logical
+- At 720p wide-camera scale, keep her visible body approximately **50-53 logical
   pixels tall**, foot-anchored to the existing 32×48 collision body. The shield
   may extend slightly above the crest and laterally beyond collision.
 - In idle, the shield supplies one large vertical mass beside the body. During
@@ -189,7 +189,7 @@ yielding around her.
 - **Aim / charge:** left shoulder braces behind the shield while the right arm
   pivots the lance along its inner lane. The weapon direction remains honest at
   every gameplay angle.
-- **Lock-in:** a fashion-pose silhouette—shield planted, torso twisted away,
+- **Lock-in:** a fashion-pose silhouette: shield planted, torso twisted away,
   lance forming a severe diagonal and free hand briefly opening above eye level.
 - **Dash:** body lowers behind the shield; left shoulder, shield center and hips
   form one driving line; lance projects beside the shield as the lethal point.
@@ -211,7 +211,7 @@ dash collision line always follow authoritative gameplay state.
 
 The Rook is a frontline diva: commanding, physically fearless and entirely
 aware that every room becomes a stage when she enters it. She enjoys forcing an
-opponent to give ground. Her confidence is playful and contemptuous rather than
+opponent to give ground. Her confidence is playful and contemptuous, never
 cruel or militaristic.
 
 She speaks in short declarations about space, distance, posture and commitment.
@@ -311,7 +311,7 @@ Reject an image or animation if any of the following is true:
 - rendering loses the theatrical high-fashion anime/manga character of the game
   in favor of photorealism, generic Western fantasy or military sci-fi.
 
-## Reusable AI prompt — full character
+## Reusable AI prompt: full character
 
 ```text
 One original female anime fighting-game character named THE ROOK, visual
@@ -367,7 +367,7 @@ background. Do not rewrite the identity block from memory.
 Before accepting a Rook asset, answer yes to all of these:
 
 1. Is the selectable class named **The Rook**?
-2. Does she read as a tall heavyweight athlete rather than a slender model?
+2. Does she read as a tall heavyweight athlete and not as a slender model?
 3. Are the vertical auburn crest and thick left-shoulder braid both present?
 4. Is her left arm armored and shield-bearing while her right arm is bare?
 5. Is the navy drape on her right leg and the fitted black trouser on her left?

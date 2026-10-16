@@ -6,8 +6,8 @@ class_name Hazard
 ##
 ## It drifts along a [Mover] rail, so it is stationary while time is stopped and
 ## only travels during an execution window. Striking it with a knife detonates a
-## radial forcefield: fighters are shoved, while every knife in the ring — the
-## trigger included — is relaunched outward at full throw speed. Nobody is
+## radial forcefield: fighters are shoved, while every knife in the ring (the
+## trigger included) is relaunched outward at full throw speed. Nobody is
 ## damaged directly, but positions, velocities and firing lines all change.
 ##
 ## The orb then goes dark and recharges over a fixed number of execution

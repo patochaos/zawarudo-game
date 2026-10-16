@@ -28,14 +28,14 @@ const PAGES := [
 	{
 		"kicker": "COMBAT BRIEFING  01 / 06",
 		"title": "PLAN FIRST.\nTHEN TIME MOVES.",
-		"body": "Every turn has two states. During PLAN, the world is frozen while each fighter builds a short sequence. During EXECUTE, every locked sequence plays at the same time.\n\nYou give no input during EXECUTE — watch the result, then plan the next turn from the new frozen state.",
+		"body": "Every turn has two states. During PLAN, the world is frozen while each fighter builds a short sequence. During EXECUTE, every locked sequence plays at the same time.\n\nYou give no input during EXECUTE. Watch the result, then plan the next turn from the new frozen state.",
 		"callout_title": "THE ONE RULE TO REMEMBER",
-		"callout": "PLAN is your input. EXECUTE is the consequence.",
+		"callout": "You only act during PLAN. EXECUTE plays back what both sides locked.",
 		"visual_title": "ONE TURN, FROM LEFT TO RIGHT",
 		"visual_caption": "Your rival plans too. Neither plan changes the world until execution begins.",
 		"rows": [
 			["1  PLAN", "Build movement and place an attack"],
-			["2  LOCK", "Finish early — or let the timer expire"],
+			["2  LOCK", "Finish early, or let the timer expire"],
 			["3  EXECUTE", "Both fighters act together"],
 		],
 	},
@@ -55,7 +55,7 @@ const PAGES := [
 	},
 	{
 		"kicker": "COMBAT BRIEFING  03 / 06",
-		"title": "ADD HEIGHT —\nOR ADD WAITING.",
+		"title": "ADD HEIGHT,\nOR ADD WAITING.",
 		"body": "Press jump while tracing the route. Keep holding a movement, jump, or wait control to record the airborne part of the arc.\n\nWaiting spends part of the route without steering. On a one-way platform, hold down and press jump to record a drop-through.",
 		"callout_title": "NO SURPRISE AUTOPILOT",
 		"callout": "The route advances only while you hold a planning control.",
@@ -70,9 +70,9 @@ const PAGES := [
 	{
 		"kicker": "COMBAT BRIEFING  04 / 06",
 		"title": "PLACE THE ATTACK\nON YOUR ROUTE.",
-		"body": "Aim from the ghost, then hold the attack control to build power and release it to place the attack. It will happen at that exact point in your recorded route.\n\nThe aim line is a prediction, not a promise. During EXECUTE, fighters, projectiles, and moving geometry can interfere.",
+		"body": "Aim from the ghost, then hold the attack control to build power and release it to place the attack. It will happen at that exact point in your recorded route.\n\nThe aim line shows the throw as it would fly through an empty arena. During EXECUTE, fighters, projectiles and moving geometry can interfere.",
 		"callout_title": "WHAT YOU SHOULD SEE",
-		"callout": "The attack begins at the ghost — not at the frozen fighter you started from.",
+		"callout": "The attack leaves from where the ghost stands at that point in the route.",
 		"visual_title": "AIM FROM THE FUTURE POSITION",
 		"visual_caption": "Low charge spreads two slow daggers. High charge narrows them into a fast pair.",
 		"rows": [
@@ -86,7 +86,7 @@ const PAGES := [
 		"title": "CORRECT IT.\nTHEN LOCK IT.",
 		"body": "Backspace / L1 rewinds 0.10s. Hold Alt / R1 to re-aim a placed throw. Comma / period shifts its timing.\n\nUNDO removes the throw; RESET clears the route. LOCK submits the plan. When time expires, your current plan executes.",
 		"callout_title": "SAFE TO EXPERIMENT",
-		"callout": "Nothing becomes real until execution. Edit freely while PLAN is visible.",
+		"callout": "Edit as much as you like while PLAN is visible. Only the locked plan executes.",
 		"visual_title": "REVISE BEFORE THE CLOCK RELEASES",
 		"visual_caption": "Undo the attack, reset the route, or lock the plan exactly as it stands.",
 		"rows": [
@@ -98,11 +98,11 @@ const PAGES := [
 	{
 		"kicker": "COMBAT BRIEFING  06 / 06",
 		"title": "READ THE RESULT.\nPLAN AGAIN.",
-		"body": "A hit scores one life, then the struck fighter returns on a later turn. The first fighter — or team — to reach the selected Match Lives wins.\n\nProjectiles and damaged platforms can survive between turns. Each new PLAN starts from the world you just created, so adapt instead of repeating the same route.",
+		"body": "A hit scores one life, then the struck fighter returns on a later turn. The first fighter or team to reach the selected Match Lives wins.\n\nProjectiles and damaged platforms can survive between turns. Each new PLAN starts from the world you just created, so adapt instead of repeating the same route.",
 		"callout_title": "READY FOR A FIRST MATCH",
 		"callout": "Choose PLAY → VS AI and leave Match Lives at 3 for the simplest start.",
 		"visual_title": "THE LOOP CONTINUES FROM THE NEW WORLD",
-		"visual_caption": "Observe what changed, then write the next short piece of the fight.",
+		"visual_caption": "Check what changed, then plan the next turn from there.",
 		"rows": [
 			["START EASY", "PLAY  →  VS AI  →  3 lives"],
 			["DURING PLAN", "Trace  ·  jump  ·  aim  ·  attack"],

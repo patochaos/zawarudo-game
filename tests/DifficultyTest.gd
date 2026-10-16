@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Opponent skill. Every preset plans by the same rules and still cannot read the
-## other player's plan — what changes is how much of the candidate set the search
+## other player's plan. What changes is how much of the candidate set the search
 ## spends, how precisely it aims, and how long it deliberates. These checks pin
 ## that the three presets stay ordered and that the AI actually reads them.
 

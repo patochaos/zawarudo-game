@@ -1,9 +1,9 @@
-ZAWARUDO - Tuning playtest 0.3.0-tuning.1
-=======================================
+ZAWARUDO - Playtest 0.4.1-names.2
+=================================
 
 Portable Windows build. No installation is required: run ZAWARUDO.exe.
 
-Choose LEARN TO PLAY for three playable lessons, or START DUEL to face a
+Choose LEARN TO PLAY for three playable lessons, or START DUEL to face an
 opponent ladder in Endless Descent: five named CPUs, played in order. The first Duelist to score three hits wins.
 Cross a side edge to return on the opposite side; shafts connect top and bottom.
 

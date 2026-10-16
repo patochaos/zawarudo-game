@@ -3,8 +3,8 @@ extends CanvasLayer
 ## Title screen. Keyboard and mouse share the same selection/activation path so
 ## hovering, clicking and pressing Enter always produce identical results.
 ##
-## Everything about a local match — the lineup on RosterLayer, then the rules and
-## arena on MatchSetupLayer — is decided elsewhere. This screen only chooses which
+## Everything about a local match (the lineup on RosterLayer, then the rules and
+## arena on MatchSetupLayer) is decided elsewhere. This screen only chooses which
 ## destination to open.
 
 signal duel_requested
@@ -84,6 +84,25 @@ const DIM := Color(0.55, 0.60, 0.70)
 const HOT := Color(1.0, 0.93, 0.60)
 const GOLD := Color(0.91, 0.66, 0.22)
 const VIOLET := Color(0.45, 0.16, 0.67)
+
+## The main page is not a flat list. Start Duel is the one thing a new player
+## should hit, the other ways to play come next, and the system entries sit
+## last and small. Each entry: plate height, font size, gap above the row, and
+## the kicker printed over the gap (empty for none).
+const MAIN_ROW_TIERS := [
+	[54.0, 26, 0.0, ""],        # START DUEL
+	[34.0, 17, 20.0, "MODES"],  # CUSTOM MATCH
+	[34.0, 17, 0.0, ""],        # INTERCEPTION
+	[34.0, 17, 0.0, ""],        # LEARN TO PLAY
+	[34.0, 17, 0.0, ""],        # ONLINE
+	[24.0, 13, 26.0, "SYSTEM"], # CONTROLS
+	[24.0, 13, 0.0, ""],        # OPTIONS
+	[24.0, 13, 0.0, ""],        # GAME TUNING
+	[24.0, 13, 0.0, ""],        # SEND FEEDBACK / EXPERIMENTS
+	[24.0, 13, 0.0, ""],        # QUIT / RELOAD DEMO
+]
+const ROW_TOP := 184.0
+const ROW_SPACING := 6.0
 
 
 class MangaMenuArt:
@@ -350,6 +369,8 @@ var _build_label: Label
 var _controls_sheet: ControlsSheet
 var _row_bgs: Array[Polygon2D] = []
 var _row_buttons: Array[Button] = []
+## One per row slot; only the main page's tier headings ever show.
+var _row_kickers: Array[Label] = []
 var _page: int = MenuPage.MAIN
 ## Start Duel's current ladder position, written by GameManager when the menu opens.
 var ladder_line: String = ""
@@ -393,8 +414,8 @@ func _ready() -> void:
 
 	_blurb = _label(Vector2(74.0, 116.0), 1120.0, 14, Color(0.52, 0.58, 0.68))
 	_blurb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_blurb.text = "Suspend the world · compose 0.75 seconds of movement and one knife volley\n" \
-		+ "lock fate · then watch every plan collide"
+	_blurb.text = "Plan 0.75 seconds of movement and one knife throw while time is stopped.\n" \
+		+ "Lock it, then watch every plan play out at once."
 
 	for i in ROWS:
 		var row_y := 184.0 + float(i) * 43.0
@@ -406,6 +427,10 @@ func _ready() -> void:
 		var row_label := _label(Vector2(98.0, row_y + 4.0), 472.0, 18, DIM)
 		row_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_rows.append(row_label)
+		var kicker := _label(Vector2(84.0, row_y), 300.0, 10, Color(0.91, 0.66, 0.22, 0.78))
+		kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		kicker.visible = false
+		_row_kickers.append(kicker)
 
 		var hit := Button.new()
 		hit.position = Vector2(70.0, row_y)
@@ -560,7 +585,7 @@ func _refresh() -> void:
 		MenuPage.EXPERIMENTS:
 			_blurb.text = "EXPERIMENTS · UNFINISHED MODES AND DEVELOPMENT TOOLS"
 		_:
-			_blurb.text = "STOP TIME · WRITE THE MOVE · RELEASE THE CONSEQUENCE"
+			_blurb.text = "PLAN WHILE TIME IS STOPPED, THEN WATCH BOTH PLANS PLAY OUT"
 	# The panel names whatever the cursor is on; only Options is an options list.
 	_footer_kicker.text = "OPTIONS // DISPLAY, SOUND, ACCESSIBILITY" if _page == MenuPage.OPTIONS \
 		else ("CONTROLS // PLAYER 1 KEYS" if _page == MenuPage.BINDINGS else "COMMAND // SELECT")
@@ -581,32 +606,64 @@ func _refresh() -> void:
 		else ("CLICK / TAP or W / S select      ENTER activate      ESC back"
 		if _page == MenuPage.EXPERIMENTS
 		else "CLICK / TAP or W / S select      ENTER activate")))
-	var pitch := 43.0 if names.size() <= 8 else 36.0
-	var plate_h := pitch - 6.0
-	var font_size := 18 if names.size() <= 8 else 15
+	var layout := _row_layout(names.size())
 	for slot in ROWS:
 		var row_visible := not controls_open and slot < names.size()
 		_rows[slot].visible = row_visible
 		_row_bgs[slot].visible = row_visible
 		_row_buttons[slot].visible = row_visible
+		_row_kickers[slot].visible = false
 		if not row_visible:
 			continue
-		var row_y := 184.0 + float(slot) * pitch
+		var row: Dictionary = layout[slot]
+		var row_y: float = row["y"]
+		var plate_h: float = row["h"]
+		var font_size: int = row["font"]
+		var hero: bool = row["hero"]
 		_row_bgs[slot].position = Vector2(70.0, row_y)
 		_row_bgs[slot].polygon = PackedVector2Array([
 			Vector2(12.0, 0.0), Vector2(540.0, 0.0),
 			Vector2(540.0 - plate_h * 0.38, plate_h), Vector2(0.0, plate_h),
 		])
-		_rows[slot].position = Vector2(98.0, row_y + (plate_h - 24.0) * 0.5)
+		# Centre the glyph box, not a fixed 24px line, so every tier sits evenly.
+		_rows[slot].position = Vector2(98.0, row_y + (plate_h - float(font_size) * 1.35) * 0.5)
 		_rows[slot].add_theme_font_size_override("font_size", font_size)
 		_row_buttons[slot].position = Vector2(70.0, row_y)
 		_row_buttons[slot].size = Vector2(540.0, plate_h)
+		var kicker: String = row["kicker"]
+		if not kicker.is_empty():
+			_row_kickers[slot].text = kicker + " //"
+			_row_kickers[slot].position = Vector2(84.0, row_y - 17.0)
+			_row_kickers[slot].visible = true
 		var is_selected := slot == _cursor
 		# ASCII markers remain crisp in the Web export's reduced fallback font.
 		_rows[slot].text = (">  " + names[slot]) if is_selected else ("    " + names[slot])
-		_rows[slot].add_theme_color_override("font_color", HOT if is_selected else DIM)
-		_row_bgs[slot].color = Color(0.35, 0.10, 0.52, 0.84) if is_selected \
-			else Color(0.045, 0.028, 0.070, 0.74)
+		# The hero row keeps a warm plate and bright copy even when the cursor is
+		# elsewhere, so the first thing to press reads as such from across the room.
+		var idle_text := Color(0.95, 0.80, 0.46) if hero else DIM
+		var idle_plate := Color(0.26, 0.13, 0.05, 0.82) if hero else Color(0.045, 0.028, 0.070, 0.74)
+		_rows[slot].add_theme_color_override("font_color", HOT if is_selected else idle_text)
+		_row_bgs[slot].color = Color(0.35, 0.10, 0.52, 0.84) if is_selected else idle_plate
+
+
+## Row geometry for the current page: the main page is tiered, every other page
+## is a uniform list whose pitch shrinks to fit the longest page.
+func _row_layout(count: int) -> Array[Dictionary]:
+	var layout: Array[Dictionary] = []
+	if _page == MenuPage.MAIN:
+		var y := ROW_TOP
+		for i in count:
+			var tier: Array = MAIN_ROW_TIERS[mini(i, MAIN_ROW_TIERS.size() - 1)]
+			y += float(tier[2])
+			layout.append({"y": y, "h": float(tier[0]), "font": int(tier[1]),
+				"kicker": str(tier[3]), "hero": i == ROW_PLAY})
+			y += float(tier[0]) + ROW_SPACING
+		return layout
+	var pitch := 43.0 if count <= 8 else 36.0
+	for i in count:
+		layout.append({"y": ROW_TOP + float(i) * pitch, "h": pitch - ROW_SPACING,
+			"font": 18 if count <= 8 else 15, "kicker": "", "hero": false})
+	return layout
 
 
 func _activate(row: int) -> void:

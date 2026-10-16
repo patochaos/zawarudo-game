@@ -139,8 +139,8 @@ func _process(delta: float) -> void:
 		_socket_was_open = false
 		if not _manual_close:
 			_reconnect_at = Time.get_ticks_msec() * 0.001 + RECONNECT_SECONDS
-			status_changed.emit("CONNECTION LOST — RECONNECTING…" if was_open \
-				else "COULD NOT CONNECT — RETRYING…", true)
+			status_changed.emit("CONNECTION LOST · RECONNECTING…" if was_open \
+				else "COULD NOT CONNECT · RETRYING…", true)
 
 
 func _on_http_completed(_result: int, response_code: int,
@@ -179,7 +179,7 @@ func _connect_socket() -> void:
 	if err != OK:
 		_peer = null
 		_reconnect_at = Time.get_ticks_msec() * 0.001 + RECONNECT_SECONDS
-		status_changed.emit("WEBSOCKET CONNECTION FAILED — RETRYING…", true)
+		status_changed.emit("WEBSOCKET CONNECTION FAILED · RETRYING…", true)
 
 
 func _api_url() -> String:
@@ -196,7 +196,7 @@ func _send(payload: Dictionary) -> bool:
 					and _pending_messages[i].get("turn", -1) == payload.get("turn", -1):
 				_pending_messages.remove_at(i)
 		_pending_messages.append(payload.duplicate(true))
-		status_changed.emit("MESSAGE QUEUED — RECONNECTING…", true)
+		status_changed.emit("MESSAGE QUEUED · RECONNECTING…", true)
 		return true
 	return _peer.send_text(JSON.stringify(payload)) == OK
 

@@ -1,4 +1,4 @@
-# Duelist polish — September 4, 2026
+# Duelist polish, September 4, 2026
 
 ## Intent
 

@@ -34,7 +34,7 @@ func _process(_delta: float) -> void:
 	title.position.y = 143.0 if gm.class_lab and not gm.real_time_mode else 12.0
 	if gm.class_lab:
 		title.text = "CLASS LAB // %s VS %s // %s" % [Roster.short_name(gm.player_weapons[0]), Roster.short_name(gm.player_weapons[1]), "REAL TIME" if gm.real_time_mode else "PLANNING"]
-		hint.text = "1–4 P1 · 5–8 CPU: DUELIST / ROOK / PULSE / ECLIPSE · T SWITCH MODE (RESTART) · ESC MENU\n" + ClassLab.COPY[ClassLab.ORDER.find(gm.player_weapons[0])]
+		hint.text = "1-4 P1 · 5-8 CPU: DUELIST / ROOK / PULSE / ECLIPSE · T SWITCH MODE (RESTART) · ESC MENU\n" + ClassLab.COPY[ClassLab.ORDER.find(gm.player_weapons[0])]
 		return
 	title.text = "REAL TIME // DUELIST VS CPU"
 	if visible:

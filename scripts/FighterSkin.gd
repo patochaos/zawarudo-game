@@ -132,7 +132,7 @@ const ECLIPSE_GHOST_PATHS := {
 
 const ANIMATED_FIGHTERS := {
 	&"rook_animated_v2": {
-		"name": "The Rook — simplified animated arena fighter",
+		"name": "The Rook · simplified animated arena fighter",
 		"atlases": ROOK_ATLAS_PATHS,
 		"ghosts": ROOK_GHOST_PATHS,
 		"ghost": "res://assets/art/fighters/rook-animated-v2/ghost.png",
@@ -144,7 +144,7 @@ const ANIMATED_FIGHTERS := {
 		},
 	},
 	&"pulse_animated_v2": {
-		"name": "The Pulse — simplified animated arena fighter",
+		"name": "The Pulse · simplified animated arena fighter",
 		"atlases": PULSE_ATLAS_PATHS,
 		"ghosts": PULSE_GHOST_PATHS,
 		"ghost": "res://assets/art/fighters/pulse-animated-v2/ghost.png",
@@ -156,7 +156,7 @@ const ANIMATED_FIGHTERS := {
 		},
 	},
 	&"eclipse_animated_v1": {
-		"name": "The Eclipse — simplified animated arena fighter",
+		"name": "The Eclipse · simplified animated arena fighter",
 		"atlases": ECLIPSE_ATLAS_PATHS,
 		"ghosts": ECLIPSE_GHOST_PATHS,
 		"ghost": "res://assets/art/fighters/eclipse-animated-v1/ghost.png",
@@ -232,7 +232,7 @@ func motion_frame(state: StringName, tick: int, velocity: Vector2) -> int:
 ## accent separates them without repainting the art: `sprite_tint` multiplies, so
 ## near-white stays near-white and only the authored hues shift.
 ##
-## The wash alone is deliberately weak — the readable signal is the label, ground
+## The wash alone is deliberately weak. The readable signal is the label, ground
 ## shadow, invulnerability ring and SUPER arc, which all read `palette.body`.
 const IDENTITY_WASH := 0.34
 
@@ -248,7 +248,7 @@ static func animated_executor_proof(player_color: Color) -> FighterSkin:
 	skin.air_pose_speed_threshold = 300.0
 	skin.sprite_texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	skin.skin_id = &"duelist_polished_v2"
-	skin.display_name = "The Duelist — polished cel animation"
+	skin.display_name = "The Duelist · polished cel animation"
 	skin.sprite_atlases = {}
 	for state: StringName in ANIMATED_EXECUTOR_PATHS:
 		var texture := load(ANIMATED_EXECUTOR_PATHS[state]) as Texture2D
@@ -291,8 +291,8 @@ static func greybox(player_index: int) -> FighterSkin:
 	var skin := FighterSkin.new()
 	var executor := player_index % 2 == 0
 	skin.skin_id = &"greybox_executor" if executor else &"greybox_witness"
-	skin.display_name = "The Gilded Executor — greybox" if executor \
-		else "The Violet Witness — greybox"
+	skin.display_name = "The Gilded Executor · greybox" if executor \
+		else "The Violet Witness · greybox"
 	skin.palette = {
 		&"body": Color(0.92, 0.72, 0.24) if executor else Color(0.62, 0.38, 0.94),
 		&"secondary": Color(0.52, 0.30, 0.08) if executor else Color(0.18, 0.80, 0.88),

@@ -1,7 +1,7 @@
 extends Node2D
 class_name Arrow
 
-## Persistent projectile — a thrown knife. Never destroyed at a phase boundary,
+## Persistent projectile: a thrown knife. Never destroyed at a phase boundary,
 ## only when it embeds in terrain, hits a player, or leaves the world bounds.
 ## A forceful strike on HARD terrain ricochets and remains live.
 ##
@@ -24,7 +24,7 @@ var volley: int = -1
 var color: Color = Color.WHITE
 var age_ticks: int = 0
 ## Position at the start of the current tick. Clash resolution needs the swept
-## segment, not just the endpoint — two knives closing head-on cover up to 24px
+## segment, not just the endpoint: two knives closing head-on cover up to 24px
 ## in one tick and would tunnel through a point test.
 var prev_pos: Vector2 = Vector2.ZERO
 ## Struck by another knife: tumbling, slowed, no longer on its aimed line.
@@ -45,7 +45,7 @@ var clash_cooldown: int = 0
 ## Cooldown is tracked PER OTHER KNIFE. A fresh third knife may strike
 ## immediately; only the pair that just separated is temporarily suppressed.
 var _clash_cooldowns: Dictionary = {}
-## Recent world positions, newest last — drawn as a fading streak so a fast
+## Recent world positions, newest last, drawn as a fading streak so a fast
 ## knife reads as motion during execution instead of a teleporting dash.
 var trail: PackedVector2Array = PackedVector2Array()
 
@@ -246,7 +246,7 @@ func lockstep_digest_fragment() -> String:
 ##
 ## DRAG is applied to the FORWARD component only, and that asymmetry is the whole
 ## design. Gravity keeps pulling at full strength while the throw runs out of
-## steam, so the arc does not merely widen — it collapses: the knife stops
+## steam, so the arc does not merely widen. It collapses: the knife stops
 ## advancing and drops. Bleeding the vertical component too would cap the fall
 ## speed and produce the opposite read, a knife parachuting gently down.
 ##

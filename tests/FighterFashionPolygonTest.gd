@@ -66,7 +66,7 @@ func _run() -> void:
 ## Walks the three branches of `Player._pose_points()`: grounded idle, airborne,
 ## and running. Running is swept in both travel directions because the run pose
 ## slides chest and neck by velocity sign while the free shoulder mirrors by
-## facing — running backwards is a distinct pose, and it is the one that broke.
+## facing. Running backwards is a distinct pose, and it is the one that broke.
 func _sweep_pose_branches(subject: Player, facing: int) -> int:
 	var drawn := 0
 

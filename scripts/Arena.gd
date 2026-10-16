@@ -2,13 +2,13 @@ extends Node2D
 class_name Arena
 
 ## Renders the platform set. Layouts live in Levels.gd; damage state lives in
-## GameManager. Terrain never damages a player — only arrows do.
+## GameManager. Terrain never damages a player: only arrows do.
 ##
 ## Indestructible geometry uses cool dressed surfaces; breakable geometry is warm, carries
 ## hit pips, and reddens and cracks as it takes damage. Moving geometry keeps the
 ## permanent silhouette but swaps its top edge for violet and wears chevrons
 ## pointing along its rail. That three-way colour split is the only thing a player
-## has to learn to read the arena — and the moving read has to survive execution,
+## has to learn to read the arena, and the moving read has to survive execution,
 ## when every planning overlay is stripped away.
 
 const INDESTRUCTIBLE := -1

@@ -14,7 +14,7 @@ func _ready() -> void:
 	add_child(backdrop)
 	_label(Vector2(160, 65), Vector2(960, 50), "HELP SHAPE THE NEXT DUEL", 30)
 	_label(Vector2(160, 128), Vector2(960, 88),
-		"What were you trying to do? What surprised or confused you?\nDid you want another match — and why?", 22)
+		"What were you trying to do? What surprised or confused you?\nDid you want another match, and why?", 22)
 	_notes = TextEdit.new()
 	_notes.position = Vector2(160, 236)
 	_notes.size = Vector2(960, 220)

@@ -86,11 +86,11 @@ enum Weapon { KNIVES = 0, DASHBLADE = 2, CHAKRAM = 3, SHOCK = 4 }
 
 @export_group("Opponent")
 ## When true, every active player after Player 1 is driven by Ai.gd and its
-## preview stays hidden — it cannot see your plan, so showing it would be a
+## preview stays hidden. It cannot see your plan, so showing it would be a
 ## one-way giveaway.
 @export var vs_ai: bool = true
 ## Opponent skill. Every level plans by the same rules and still cannot see
-## your plan — what changes is how much of the search it spends and how
+## your plan. What changes is how much of the search it spends and how
 ## precisely it aims, so a lower level is a rival you can read rather than a
 ## different game. Set from the match setup screen; the fields below are what
 ## it writes, and stay editable for tuning.
@@ -107,7 +107,7 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export var ai_slice_usec: int = 1200
 
 @export_group("Match")
-## Hits needed to take the match. A hit does not end the round — the victim
+## Hits needed to take the match. A hit does not end the round: the victim
 ## respawns and the world carries on exactly where it was.
 @export_range(3, MAX_HITS_TO_WIN, 2) var hits_to_win: int = DEFAULT_HITS_TO_WIN
 @export var respawn_invuln_turns: int = 1
@@ -140,7 +140,7 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export_group("Movement")
 ## Seconds of piloted control per turn. The rest of the window coasts.
 @export var movement_budget: float = 0.50
-## Ghost piloting runs at this fraction of real time — below 1.0 for precision.
+## Ghost piloting runs at this fraction of real time, below 1.0 for precision.
 @export var pilot_time_scale: float = 0.5
 @export var player_move_speed: float = 260.0
 ## Locomotion is part of each prototype's identity. These scales multiply the
@@ -212,11 +212,11 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## throw is replaced by a per-fighter cooldown that starts when an attack leaves.
 @export_range(0.0, 5.0, 0.05) var real_time_throw_cooldown: float = 1.2
 ## On a fully wrapping arena a knife has no edge to leave through, so it is
-## aged out instead. 900 ticks is 15s — twenty execution phases.
+## aged out instead. 900 ticks is 15s, twenty execution phases.
 @export var arrow_max_ticks: int = 900
 ## One throw looses this many knives at once, fanned around the aim line.
 @export var knives_per_shot: int = 2
-## Total fan angle. A light throw scatters wide and slow — area denial you do
+## Total fan angle. A light throw scatters wide and slow, area denial you do
 ## not have to predict exactly; a full wind-up is a tight, fast pair.
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
@@ -476,7 +476,7 @@ var hazards: Array = []
 var _blasts_this_execution: int = 0
 
 ## TowerFall-style screen wrap. Anything leaving a wrapping edge re-enters the
-## opposite one — arrows and players alike.
+## opposite one, arrows and players alike.
 var wrap_x: bool = false
 var wrap_y: bool = false
 const ARENA_W := Levels.ARENA_W
@@ -571,7 +571,7 @@ var ghost_drop_from: Array[float] = [0.0, 0.0, 0.0, 0.0]
 ## Combat-free copies of dashes that crossed a time-stop boundary. They advance
 ## with the piloted ghost so ignored inputs and exit momentum match execution.
 var ghost_dash: Array = [null, null, null, null]
-## Recorded path plus the coasted tail — always exactly one full window long.
+## Recorded path plus the coasted tail, always exactly one full window long.
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
 ]
@@ -1621,8 +1621,8 @@ func _on_online_message(message: Dictionary) -> void:
 						_online_lobby.level, online_names)
 				if online_mode and peer_slot != online_player:
 					banner_text = "%s RECONNECTED" % player_title(peer_slot) if connected \
-						else ("%s DISCONNECTED - WAIT FOR RECONNECT OR ESC TO LEAVE" % player_title(peer_slot) \
-						if player_count > 2 else "OPPONENT DISCONNECTED - ENTER CLAIMS THE MATCH")
+						else ("%s DISCONNECTED · WAIT FOR RECONNECT OR ESC TO LEAVE" % player_title(peer_slot) \
+						if player_count > 2 else "OPPONENT DISCONNECTED · ENTER CLAIMS THE MATCH")
 					banner_color = Color(0.52, 0.95, 0.70) if connected else Color(1.0, 0.45, 0.35)
 					banner_time = 2.0
 		"match_start":
@@ -1631,13 +1631,13 @@ func _on_online_message(message: Dictionary) -> void:
 				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]),
 				message.get("names", []))
 		"plan_ack":
-			banner_text = "PLAN LOCKED - WAITING FOR PLAYERS"
+			banner_text = "PLAN LOCKED · WAITING FOR PLAYERS"
 			banner_color = PLAYER_COLORS[online_player].lightened(0.3)
 			banner_time = 1.0
 		"turn_plans":
 			_apply_online_turn_plans(message)
 		"turn_complete_ack":
-			banner_text = "TURN COMPLETE - WAITING FOR PLAYERS"
+			banner_text = "TURN COMPLETE · WAITING FOR PLAYERS"
 			banner_color = Color(0.62, 0.78, 0.70)
 			banner_time = 1.0
 		"turn_start":
@@ -1645,7 +1645,7 @@ func _on_online_message(message: Dictionary) -> void:
 			if online_mode and state == Phase.ONLINE_WAIT and next_turn == turn + 1:
 				_begin_planning(false)
 		"match_over":
-			banner_text = "MATCH VERIFIED — RESULTS READY"
+			banner_text = "MATCH VERIFIED · RESULTS READY"
 			banner_color = PLAYER_COLORS[winner].lightened(0.3) if winner >= 0 else Color.WHITE
 			banner_time = 2.2
 		"rematch_status":
@@ -1664,7 +1664,7 @@ func _on_online_message(message: Dictionary) -> void:
 		"desync":
 			state = Phase.ONLINE_WAIT
 			online_match_broken = true
-			banner_text = "MATCH DESYNC DETECTED — ESC RETURNS TO THE MENU"
+			banner_text = "MATCH DESYNC DETECTED · ESC RETURNS TO THE MENU"
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 		"error":
@@ -1760,7 +1760,7 @@ func _apply_online_turn_plans(message: Dictionary) -> void:
 			state = Phase.ONLINE_WAIT
 			online_match_broken = true
 			var owner := "YOUR" if i == online_player else "OPPONENT"
-			banner_text = "%s PLAN FAILED VALIDATION — ESC RETURNS TO THE MENU" % owner
+			banner_text = "%s PLAN FAILED VALIDATION · ESC RETURNS TO THE MENU" % owner
 			banner_color = Color(1.0, 0.24, 0.20)
 			banner_time = 999.0
 			push_error("Online plan rejected for player %d: %s" % [i + 1, invalid_reason])
@@ -2115,7 +2115,7 @@ func time_scale_at(p: Vector2) -> float:
 
 # ------------------------------------------------------- moving geometry -----
 #
-# Everything below answers one question — "where is the world at tick N?" — and
+# Everything below answers one question, "where is the world at tick N?", and
 # every consumer (execution, ghost piloting, the coasted tail, the AI search)
 # asks it the same way. That single source is what keeps a plan honest: if a
 # lift will have risen by the time your ghost lands there, the ghost lands on
@@ -2893,7 +2893,7 @@ func _freeplay_tick(delta: float) -> void:
 			aim_min_angle, aim_max_angle)
 	_update_facing()
 
-	# hold to draw, release to loose — immediately, no turn to wait for
+	# hold to draw, release to loose immediately, no turn to wait for
 	var primary_held: bool = _held(key_bindings["charge"]) or _touch_controls.charge_held
 	var can_absolve: bool = uses_chakram(0) and oldest_recallable_chakram(0) != null
 	var secondary_held: bool = (uses_shock(0) or can_absolve) \
@@ -3472,7 +3472,7 @@ func _resolve_hazard_strikes(live: Array) -> Array:
 	return kept
 
 
-## The forcefield. It damages nobody — knives remain the only source of damage —
+## The forcefield. It damages nobody (knives remain the only source of damage)
 ## but it rewrites position, momentum and every firing line inside its radius,
 ## and the knives it throws outward stay in the world afterwards.
 func _detonate(h: Hazard, affected_arrows: Array) -> void:
@@ -3632,7 +3632,7 @@ func _gain_super(i: int, amount: float, reason: String) -> void:
 		_telemetry.record("super_gain", turn, {"player": i + 1, "reason": reason,
 			"amount": snappedf(amount, 0.001), "meter": snappedf(super_meter[i], 0.001)})
 	if super_meter[i] >= 1.0:
-		banner_text = "%s — SUPER READY" % player_title(i)
+		banner_text = "%s · SUPER READY" % player_title(i)
 		banner_color = PLAYER_COLORS[i].lightened(0.35)
 		banner_time = 1.4
 		if _sfx != null:
@@ -3708,7 +3708,7 @@ func _advance_temporal_core() -> void:
 			core_active = true
 			core_turns_left = maxi(1, core_active_turns)
 			_sync_temporal_core_visual()
-			banner_text = "TEMPORAL CORE MATERIALIZED — FULL SUPER"
+			banner_text = "TEMPORAL CORE MATERIALIZED · FULL SUPER"
 			banner_color = Color(1.0, 0.84, 0.34)
 			banner_time = 1.8
 		return
@@ -3722,7 +3722,7 @@ func _advance_temporal_core() -> void:
 		core_position = _choose_core_spawn()
 		core_announced = true
 		_sync_temporal_core_visual()
-		banner_text = "TEMPORAL CORE INCOMING — NEXT TURN"
+		banner_text = "TEMPORAL CORE INCOMING · NEXT TURN"
 		banner_color = Color(0.86, 0.68, 1.0)
 		banner_time = 1.8
 
@@ -3781,10 +3781,10 @@ func _check_core_collection() -> void:
 	if _sfx != null:
 		_sfx.play("core_collect")
 	if collectors.size() > 1:
-		banner_text = "MULTIPLE PLAYERS — SUPER READY"
+		banner_text = "MULTIPLE PLAYERS · SUPER READY"
 		banner_color = Color(1.0, 0.90, 0.48)
 	else:
-		banner_text = "%s CLAIMED THE CORE — SUPER READY" % player_title(collectors[0])
+		banner_text = "%s CLAIMED THE CORE · SUPER READY" % player_title(collectors[0])
 		banner_color = PLAYER_COLORS[collectors[0]].lightened(0.35)
 	banner_time = 1.8
 
@@ -3880,7 +3880,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 		banner_time = banner_duration
 		return
 	if team_mode and player_teams[scorer] == player_teams[victim_idx]:
-		banner_text = "%s FRIENDLY HIT — NO POINT" % TEAM_NAMES[player_teams[scorer]]
+		banner_text = "%s FRIENDLY HIT · NO POINT" % TEAM_NAMES[player_teams[scorer]]
 		banner_color = TEAM_COLORS[player_teams[scorer]]
 		banner_time = banner_duration
 		return
@@ -3902,7 +3902,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 			_sfx.play("victory")
 			_finish_match_telemetry()
 		else:
-			banner_text = "%s SCORES — %d : %d" % [TEAM_NAMES[scoring_team], team_score[0], team_score[1]]
+			banner_text = "%s SCORES   %d : %d" % [TEAM_NAMES[scoring_team], team_score[0], team_score[1]]
 			banner_color = TEAM_COLORS[scoring_team]
 		banner_time = banner_duration
 		return
@@ -4157,7 +4157,7 @@ func _begin_execution() -> void:
 			search.complete_early()
 			search.apply()
 			rebuilt = true
-	# apply() adds recorded ticks, so the cached ghost is now stale — and the
+	# apply() adds recorded ticks, so the cached ghost is now stale, and the
 	# shot origin is read from it.
 	if rebuilt:
 		_rebuild_ghost_paths()
@@ -4463,11 +4463,11 @@ func _end_execution() -> void:
 		_practice.finish_window()
 		return
 	_advance_temporal_core()
-	# Everything keeps its position / velocity — nothing is cleared.
+	# Everything keeps its position / velocity. Nothing is cleared.
 	if online_mode:
 		state = Phase.ONLINE_WAIT
 		if not _online_client.send_turn_complete(turn, _online_state_digest()):
-			banner_text = "TURN SAVED LOCALLY — RECONNECTING TO OPPONENT"
+			banner_text = "TURN SAVED LOCALLY · RECONNECTING TO OPPONENT"
 			banner_color = Color(1.0, 0.45, 0.35)
 			banner_time = 2.0
 	else:
@@ -4542,7 +4542,7 @@ func _choose_respawn_point(player_index: int) -> Vector2:
 	return candidates[best_index]
 
 
-## One throw looses the whole fan from the same point at the same tick — the
+## One throw looses the whole fan from the same point at the same tick. The
 ## spread is the shot, not a sequence of shots.
 func _spawn_player_attack(p: Player) -> void:
 	if _telemetry != null:
@@ -4611,7 +4611,7 @@ func dash_parameters(power: float, empowered: bool = false,
 
 
 ## Uses the exact dash primitive against the current frozen terrain. The preview
-## can therefore promise a body endpoint—including a wall shimmy—rather than
+## can therefore promise a body endpoint (including a wall shimmy) instead of
 ## showing a dagger-shaped guess.
 func dash_preview_path(origin: Vector2, direction: Vector2, power: float,
 		empowered: bool = false, lost_frames: int = 0) -> PackedVector2Array:
@@ -4764,7 +4764,7 @@ func _spawn_character_super(p: Player) -> void:
 	super_armed[p.index] = false
 	p.queue_redraw()
 	_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
-	banner_text = "%s — %s" % [player_title(p.index), weapon_short_name(p.index)]
+	banner_text = "%s · %s" % [player_title(p.index), weapon_short_name(p.index)]
 	banner_color = PLAYER_COLORS[p.index].lightened(0.35)
 	banner_time = 0.9
 	match player_weapons[p.index]:
@@ -4813,7 +4813,7 @@ func _spawn_super_wave(p: Player, wave: int) -> void:
 		super_armed[p.index] = false
 		p.queue_redraw()
 		_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
-		banner_text = "%s — SUPER" % player_title(p.index)
+		banner_text = "%s · SUPER" % player_title(p.index)
 		banner_color = PLAYER_COLORS[p.index].lightened(0.35)
 		banner_time = 0.9
 
@@ -4839,7 +4839,7 @@ func _spawn_super_wave(p: Player, wave: int) -> void:
 	_sfx.play("knife_super")
 
 
-## Facing follows the bow, not the opponent — with free aim that is what reads.
+## Facing follows the bow, not the opponent. With free aim that is what reads.
 func _update_facing() -> void:
 	for p in players:
 		var f: int = p.plan.aim_side()
@@ -4965,7 +4965,7 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	var pl: PlayerPlan = players[i].plan
 	if pl.recorded_ticks() >= movement_tick_budget() or stamina[i] <= 0.0:
 		return false
-	# The tick this step LEAVES, in absolute time — the moving world is projected
+	# The tick this step LEAVES, in absolute time. The moving world is projected
 	# forward from here, so the ghost meets the geometry the plan will meet.
 	var from_tick: int = world_tick + pl.recorded_ticks()
 	var pending_dash = ghost_dash[i]
@@ -5090,7 +5090,7 @@ func _dash_prediction_copy(i: int):
 	return null
 
 
-## Where the ghost currently stands — the point a shot would be loosed from.
+## Where the ghost currently stands: the point a shot would be loosed from.
 func pilot_tick(i: int) -> int:
 	var pl: PlayerPlan = players[i].plan
 	return pl.shot_tick if pl.has_shot() else pl.recorded_ticks()
@@ -5111,7 +5111,7 @@ func shot_origin(i: int) -> Vector2:
 #   Move  : held, drives the ghost in real time (stamina drains)
 #   Jump  : press, inserts a jump impulse at the ghost's current tick
 #   Aim   : mouse (P1) / right stick (P2)
-#   Power : hold to charge — the ghost FREEZES while charging — release to fire
+#   Power : hold to charge (the ghost FREEZES while charging), release to fire
 #           from wherever the ghost is standing
 #   Super : toggles whether a full meter upgrades the next placed shot
 #   Rollback   : un-fires the shot and drops the confirmation, keeps the path
@@ -5231,7 +5231,7 @@ func _request_rematch() -> void:
 		if _online_waiting_rematch:
 			return
 		_online_waiting_rematch = _online_client.send_rematch(rematch_level_index)
-		banner_text = "REMATCH REQUESTED - WAITING FOR PLAYERS"
+		banner_text = "REMATCH REQUESTED · WAITING FOR PLAYERS"
 		banner_color = Color(0.86, 0.68, 1.0)
 		banner_time = 2.0
 	else:
@@ -5258,7 +5258,7 @@ func _claim_abandoned_match() -> void:
 	if not online_mode or player_count != 2 or online_peer_lost == false or state == Phase.GAME_OVER:
 		return
 	if not _online_client.send_forfeit():
-		banner_text = "COULD NOT REACH THE ROOM — RECONNECTING"
+		banner_text = "COULD NOT REACH THE ROOM · RECONNECTING"
 		banner_color = Color(1.0, 0.45, 0.35)
 		banner_time = 2.0
 		return
@@ -5281,7 +5281,7 @@ func _finish_abandoned_match(claimed_by: int) -> void:
 	# edges are primed and a held button cannot instantly skip past it.
 	_prime_game_over_pad_state()
 	_finish_match_telemetry()
-	banner_text = "OPPONENT LEFT — %s TAKES THE MATCH" % player_title(winner)
+	banner_text = "OPPONENT LEFT · %s TAKES THE MATCH" % player_title(winner)
 	banner_color = PLAYER_COLORS[winner].lightened(0.3)
 	banner_time = 3.0
 	if _sfx != null:
@@ -5615,7 +5615,7 @@ func _set_shock_attack_mode(i: int, mode: int) -> void:
 	if not p.alive or p.plan.confirmed:
 		return
 	p.plan.attack_mode = clampi(mode, 0, 1)
-	banner_text = "%s PULSE — %s" % [player_tag(i),
+	banner_text = "%s PULSE · %s" % [player_tag(i),
 		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
 	banner_color = p.color
 	banner_time = 1.1
@@ -5632,7 +5632,7 @@ func _toggle_super(i: int) -> void:
 		return
 	super_armed[i] = not super_armed[i]
 	p.queue_redraw()
-	banner_text = "%s — SUPER %s" % [player_title(i), "ARMED" if super_armed[i] else "STANDBY"]
+	banner_text = "%s · SUPER %s" % [player_title(i), "ARMED" if super_armed[i] else "STANDBY"]
 	banner_color = Color(1.0, 0.94, 0.58) if super_armed[i] \
 		else PLAYER_COLORS[i].lightened(0.25)
 	banner_time = 1.1
@@ -5736,7 +5736,7 @@ func _confirm(i: int) -> void:
 	if online_mode:
 		_online_plan_sent = _online_client.send_plan(turn, p.plan.to_network_dict())
 		if _online_plan_sent:
-			banner_text = "PLAN LOCKED — WAITING FOR OPPONENT"
+			banner_text = "PLAN LOCKED · WAITING FOR OPPONENT"
 			banner_color = PLAYER_COLORS[i].lightened(0.3)
 			banner_time = 1.2
 		return
@@ -5918,7 +5918,7 @@ func _poll_pilot(i: int, delta: float) -> void:
 
 	# ONE time rule, on the ground and in the air alike: the ghost advances only
 	# while you are holding a pilot input. Airborne used to advance on its own,
-	# which meant the controls silently changed the moment you left the ground —
+	# which meant the controls silently changed the moment you left the ground,
 	# and since a full jump outlasts the window, that was every jump.
 	var advancing: bool = dir != 0 or jump_now or wait_held
 	if not advancing:
@@ -5964,7 +5964,7 @@ func _pad_right(pad: int) -> bool:
 		or Input.is_joy_button_pressed(pad, JOY_BUTTON_DPAD_RIGHT)
 
 
-## "Let time run without steering" — hold to walk the ghost forward through a
+## "Let time run without steering": hold to walk the ghost forward through a
 ## fall, or to line a shot up at a precise moment.
 func _pad_down(pad: int) -> bool:
 	if pad < 0:
@@ -6102,7 +6102,7 @@ func _fill_test_super(second_player: bool) -> void:
 	super_meter[who] = 1.0
 	super_armed[who] = false
 	players[who].queue_redraw()
-	banner_text = "PLAYER %d — SUPER READY (TEST)" % (who + 1)
+	banner_text = "PLAYER %d · SUPER READY (TEST)" % (who + 1)
 	banner_color = PLAYER_COLORS[who].lightened(0.35)
 	banner_time = 1.4
 

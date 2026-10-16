@@ -11,7 +11,7 @@ presentation pass on the existing ivory/black/gold design.
   the throw. The release remains synchronized to the authoritative shot tick.
 - Explicit source body anchors replace silhouette-box centering. Coat and hand
   extensions no longer determine where the body is placed within the atlas.
-- Launch/apex and descent/brace poses follow vertical speed rather than looping
+- Launch/apex and descent/brace poses follow vertical speed instead of looping
   on the world clock. Live rendering, prediction and last-turn review share
   the frame selector. Other fighters retain their existing animation behavior.
 - New atlas imports carry mipmaps; the Duelist visual uses linear mipmap

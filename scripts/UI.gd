@@ -128,7 +128,7 @@ class FighterSeal:
 		var bar_width := 110.0
 		var bar_rect := Rect2(bar_x, 39.0, bar_width, 4.0)
 		# Directly above the bar, never beside it: at 284 the label ran from 284 to
-		# 332 while the bar started at 306, so the fill painted over its own name —
+		# 332 while the bar started at 306, so the fill painted over its own name,
 		# and on the mirrored side it covered the label completely.
 		draw_string(font, Vector2(bar_x, 35.0), "SUPER",
 			HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT,
@@ -243,7 +243,7 @@ var _hint_p2: Label
 
 const _HINT_P2_MISSING := "P2  CONNECT A GAMEPAD"
 const _HINT_AI := "P2  AI · PLAN HIDDEN"
-const _HINT_AI_4P := "P2–P4  AI · PLANS HIDDEN"
+const _HINT_AI_4P := "P2-P4  AI · PLANS HIDDEN"
 const _HINT_ONLINE_YOU := "YOU P%d  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO"
 const _HINT_ONLINE_ABANDONED := "OPPONENT DISCONNECTED  ·  ENTER CLAIMS THE MATCH  ·  ESC LEAVES"
 const _HINT_ONLINE_BROKEN := "MATCH STOPPED  ·  ESC RETURNS TO THE MENU"
@@ -553,7 +553,7 @@ func refresh() -> void:
 		if gm.close_camera_mode else (("FATE TRIAL · SURVIVE %d / %d WINDOWS · HOSTILE PLAN REVEALED" % [
 		gm.fate_trial_windows_survived, gm.FATE_TRIAL_WINDOWS]) if gm.fate_trial_mode else \
 		("TRAINING · HORIZONTAL TUNNEL ↔" if gm.tutorial_mode else \
-		("CRIMSON  %d   —   %d  AZURE     ·     FIRST TO %d" % [
+		("CRIMSON  %d : %d  AZURE     ·     FIRST TO %d" % [
 			gm.team_score[0], gm.team_score[1], gm.hits_to_win] if gm.team_mode else \
 		"FIRST TO %d HITS" % gm.hits_to_win)))
 	if not gm.close_camera_mode and not gm.fate_trial_mode and not gm.tutorial_mode and gm.core_active:
@@ -566,15 +566,15 @@ func refresh() -> void:
 		match_rule += "   ·   CORE IN %d HITLESS TURN%s" % [remaining, "" if remaining == 1 else "S"]
 	_score_label.text = match_rule
 	_score_label.visible = gm.team_mode or gm.fate_trial_mode or gm.close_camera_mode
-	_level_label.text = "LEVEL %d/%d — %s   ·   %s" % [
+	_level_label.text = "LEVEL %d/%d  //  %s   ·   %s" % [
 		gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap,
 	]
 	if gm.tutorial_mode:
-		_level_label.text = "TUTORIAL — %s   ·   %s" % [gm.level_name, gm.level_wrap]
+		_level_label.text = "TUTORIAL  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.fate_trial_mode:
-		_level_label.text = "FATE TRIAL 01 — %s   ·   %s" % [gm.level_name, gm.level_wrap]
+		_level_label.text = "FATE TRIAL 01  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.close_camera_mode:
-		_level_label.text = "CLOSE CAMERA — %s   ·   %s" % [gm.level_name, gm.level_wrap]
+		_level_label.text = "CLOSE CAMERA  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.interception_mode:
 		_level_label.text = "INTERCEPTION · ONE JUMP · AIR MOMENTUM"
 	_hint_p1.add_theme_color_override("font_color", gm.PLAYER_COLORS[0])
@@ -854,12 +854,12 @@ func refresh() -> void:
 		if gm.online_mode and gm.online_player != 0:
 			controls = "THE HOST CHOOSES THE NEXT ARENA"
 		var kicker := "" if gm.fate_trial_mode or gm.close_camera_mode else "FIRST TO %d HITS" % gm.hits_to_win
-		var arena_line := "CLOSE CAMERA — KNIFE COURT" if gm.close_camera_mode else \
-			("TRIAL 01 — THE CROSSFIRE" if gm.fate_trial_mode else \
-			"NEXT ARENA   %02d / %02d   —   %s" % [
+		var arena_line := "CLOSE CAMERA // KNIFE COURT" if gm.close_camera_mode else \
+			("TRIAL 01 // THE CROSSFIRE" if gm.fate_trial_mode else \
+			"NEXT ARENA   %02d / %02d   //   %s" % [
 			gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name])
 		if gm.online_mode and gm.online_player != 0:
-			arena_line = "HOST ARENA — %d/%d — %s" % [
+			arena_line = "HOST ARENA   %d / %d   //   %s" % [
 				gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		var score_line: String = gm._score_text()
 		if gm.demo_match:

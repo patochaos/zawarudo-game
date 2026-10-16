@@ -1,4 +1,4 @@
-# ZAWARUDO — Documento de diseño de juego
+# ZAWARUDO: Documento de diseño de juego
 
 **Demo de prueba del bucle principal, 0.3.0:** [alcance actual](CORE_PLAYTEST.md).
 La entrada pública ofrece un duelo directo y tres lecciones jugables. Cada turno
@@ -28,7 +28,7 @@ consecuencias.**
 La fantasía central no es simplemente «ser hábil con cuchillos». Es sentirse
 como un duelista capaz de estudiar un instante imposible, preparar una jugada y
 pronunciar una sentencia sobre el futuro. Cuando el tiempo vuelve, el jugador
-ya no corrige: descubre si entendió bien la situación.
+ya no puede corregir y comprueba si entendió bien la situación.
 
 ### Promesa al jugador
 
@@ -82,8 +82,8 @@ El jugador no selecciona una orden abstracta ni dibuja un destino. Controla una
 versión fantasma de su luchador, registra una secuencia concreta y coloca el
 lanzamiento en un punto exacto de esa secuencia.
 
-Esto debe conservar la expresividad de un juego de plataformas —carrera, salto,
-inercia, espera y puntería— sin convertir la fase decisiva en una prueba de
+Esto debe conservar la expresividad de un juego de plataformas (carrera, salto,
+inercia, espera y puntería) sin convertir la fase decisiva en una prueba de
 reflejos.
 
 **Implicación:** las nuevas acciones deberían poder ensayarse, leerse y
@@ -143,7 +143,7 @@ viables. La geometría debe generar decisiones, no ruido visual.
 
 ---
 
-## Estado de pulido — 4 de septiembre de 2026
+## Estado de pulido, 4 de septiembre de 2026
 
 La partida estándar ofrece 8 segundos fijos para planificar y conserva la
 resolución de 0,75 segundos. Confirmar antes sigue adelantando la ejecución.
@@ -188,8 +188,8 @@ Puede correr, saltar con altura variable, dejar pasar tiempo sin dirigir y
 detenerse para cargar y apuntar. Puede efectuar una única descarga, fijada a un
 momento de su ruta.
 
-La porción no pilotada de la ventana sigue obedeciendo a impulso y gravedad. La
-falta de control futura también forma parte del plan.
+La porción no pilotada de la ventana sigue obedeciendo a impulso y gravedad. El
+tramo sin control forma parte del plan y debe tenerse en cuenta al componerlo.
 
 ### 4.3 Confirmar
 
@@ -310,13 +310,13 @@ en reserva; no representan opciones disponibles.
   abstracta. No tiene salto convencional: CUT TO END es también su única forma
   de ganar altura, y cae más rápido que el resto del elenco.
 - **The Pulse / Shock:** alterna entre un plasma recto cuya velocidad,
-  alcance y grosor crecen con la carga —solo la carga completa cruza toda la
-  pantalla— y un orbe lento que persiste, se arma y descansa
+  alcance y grosor crecen con la carga (solo la carga completa cruza toda la
+  pantalla) y un orbe lento que persiste, se arma y descansa
   sobre plataformas. Un proyectil común o el fin de vida del orbe provoca una
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
 - **The Eclipse / Chakram:** prototipo en reserva. Lanza una corona
-  viviente a 300–520 px/s y sigue exactamente la dirección elegida. Su primer
+  viviente a 300-520 px/s y sigue exactamente la dirección elegida. Su primer
   impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
   cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
   lanzamiento que termine en el aire se detiene en ese punto.
@@ -375,8 +375,8 @@ determinista y se acumula sobre el mismo medidor:
 - lanzar, en proporción a la carga;
 - acertar a un rival, y en menor medida recibir un impacto legítimo.
 
-La regla une defensa, movimiento y agresión: quien compone rutas, lanza y
-responde llega antes al clímax que quien espera.
+La regla une defensa, movimiento y agresión. Un jugador que compone rutas,
+lanza y responde llena el medidor antes que uno que espera.
 
 Al llenarse, el jugador puede anunciar y preparar una descarga especial de
 varias oleadas estrechas. La SUPER:
@@ -434,7 +434,7 @@ premio fortuito.
 - **Batalla de equipos 2v2:** teclado/ratón y hasta tres mandos se unen de forma
   explícita y eligen Crimson o Azure. Los huecos vacíos se rellenan con aliados
   de IA. El equipo comparte puntuación; el fuego amigo mantiene su consecuencia
-  espacial —el aliado cae durante esa ventana— pero no concede puntos.
+  espacial (el aliado cae durante esa ventana) pero no concede puntos.
 - **Juego libre:** elimina turnos, puntuación y presión para evaluar sensación de
   movimiento y lanzamiento. Es una herramienta de experimentación, no el modo
   que define la experiencia principal.
@@ -549,8 +549,8 @@ ZAWARUDO no intenta ser:
 - un multijugador local que finge ocultar información visible en la misma
   pantalla.
 
-Estos límites son una defensa contra la pérdida gradual de identidad, no una
-prohibición de experimentar.
+Estos límites protegen la identidad del juego frente a cambios graduales.
+Experimentar sigue permitido mientras se respeten.
 
 ---
 
@@ -569,10 +569,10 @@ Antes de incorporar una mecánica, arena, interfaz o cambio de reglas, puntuar d
 
 ### Interpretación
 
-- **8–10:** encaja con fuerza; prototipar y validar costes secundarios.
-- **5–7:** idea prometedora, pero necesita una relación más clara con los
+- **8-10:** encaja con fuerza; prototipar y validar costes secundarios.
+- **5-7:** idea prometedora, pero necesita una relación más clara con los
   pilares.
-- **0–4:** probablemente pertenece a otro juego o resuelve un problema no
+- **0-4:** probablemente pertenece a otro juego o resuelve un problema no
   demostrado.
 
 Además de la puntuación, toda propuesta debe responder:
@@ -712,4 +712,5 @@ La pregunta rectora es:
 > **¿Esta decisión hace más interesante leer un instante detenido, comprometer
 > una intención y vivir con lo que ocurre cuando el tiempo vuelve?**
 
-Si la respuesta es no, la idea necesita cambiar o no pertenece a ZAWARUDO.
+Si la respuesta es no, la idea debe revisarse antes de entrar en el juego, o
+descartarse.

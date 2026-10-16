@@ -375,7 +375,7 @@ func _refresh_choices() -> void:
 	_fighter_label.text = "YOUR FIGHTER // %s  ·  %s" % [
 		Roster.full_name(weapon), str(Roster.entry(weapon)["kit"])]
 	_fighter_grid.apply(weapon)
-	_level_label.text = "HOST ARENA // %02d OF %02d  —  %s" % [
+	_level_label.text = "HOST ARENA // %02d OF %02d  ·  %s" % [
 		level + 1, Levels.count(), Levels.build(level)["name"]]
 
 

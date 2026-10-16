@@ -2,7 +2,7 @@ extends CanvasLayer
 
 ## Live tuning readout for the free-play sandbox. Values are edited on the
 ## GameManager directly, so anything changed here is immediately what the real
-## simulation uses — walk out of free play and the match plays with your numbers.
+## simulation uses. Walk out of free play and the match plays with your numbers.
 ##
 ## Derived figures (apex, hang time, distance covered in one window) are the ones
 ## that actually decide how the game feels, so they are shown alongside the raw
@@ -27,7 +27,7 @@ const PARAMS := [
 
 const DIM := Color(0.60, 0.65, 0.74)
 const HOT := Color(1.0, 0.93, 0.60)
-## Height above the floor the derived knife-reach readout launches from — a
+## Height above the floor the derived knife-reach readout launches from: a
 ## fighter standing on a mid-arena tier rather than on the ground.
 const LAUNCH_HEIGHT := 320.0
 
@@ -77,7 +77,7 @@ func build(manager) -> void:
 		_sandbox_buttons.append(button)
 
 	_title = _label(Vector2(30.0, 20.0), 320.0, 20, Color(0.92, 0.95, 1.0))
-	_title.text = "SANDBOX — TUNING"
+	_title.text = "SANDBOX // TUNING"
 
 	for i in PARAMS.size():
 		_rows.append(_label(Vector2(30.0, 52.0 + float(i) * 24.0), 316.0, 16, DIM))
@@ -235,7 +235,7 @@ func refresh() -> void:
 
 ## How far a flat full-draw throw gets before it meets the floor, launched from
 ## mid-arena height. This replaces the old 45-degree range formula, which drag
-## makes meaningless — and it is the number worth watching while tuning, because
+## makes meaningless. It is the number worth watching while tuning, because
 ## it is the difference between "the long line exists" and "it does not".
 func _flat_reach() -> float:
 	var speed: float = gm.arrow_speed_max
@@ -246,7 +246,7 @@ func _flat_reach() -> float:
 
 
 ## The share of its forward speed a knife still has when the window it was
-## thrown in closes — the most direct readout of how quickly an arc collapses.
+## thrown in closes, the most direct readout of how quickly an arc collapses.
 func _speed_kept_per_window() -> float:
 	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
 	var ticks: int = maxi(1, int(round(gm.execution_duration / dt)))

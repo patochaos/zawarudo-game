@@ -1,4 +1,4 @@
-# Velocity — Lost Frames prototype — 2026-08-20
+# Velocity, Lost Frames prototype, 2026-08-20
 
 ## Rule
 
@@ -62,9 +62,9 @@ without firing remains a legal fallback if every available shot is worse.
 
 One production-AI seed across all seven arenas produced 21 resolved duels:
 
-- Dagger 3–4 Velocity.
-- Static Witch 4–3 Velocity.
-- Static Witch 5–2 Dagger.
+- Dagger 3-4 Velocity.
+- Static Witch 4-3 Velocity.
+- Static Witch 5-2 Dagger.
 - Velocity won 7 of 14 appearances and averaged 3.93 hits.
 
 The slice is intentionally too small and one-sided to establish final balance,
@@ -78,9 +78,9 @@ Focused Dashblade, character-kit, online-lockstep and replay tests pass.
 The same one-seed, seven-arena matrix was rerun after adding dash-aware AI
 counterplay, 28% dash-exit momentum retention, and the post-dash debt lock:
 
-- Dagger 3–4 Velocity.
-- Static Witch 4–3 Velocity.
-- Static Witch 5–2 Dagger.
+- Dagger 3-4 Velocity.
+- Static Witch 4-3 Velocity.
+- Static Witch 5-2 Dagger.
 - Velocity won 7 of 14 appearances and averaged 4.00 hits.
 - All 21 duels resolved, averaging 31.14 turns instead of 28.29.
 

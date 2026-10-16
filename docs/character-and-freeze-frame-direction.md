@@ -80,7 +80,7 @@ That suggests four transferable principles for ZAWARUDO:
 
 ## Proposed event grammar
 
-### Planning — the readable stage
+### Planning: the readable stage
 
 - Stable violet/black/gold world palette.
 - Normal character colors and a quiet breathing pose.
@@ -88,9 +88,9 @@ That suggests four transferable principles for ZAWARUDO:
 - The planning ghost uses the same final silhouette but reduced to a flat,
   outlined color shape; it should not show facial/costume texture.
 
-### Lock-in — the `mie` pose
+### Lock-in: the `mie` pose
 
-- Over 120–180 ms, the fighter shifts into a held, asymmetric silhouette.
+- Over 120-180 ms, the fighter shifts into a held, asymmetric silhouette.
 - A narrow spotlight or hard rim light isolates the confirming player.
 - Coat tails/scarf settle one beat late.
 - `READY` remains readable, but a short original word such as `LOCK` or
@@ -98,48 +98,48 @@ That suggests four transferable principles for ZAWARUDO:
 - The opponent does not see hidden plan details; this is public readiness
   theater only.
 
-### Execution — stepped controlled animation
+### Execution: stepped controlled animation
 
 - Animate bodies on twos at an apparent 12 fps while the 60 Hz simulation stays
   deterministic. This produces intentional snap instead of interpolation mush.
-- Use strong contact poses and readable arcs rather than many in-between frames.
+- Use strong contact poses and readable arcs instead of many in-between frames.
 - Afterimages remain limited to fast displacement and preserve the last pose
   when time stops again.
 
-### Impact — special-cut color
+### Impact: special-cut color
 
 - Existing hit freeze holds the strongest contact silhouette for roughly
-  50–90 ms according to accessibility settings.
+  50-90 ms according to accessibility settings.
 - A full-screen palette preset temporarily remaps background, fighters and UI
   accent together. Do not apply a generic white flash.
 - Add a diagonal crop, one hard shadow and one original impact word (`SNAP`,
   `FRACTURE`, `TIME // CUT`) selected by event type.
 - Return to the base palette in two or three stepped frames.
 
-### SUPER — three beats, not one long overlay
+### SUPER: three beats instead of one long overlay
 
-1. **Anticipation:** 100–140 ms; background collapses to two values and the
+1. **Anticipation:** 100-140 ms; background collapses to two values and the
    fighter enters a unique pose.
-2. **Portrait strike:** 350–500 ms; character-specific portrait, impossible
+2. **Portrait strike:** 350-500 ms; character-specific portrait, impossible
    palette and one original line. The current 1.45 s cut-in should be shortened
    after user testing so repeated SUPERS do not stall match rhythm.
-3. **Release:** 80–120 ms; panel tears away along the knife direction and combat
+3. **Release:** 80-120 ms; panel tears away along the knife direction and combat
    resumes on the sound transient.
 
 The reduced-flash option should replace high-luminance inversion with hue-only
 palette changes and shorter transitions, never remove the gameplay cue.
 
-### Result — final tableau
+### Result: final tableau
 
 - Freeze the actual winning world state.
 - Winner adopts a character-specific victory pose; loser holds the real defeat
   silhouette.
 - Apply a subdued final special palette and asymmetric spotlight.
-- The result UI should frame the tableau rather than cover both bodies.
+- The result UI should frame the tableau and leave both bodies uncovered.
 
 ## Character design proposal
 
-### Fighter A — The Gilded Executor
+### Fighter A: The Gilded Executor
 
 - **Primary silhouette:** inverted triangle, narrow legs, split coat tails.
 - **Gesture language:** straight diagonals, open hand above eye line, chest
@@ -148,7 +148,7 @@ palette changes and shorter transitions, never remove the gameplay cue.
   diamond-hourglass knives.
 - **Animation character:** economical and controlled; held poses end sharply.
 
-### Fighter B — The Violet Witness
+### Fighter B: The Violet Witness
 
 - **Primary silhouette:** tall S-curve, flared lower leg, long cyan scarf ribbon.
 - **Gesture language:** spirals, crossed wrists and strong counter-rotation
@@ -159,13 +159,13 @@ palette changes and shorter transitions, never remove the gameplay cue.
   weapon hand still snaps to exact aim.
 
 These designs intentionally share the game's diamonds, clocks and suspended
-time motifs rather than another franchise's hair, collars, emblems or catchphrases.
+time motifs instead of another franchise's hair, collars, emblems or catchphrases.
 
 ### Scale and readability rules
 
 - Keep the physics box at 32×48.
 - Match the original stick fighter's combat footprint in a shared gameplay
-  capture. The current calibrated target is approximately **50–53 visible
+  capture. The current calibrated target is approximately **50-53 visible
   logical pixels tall** at 720p, anchored at the same feet. Judge both height
   and filled visual mass; capes and action poses may widen the silhouette, but
   the body must neither dominate nor disappear beside the legacy fighter.
@@ -174,7 +174,7 @@ time motifs rather than another franchise's hair, collars, emblems or catchphras
   anchors.** These must identify the fighter without color, facial detail,
   weapon, nameplate or HUD portrait. The Gilded Executor's anchors are the
   angular/spiky hair wedge and the long blade-like split cape tails. Other
-  fighters must use different anchor combinations rather than variations of
+  fighters must use different anchor combinations, never variations of
   those shapes.
 - Approve a new arena fighter only after its solid-black silhouette remains
   identifiable at match scale against a noisy arena background, during bright
@@ -235,13 +235,13 @@ Suggested animation states:
 
 | State | Minimum authored content |
 |---|---|
-| Idle / plan | 6–8 frame stepped loop plus one lock-in pose |
+| Idle / plan | 6-8 frame stepped loop plus one lock-in pose |
 | Move | 8-frame run with clear contacts and passing pose |
 | Jump | anticipation, rise, apex, fall and landing keys |
 | Aim / draw | layered arm, 4 charge stages, exact direction from gameplay |
-| Throw | 3–4 frame release overlay; gameplay spawn timing remains authoritative |
+| Throw | 3-4 frame release overlay; gameplay spawn timing remains authoritative |
 | Hit | one exceptional silhouette plus two recovery cels |
-| Defeat | 5–7 frames and a held final pose |
+| Defeat | 5-7 frames and a held final pose |
 | Victory | one character-specific theatrical pose |
 | SUPER | one body pose, one detailed portrait and one release smear |
 
@@ -257,7 +257,7 @@ existing simulation remains the only source of position and timing.
    image sequences at 2× or 4× target resolution.
 5. Downsample and retouch the important lock/hit/SUPER frames by hand.
 6. Pack atlases per fighter and import as `SpriteFrames`/textures.
-7. Rebuild afterimages and ghosts from the final flat silhouette rather than
+7. Rebuild afterimages and ghosts from the final flat silhouette instead of
    duplicating all detailed layers.
 
 For a Web/mobile target, pre-rendering is safer than two continuously updating
@@ -267,14 +267,14 @@ portrait on low-quality settings.
 
 ## Implementation phases
 
-### Phase 1 — silhouette proof
+### Phase 1: silhouette proof
 
-- Replace only the live stick figure with flat prototype body shapes at 64–80 px.
+- Replace only the live stick figure with flat prototype body shapes at 64-80 px.
 - Keep collision, ghosts and mechanics untouched.
 - Test both fighters on all arenas at 1024×576 and touch scale.
 - Acceptance: each player is identifiable with color removed and during motion.
 
-### Phase 2 — one-fighter vertical slice
+### Phase 2: one-fighter vertical slice
 
 - Build Fighter A with idle, run, jump, aim, throw, hit and defeat.
 - Add the layered aim rig and confirm the launch origin matches the existing
@@ -282,13 +282,13 @@ portrait on low-quality settings.
 - Add one special-cut palette and lock-in pose.
 - Acceptance: all gameplay/replay/online determinism tests remain unchanged.
 
-### Phase 3 — second fighter and identity pass
+### Phase 3: second fighter and identity pass
 
 - Build Fighter B with the same state contract but different gesture timing.
 - Replace mirrored/tinted HUD portraits with character-specific portraits.
 - Replace `MUDA MUDA` and the current SUPER line with original copy and iconography.
 
-### Phase 4 — freeze-frame direction
+### Phase 4: freeze-frame direction
 
 - Add event-driven palette presets, panel crops, character spotlights and final
   tableaus.

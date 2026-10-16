@@ -1,12 +1,12 @@
 ; Engine configuration file.
-; ZAWARUDO — simultaneous planning + short real-time execution.
+; ZAWARUDO: simultaneous planning + short real-time execution.
 
 config_version=5
 
 [application]
 
 config/name="ZAWARUDO"
-config/version="0.4.1-names.1"
+config/version="0.4.1-names.2"
 run/main_scene="res://scenes/Main.tscn"
 boot_splash/image="res://assets/branding/zawarudo-splash.png"
 boot_splash/bg_color=Color(0.015, 0.008, 0.027, 1)

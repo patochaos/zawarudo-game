@@ -1,4 +1,4 @@
-# Character movement balance — 2026-08-21
+# Character movement balance, 2026-08-21
 
 This pass makes locomotion part of the four selectable class identities instead
 of giving every fighter the same vertical physics. Values below use the default
@@ -17,12 +17,12 @@ collision and releasing jump early make the observed route slightly smaller.
 
 ## Why Velocity has no jump
 
-Velocity already owns a freely aimed 660–980 px/s body dash lasting 8–15 ticks,
+Velocity already owns a freely aimed 660-980 px/s body dash lasting 8-15 ticks,
 with up to three extra ticks from Lost Frames. Letting that attack be her only
 way to climb gives the class a real constraint without making upper terrain
 inaccessible. Going upward now costs her attack for the turn, exposes a committed
 line, and risks the faster descent afterward. The first tournament showed that
-75% walk plus no jump was too punitive, including a 0–14 matchup into Broodtail.
+75% walk plus no jump was too punitive, including a 0-14 matchup into Broodtail.
 The retained 90% walk keeps a visible Lost Frames penalty without making every
 ground approach glacial. Frame Debt's cell distance was reduced proportionally,
 so the movement buff does not quietly nerf her attack resource.
@@ -32,17 +32,17 @@ so the movement buff does not quietly nerf her attack resource.
 The initial two-seed, seven-arena duel matrix used the no-jump profile with 75%
 walk, 125% fall, and the Witch's more extreme float. Across 84 matches it found
 7 unresolved and these win totals: Dagger 20/42, Velocity 12/42, Static Witch
-31/42, and Broodtail 14/42. Velocity was healthy into Dagger (7–6) and playable
-into Witch (5–9), but Broodtail won the matchup 14–0.
+31/42, and Broodtail 14/42. Velocity was healthy into Dagger (7-6) and playable
+into Witch (5-9), but Broodtail won the matchup 14-0.
 
 The revised one-seed directional check covered all 42 arena/pairing combinations.
 It found 4 unresolved and these win totals: Dagger 7/21, Velocity 9/21, Static
-Witch 15/21, and Broodtail 7/21. Velocity improved to 42.9% overall and went 3–4
-into Witch, but the Broodtail counter persisted at 7–0 while Velocity swung to
-6–1 over Dagger.
+Witch 15/21, and Broodtail 7/21. Velocity improved to 42.9% overall and went 3-4
+into Witch, but the Broodtail counter persisted at 7-0 while Velocity swung to
+6-1 over Dagger.
 
 That second result is a guardrail against further universal movement buffs.
-Broodtail–Velocity needs a weapon-interaction review; more walk speed would
+Broodtail vs Velocity needs a weapon-interaction review; more walk speed would
 mainly make Velocity oppressive in the matchups that are already functional.
 Static Witch's remaining 71.4% lead likewise points beyond locomotion to her
 plasma/orb kit. Tournament AI is directional evidence, not a replacement for

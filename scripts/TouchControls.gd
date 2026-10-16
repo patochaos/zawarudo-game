@@ -380,7 +380,7 @@ func _draw_touch_result_card() -> void:
 	if _gm.interception_mode:
 		prompt = "INTERCEPTION · WATCH THE FIGHT OR RUN IT BACK"
 	if _gm.online_mode and _gm.online_player != 0:
-		prompt = "THE HOST CHOOSES THE ARENA — WATCH THE FIGHT OR RUN IT BACK"
+		prompt = "THE HOST CHOOSES THE ARENA · WATCH THE FIGHT OR RUN IT BACK"
 	_surface.draw_string(HUD_FONT, Vector2(330.0, 417.0), prompt,
 		HORIZONTAL_ALIGNMENT_CENTER, 620.0, 13, Color(SPECTRAL.r, SPECTRAL.g, SPECTRAL.b, 0.74))
 	_surface.draw_string(HUD_FONT, Vector2(330.0, 465.0),

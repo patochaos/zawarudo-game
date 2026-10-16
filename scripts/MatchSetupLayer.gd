@@ -3,7 +3,7 @@ class_name MatchSetupLayer
 
 ## The rules screen, second and last stop before a local match. The lineup
 ## arrives already decided from RosterLayer; everything chosen here is a rule
-## the whole table shares — the mode, the arena, and how long the match runs.
+## the whole table shares: the mode, the arena, and how long the match runs.
 ##
 ## The arena is picked next to a scale drawing of its actual layout, because a
 ## name alone never told anyone whether a level wraps or where the cover is.
@@ -19,7 +19,7 @@ const MODE_NAMES := ["VS", "TEAM BATTLE", "FREE PLAY"]
 const MODE_NOTES := [
 	"EVERY FIGHTER SCORES FOR THEMSELVES.",
 	"CRIMSON AND AZURE ALTERNATE BY SLOT.",
-	"NO SCORE — A SANDBOX WITH TRAINING DUMMIES.",
+	"NO SCORE. A SANDBOX WITH TRAINING DUMMIES.",
 ]
 const MATCH_LIFE_OPTIONS := [3, 5, 7]
 const TEAM_NAMES := ["CRIMSON", "AZURE"]

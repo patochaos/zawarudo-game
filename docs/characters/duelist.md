@@ -1,4 +1,4 @@
-# The Duelist — canonical character specification
+# The Duelist: canonical character specification
 
 Status: **visual canon v1**  
 Selectable class name: **THE DUELIST**  
@@ -18,7 +18,7 @@ magistrate of time: surgical, controlled and quietly certain that the fight was
 decided before either player moved.
 
 He is **not** a berserker, rogue, assassin, vampire, soldier or stage magician.
-His appeal comes from precision and composure rather than menace or excess.
+His appeal comes from precision and composure. Menace and excess are not part of it.
 
 ## Design pillars
 
@@ -33,7 +33,7 @@ His appeal comes from precision and composure rather than menace or excess.
 ## Physical design
 
 - Masculine adult, visually late twenties to early thirties.
-- Tall, approximately 7.75–8 heads, with long legs and a lean athletic build.
+- Tall, approximately 7.75-8 heads, with long legs and a lean athletic build.
 - Broad, angular shoulders; narrow waist; strong forearms; no bodybuilder mass.
 - Warm medium/olive skin. Do not render him pale, gray or undead.
 - Long, sharp face with a squared tapered jaw, straight nose, pronounced dark
@@ -42,7 +42,7 @@ His appeal comes from precision and composure rather than menace or excess.
 - Default expression is cool focus. Secondary expression is a small, closed or
   barely open asymmetric smirk. Teeth should not dominate the face.
 
-### Hair — strict identity rule
+### Hair: strict identity rule
 
 Near-black, short and swept back from a shallow widow's peak. Build it from
 five to seven broad angular locks, kept close to the skull. The sideburns are
@@ -54,7 +54,7 @@ on this point.
 
 ## Costume construction
 
-### Primary layer — ivory judgment coat
+### Primary layer: ivory judgment coat
 
 - Warm ivory tailored coat with a narrow waist and hard, clean panel breaks.
 - Very high open collar; its tips extend laterally to form a sharp shoulder
@@ -66,7 +66,7 @@ on this point.
 - Antique-gold piping is thin and structural. No embroidery, brocade, symbols,
   medals, epaulettes or fabric texture.
 
-### Secondary layer — black formal core
+### Secondary layer: black formal core
 
 - Fitted near-black high-neck underlayer, waistcoat and trousers.
 - A clean uninterrupted dark column should remain visible between the ivory
@@ -127,8 +127,8 @@ coat or insignia.
 - Exclusive outer-silhouette anchors: the compact angular hair wedge and two
   long blade-like coat tails.
 - At 720p wide-camera gameplay scale, the visible fighter is approximately
-  **50–53 logical pixels tall**, anchored to the existing 32×48 collision body.
-- Simplify to 8–12 large shapes: hair, head, collar/torso, two arms, two legs,
+  **50-53 logical pixels tall**, anchored to the existing 32×48 collision body.
+- Simplify to 8-12 large shapes: hair, head, collar/torso, two arms, two legs,
   two coat tails and the chest disk.
 - Preserve a two-pixel-equivalent dark outer keyline.
 - At tiny scale, prioritize collar, ivory torso, clock disk, gold forearms,
@@ -142,7 +142,7 @@ identify The Duelist.
 ## Movement and pose language
 
 His movement is economical. The torso stays composed while a limb creates one
-precise diagonal. Poses should resemble measured calligraphy rather than dance
+precise diagonal. Poses should resemble measured calligraphy. They should never read as dance
 or brawling.
 
 - **Idle / planning:** upright, weight slightly back, chin level, throwing hand
@@ -170,7 +170,7 @@ obscure aim, feet or collision readability.
 ## Personality and presentation
 
 The Duelist speaks briefly and precisely. He notices timing, errors, angles and
-inevitability. His confidence is formal rather than flamboyant. He does not
+inevitability. His confidence is formal and never flamboyant. He does not
 insult an opponent's identity; he comments on the decision they made.
 
 Voice direction: low-to-mid register, dry, unhurried, articulate, with anger
@@ -237,13 +237,13 @@ Reject an image or animation if any of the following is true:
 - the pose hides the collar, chest clock and both feet without a deliberate
   close-up reason.
 
-## Reusable AI prompt — full character
+## Reusable AI prompt: full character
 
 ```text
 One original male video-game fighter, THE DUELIST, visual archetype “Gilded
 Executor”: tall lean athletic adult, warm medium olive skin, long sharp face,
 strong straight nose, heavy dark brows, narrow amber-brown eyes, clean shaven;
-short near-black hair swept back from a shallow widow's peak in 5–7 broad
+short near-black hair swept back from a shallow widow's peak in 5-7 broad
 angular locks, kept close to the skull. Warm ivory fitted judgment coat with a
 very high angular open collar and exactly two long stiff blade-like rear tails;
 near-black high-neck waistcoat and trousers; thin antique-gold structural
@@ -286,7 +286,7 @@ Before accepting a Duelist asset, answer yes to all of these:
 3. Are the high collar and exactly two blade-like rear tails readable?
 4. Is the clock clasp on his right chest with one descending clock hand?
 5. Are ivory, near-black and antique gold the only costume color families?
-6. Is he lean, adult and controlled rather than bulky or manic?
+6. Is he lean, adult and controlled, with no bulk or mania?
 7. Are the weapons matching double-ended hourglass daggers?
 8. Does the pose communicate precision through one strong diagonal?
 9. Is the relevant gameplay aim still visually honest?

@@ -1,4 +1,4 @@
-# ZAWARUDO — Tactical Knife Duel
+# ZAWARUDO: Tactical Knife Duel
 
 **Core-loop demo:** launch `Play.bat` and choose **LEARN TO PLAY** for three playable lessons, or **START DUEL** for an immediate match against the opponent ladder: five named CPUs played in order, each in its own arena, first to three hits. Turns have an eight-second planning limit by default. See the [tester guide](docs/PLAYTEST_GUIDE.md) and [current demo scope](docs/CORE_PLAYTEST.md). **CUSTOM MATCH** picks any arena, the number of fighters, each CPU's skill and the match length. Experiments require `Play.bat -- --dev-tools`.
 
@@ -71,11 +71,11 @@ whether players can explain a hit or miss, exploit an earlier knife, and finish
 their plan before the clock expires. Automated checks verify the preset values
 and rules; they do not establish which preset feels best.
 
-> Diseño de juego: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — visión,
+> Diseño de juego en [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md): visión,
 > pilares, contratos de experiencia y marco para futuras decisiones.
 
 2D side-view 1v1 duel. Simultaneous planning, then a short burst of real-time
-physics. Everything — players and knives — keeps its position and velocity
+physics. Everything, players and knives alike, keeps its position and velocity
 across the freeze, so a dangerous knife can hang in mid-air for several planning
 phases while both players decide what to do about it.
 
@@ -91,8 +91,8 @@ result looks chaotic but replays exactly, preserving the planning contract.
 ### Knife feel: drag and debris
 
 A knife bleeds forward speed but never fall speed. Gravity keeps pulling at full
-strength while the throw runs out of steam, so the arc does not flatten into a
-glide — it **collapses**: the knife stops advancing and drops. At `arrow_drag`
+strength while the throw runs out of steam, so the arc never flattens into a
+glide. The knife stops advancing and drops. At `arrow_drag`
 0.45 a knife keeps ~71% of its forward speed through one execution window, and a
 flat full-draw throw reaches about two thirds of the arena before meeting the
 floor instead of almost all of it.
@@ -100,11 +100,11 @@ floor instead of almost all of it.
 Once a knife has been struck it falls under `arrow_clashed_gravity_scale` times
 gravity. Nobody aimed it any more, so it behaves like debris and leaves the board
 in about a second instead of drifting for the fifteen seconds its age cap allows.
-This is what keeps a long exchange from silting up with stray knives — deflected
+This keeps a long exchange from silting up with stray knives. Deflected
 threats stay lethal on the way down, but they do come down.
 
-Neither knob touches persistence in kind. A slow, falling knife is still a knife,
-and still crosses planning phases; it simply stops being a flat line that owns
+Neither knob removes persistence. A slow, falling knife is still a knife,
+and still crosses planning phases. It no longer draws a flat line across
 the whole arena. Both are live in the Free Play tuning panel, alongside a derived
 readout of the flat full-draw reach and the forward speed kept per window.
 
@@ -233,8 +233,8 @@ added later still arrives with its default.
 | **PREVIEW CONTRAST** | strengthens planning lines and player-colour separation |
 | **PLAYTEST LOG** | local anonymous match events for bug reports |
 
-There is no music bed in the build, so sound splits along the axis that actually
-matters: the loud voice cues against everything else.
+There is no music bed in the build, so the two sliders split the loud voice
+cues from everything else.
 
 **START DUEL** launches the fixed playtest immediately. **CUSTOM MATCH**, available
 in developer mode, opens the lineup and rules screens described below.
@@ -247,33 +247,33 @@ Every occupied slot plays **The Duelist**, including CPUs and training dummies.
 The Rook, The Pulse and The Eclipse are benched while development focuses on
 predicting movement and placing projectiles across an opponent’s route. Their
 code and assets are retained. Under each slot, the **control tile** walks the seat
-through PLAYER, the three CPU skills, and OPEN; two fighters is the floor, so the
-open option is skipped rather than offered and refused.
+through PLAYER, the three CPU skills, and OPEN. Two fighters is the floor, so a
+slot that would drop below it skips the OPEN option.
 
 `↑`/`↓` moves between the fighter, the control tile and the confirm bar, `Tab`
 walks to the next slot, and `Enter` readies a human seat or drops a CPU into an
-empty one. A pad presses `A` to take the seat waiting for it — or the first open
-slot — moves its own fighter with the d-pad, readies with `A`, and gives the seat
-back with `B`. A pad that disconnects leaves a CPU behind rather than a dead seat.
+empty one. A pad presses `A` to take the seat waiting for it, or the first open
+slot. It moves its own fighter with the d-pad, readies with `A`, and gives the seat
+back with `B`. A pad that disconnects leaves a CPU behind, so no seat goes dead.
 
 **The rules screen** takes the settled lineup and adds what the whole table
 shares: mode, arena, and match length. The arena is chosen next to a scale
-drawing of its actual layout — solid geometry, breakable cover, spawn sockets,
-hazards and the ends of every moving ledge — so a level is picked on its shape
-rather than on its name. `Esc` steps back to the lineup with every pick intact.
+drawing of its actual layout (solid geometry, breakable cover, spawn sockets,
+hazards and the ends of every moving ledge), so you pick a level by its shape.
+`Esc` steps back to the lineup with every pick intact.
 
 The three modes are:
 
-* **VS** — every fighter scores for themselves. With two slots this is the duel,
+* **VS**: every fighter scores for themselves. With two slots this is the duel,
   played with **open information**: both players see each other's plans and
   compose them simultaneously on the same machine. With three or four slots it
   is a free-for-all, and each CPU chooses a nearby living rival so they fight one
   another as well as the human.
-* **TEAM BATTLE** — sides alternate by slot (Crimson, Azure, Crimson, Azure), so
+* **TEAM BATTLE**: sides alternate by slot (Crimson, Azure, Crimson, Azure), so
   which side you fight for is decided by which slot your device claims. Unclaimed
   positions become CPU allies. Teams share the selected hit target; friendly fire
   still removes an ally for the execution window but awards no point.
-* **FREE PLAY** — see below. Scoring is retired and unclaimed slots become
+* **FREE PLAY**: see below. Scoring is retired and unclaimed slots become
   training dummies.
 
 **LEARN TO PLAY** teaches movement, interception and persistent threats through
@@ -295,7 +295,7 @@ in `user://playtest-telemetry.jsonl` and overwrites
 for patochaos@gmail.com. The player can copy the report with their notes and
 choose whether to send it. Options can disable logging entirely.
 
-## Single player prototype — Fate Trial 01
+## Single player prototype: Fate Trial 01
 
 Choose **EXPERIMENTS → FATE TRIAL** to enter **The Crossfire** as the
 Duelist. A hostile Duelist commits first and its complete movement and knife
@@ -306,7 +306,7 @@ attempt, while hitting the hostile echo only disrupts it for that window.
 The prototype uses the ordinary deterministic match, persistent-projectile and
 replay systems. `Enter` retries the authored opening after either result.
 
-## Real Time — continuous Duelist experiment
+## Real Time: continuous Duelist experiment
 
 Choose **EXPERIMENTS → REAL TIME** for an endless Duelist-versus-CPU
 session in Crosshair Court. Movement and hold/release dagger throws happen
@@ -319,7 +319,7 @@ charge bar while drawing are the only aids; `H` toggles both off/on.
 `M` mutes and `Esc` returns to the menu. The normal Sandbox keeps its full
 previews and tuning panel. This mode is an offline feel test, not online play.
 
-## Sandbox / Free Play — judging the feel
+## Sandbox / Free Play: judging the feel
 
 Turn structure makes movement hard to evaluate: you only ever see 0.75s of it at
 a time. **EXPERIMENTS → SANDBOX** drops the freeze entirely and enters
@@ -344,17 +344,17 @@ a real match afterwards:
 `↑`/`↓` pick a value · `←`/`→` change it (hold `Shift` for ×5) · `Backspace`
 reset all · `Esc` menu
 
-It also shows what the numbers mean in play — jump apex and hang time, distance
+It also shows what the numbers mean in play: jump apex and hang time, distance
 covered in one execution window, time to reach top speed, best knife range at a
-half draw — because those are what actually decide the feel, and working them
-out from raw values by hand is the slow way to tune.
+half draw. Those decide the feel, and working them out from raw values by hand
+is slow.
 
 ## The opponent
 
 Each AI plays by the same rules you do. It sees the world state and every knife
 in flight, and it does **not** read your plan. Instead it guesses: each turn it
-plays out three hypotheses for what your feet might do this window — hold, run
-left, run right — and prefers the shot that covers the most of them. That is the
+plays out three hypotheses for what your feet might do this window (hold, run
+left, run right) and prefers the shot that covers the most of them. That is the
 same prediction problem the game asks of a human. In four-player mode, each AI
 independently targets a nearby living rival and can choose another AI.
 
@@ -363,7 +363,7 @@ because it plans blind and showing you its intent would be a one-way giveaway.
 
 It drives the ordinary piloting API, so its movement is recorded, costs stamina
 and replays exactly like yours. The search runs in ~3ms slices across frames
-during its think delay — a full sweep costs ~35ms, which would otherwise be a
+during its think delay. A full sweep costs ~35ms, which would otherwise be a
 visible hitch at the top of every planning phase. Measured over 5000 frames of
 live play: **worst frame 7.9ms, zero frames over budget.**
 
@@ -375,15 +375,15 @@ or choose a real over/under angle instead.
 
 Each CPU fighter carries its own skill preset on its slot plate, so a
 four-player match can mix them (for example, P3 NOVICE and P4 RUTHLESS).
-Every preset plans blind by the same rules — none of them ever sees another
+Every preset plans blind by the same rules. None of them ever sees another
 fighter's plan. What changes is how much of the search that CPU spends and how
 straight it throws:
 
 | Preset | Aim slop | Routes shot-searched | Deliberation |
 |---|---:|---:|---|
-| **NOVICE** | 7.0° | 1 of 11 | 1.4–3.0s |
-| **STANDARD** | 2.0° | 2 of 11 | 0.8–2.2s |
-| **RUTHLESS** | 0.6° | 5 of 11 | 0.5–1.2s |
+| **NOVICE** | 7.0° | 1 of 11 | 1.4-3.0s |
+| **STANDARD** | 2.0° | 2 of 11 | 0.8-2.2s |
+| **RUTHLESS** | 0.6° | 5 of 11 | 0.5-1.2s |
 
 STANDARD is the baseline every balance pass was tuned at. All eleven movement
 candidates are still ranked for safety at every preset; the number above is how
@@ -459,7 +459,7 @@ changes, benchmark arenas and experiments that still require player evidence.
 
 **First to 5 hits takes the default match.** The rules screen selects 3, 5, or 7
 match lives, and every CPU carries an independent skill preset. A hit
-does not end the round — it costs a point and takes the victim off the board for
+does not end the round. It costs a point and takes the victim off the board for
 the remainder of that window only.
 Everything else carries on untouched: knives stay in flight, platform damage
 stands, the other player keeps their exact position and velocity.
@@ -520,7 +520,7 @@ A hitless exchange also advances the **Temporal Core** clock. After two
 consecutive hitless execution windows, one of the level's authored Core sockets
 is marked for a full turn. If the following window is also hitless, the Core
 materializes there for two execution windows. Touching it with the real player
-(not merely the planning ghost) fills that player's SUPER meter. If both players
+(the planning ghost does not count) fills that player's SUPER meter. If both players
 touch it on the same physics tick, both earn the reward. A hit during the warning
 turn cancels the incoming Core; once materialized, it persists for its full
 lifetime unless collected.
@@ -529,7 +529,7 @@ Score pips sit under the timer. With developer tools enabled, `F10` cycles level
 
 ## Movement: pilot the ghost on a stamina budget
 
-Movement is **not** a set of toggles — it is a recording.
+Movement is a **recording** of your inputs, tick by tick.
 
 During planning you drive your **ghost** with ordinary platformer controls.
 Every tick of input is captured, and a **stamina bar** drains as the ghost
@@ -541,17 +541,17 @@ tick-for-tick.
 Design lineage: the simultaneous plan-commit-watch structure comes from
 [Frozen Synapse](https://en.wikipedia.org/wiki/Frozen_Synapse), which resolves
 both sides' orders together over a fixed slice of simulated time. The movement
-itself is closer to Worms/Gunbound — free real-time platforming metered by a
-budget you spend down — rather than Frozen Synapse's waypoint drawing.
+itself is closer to Worms/Gunbound, free real-time platforming metered by a
+budget you spend down, than to Frozen Synapse's waypoint drawing.
 
 Key properties:
 
-* **Time only moves while you do — on the ground and in the air alike.** Release
+* **Time only moves while you do, on the ground and in the air alike.** Release
   everything and the ghost freezes, wherever it is. Hold a direction and it
   walks; hold jump and it climbs; hold the wait key (`S` / `↓`) and time runs
   with no steering, for falling or for lining a shot up at a precise moment.
   *(This used to be inconsistent: airborne ghosts advanced on their own, so the
-  control rule silently changed the instant you left the ground — and since a
+  control rule silently changed the instant you left the ground. Since a
   full jump outlasts the window, that was every jump.)*
 * **Variable jump height.** Let go while still climbing and the rise is capped
   at `jump_cut` of the impulse. A tap clears ~45px and lands inside one window;
@@ -560,8 +560,8 @@ Key properties:
 * **Double jump.** Release and press jump again while airborne to spend one
   mid-air jump. Landing restores it; the ghost preview and execution replay the
   second impulse on the exact recorded tick.
-* **Charging freezes the ghost.** Hold the shoot button mid-run — even mid-jump
-  — and everything stops while you aim. Release and piloting resumes.
+* **Charging freezes the ghost.** Hold the shoot button mid-run, even mid-jump,
+  and everything stops while you aim. Release and piloting resumes.
 * **The shot is pinned to a point on the path.** Fire at the top of a jump and
   the knife fan leaves from the top of that jump, at that tick, even if you keep
   walking afterwards. Its angle and power are locked at that moment; only the
@@ -576,7 +576,7 @@ Key properties:
 | Walk the ghost | hold `A` / `D` | Left stick / D-pad |
 | Jump / double jump (hold = higher) | `Space` / `W` / `↑` | `A` |
 | Let time run | `S` | Left stick down |
-| Aim | **Mouse** — free 360° | **Right stick** |
+| Aim | **Mouse**, free 360° | **Right stick** |
 | Power | **Hold LMB** | **Hold R2** |
 | Fire | release the button | release the trigger |
 | Toggle SUPER | `T` | `Y` |
@@ -592,7 +592,7 @@ Global: `M` mute · `H` hide the control bar ·
 `R` watch replay · `C` copy the match report · `←`/`→` choose the rematch level
 · `Enter` rematch.
 
-In Vs AI the Player 2 column is inert — the AI ignores it.
+In Vs AI the Player 2 column is inert. The AI ignores it.
 
 ### Benched character prototypes (unavailable in play)
 
@@ -608,7 +608,7 @@ active roster. These do not make the benched kits available in play.
 **The Rook** deletes one frame from every four steps: her horizontal
 locomotion is 75% of the shared baseline, while the denied distance accumulates
 as up to three **LOST FRAME** cells. Standing still or pressing into a wall earns
-nothing. Her planned body dash—**CUT TO END**—automatically cashes the completed
+nothing. Her planned body dash, **CUT TO END**, automatically cashes the completed
 cells into one extra route tick each; committing all three also adds one point
 of front guard. The narrow blade remains a real moving collision surface which
 can deflect daggers or intercept plasma, while attacks reaching the body from
@@ -626,10 +626,9 @@ mouse. Her horizontal locomotion is 110% of the shared baseline.
 
 **The lance falls.** It is fast, but it is ballistic like every other projectile
 in the game, so hitting a distant target means leading it and aiming above the
-mark. Charge buys a flatter arc as well as more speed and range, which is what
-makes waiting for a full draw a decision rather than a formality. The planning
-preview draws the true arc — not a direction line — and rings the head in red
-where cover stops it. A spent dagger can still intercept the bolt and heavily
+mark. Charge buys a flatter arc as well as more speed and range, so waiting
+for a full draw is a real decision. The planning preview draws the true arc and
+rings the head in red where cover stops it. A spent dagger can still intercept the bolt and heavily
 attenuate it.
 
 She may hold **two orbs at once**. Casting a third detonates her oldest rather
@@ -643,12 +642,12 @@ places an armed orb ahead of her and fires a lance, as two separate threats.
 
 *Why she changed:* a flat lance crossed 870px of the 1280px arena inside one
 execution window, while a fighter can move about 195px. It was the one attack
-that asked no prediction of its owner in a game built on prediction, and it read
-in the balance matrix as a kit that beat every other kit. Giving it an arc put
-her back inside the game's own rule rather than nerfing a number.
+that asked no prediction of its owner, and it read in the balance matrix as a
+kit that beat every other kit. Giving the lance an arc fixed that without
+lowering any of her numbers.
 
 **The Eclipse**, a benched prototype, throws one **CORONA** at a
-deliberate 300–520 px/s. It follows the committed aim exactly. Its first impact
+deliberate 300 to 520 px/s. It follows the committed aim exactly. Its first impact
 with permanent HARD terrain ricochets at 82% speed; breakable cover or a second
 terrain impact pins it in place without stopping its spin. At the end of its
 launch window, a midair chakram also holds at its exact position. It remains a
@@ -671,7 +670,7 @@ reach radius, telegraph briefly, then pounce. Keeping that territorial,
 delayed-pressure kit separate preserves The Eclipse's returning-weapon identity
 and gives the summons room for their own counterplay and limits.
 
-In Online all computers use the **Player 1 — keyboard + mouse** column. The
+In Online all computers use the **Keyboard + mouse fighter** column. The
 server-assigned P1/P2/P3/P4 slot changes the fighter and HUD label, not the local
 bindings.
 
@@ -715,19 +714,18 @@ device in use.
 ### Descending: down + jump
 
 Walking off an edge is not the only way down. **Down + jump** drops the fighter
-through the ledge it is standing on, so changing level is a move you place in a
-plan rather than a detour you walk.
+through the ledge it is standing on, so changing level is one more move you
+place in a plan.
 
-Thickness is the rule, and it is one a player can read straight off the
-silhouette: anything thinner than 30px is a ledge you can drop through, and
-anything thicker — the floor, the walls, the roof of a tower — is not. Nothing
-has to be marked.
+Thickness is the rule, and you can read it off the silhouette: anything
+thinner than 30px is a ledge you can drop through, and anything thicker (the
+floor, the walls, the roof of a tower) is solid, so no piece needs a marker.
 
 A drop only opens the ledge you left. Ledges below stay solid, so you land on
-the very next surface down instead of tunnelling past several; and because the
-drop is recorded on its own channel of the plan, the ghost and the executed body
-agree about it like they do about every other input. The AI does not use it —
-it is a deliberate human verb, and the search has no way to value it yet.
+the very next surface down. The drop is recorded on its own channel of the
+plan, so the ghost and the executed body agree about it like they do about every
+other input. The AI does not use it yet, because the search has no way to value
+it.
 
 ## Levels
 
@@ -743,7 +741,7 @@ in every count, and the first arena is the deliberately readable one.
 | 1 | **Crosshair Court** | walled | Static permanent cover: the clean baseline for reading knife collisions and delayed danger. |
 | 2 | **Clockwork Gallery** | walled | Three bridge gates and two low gates open and close on staggered clocks. Stand on one when it opens and you fall. Side walls keep every throw on the gates instead of across the seam. |
 | 3 | **Stilled Hall** | walled | Two stasis fields flank the centre pillar. Bodies and knives inside run at 35 percent speed, so a knife thrown in stays a threat for turns. |
-| 4 | **Pulse Chamber** | ↔ | Staggered islands and paired triggerable orbs turn the side seam into a slingshot loop. |
+| 4 | **Pulse Chamber** | ↔ | Staggered islands and paired triggerable orbs turn the side seam into a slingshot loop. Lower bulkheads wall the ground lane, so the seam opens at ledge height and above. |
 | 5 | **Endless Descent** | ↔ ↕ | Four-corner spawns, permanent side climbs and two vertical loops split by a hanging central pillar. |
 
 Moving platforms and breakable cover remain supported rules (the kinetic
@@ -774,7 +772,7 @@ The position is a **pure function of the absolute simulation tick** (see
   everything else in the world.
 * Planning can project it. The ghost path, the coasted tail, existing-knife
   trajectories and the AI search all resolve against the geometry as it will
-  stand on each tick of the coming window — not against the frozen snapshot. A
+  stand on each tick of the coming window, never against the frozen snapshot. A
   plan that steps onto a lift that is about to rise is a plan you authored, and
   `KineticArenaTest` asserts the executed path matches the previewed one to
   within a thousandth of a pixel.
@@ -798,7 +796,7 @@ every knife inside its radius directly outward at full player-throw speed.
 Fighter push keeps a linear falloff so the rim can be judged by eye. The orb
 then goes dark for two execution windows, showing its recharge as pips.
 
-Nothing is damaged — knives remain the only source of damage — but position,
+Nothing is damaged, since knives remain the only source of damage, but position,
 momentum and every firing line inside the ring change, and the knives blown
 outward stay in the world on ordinary throw gravity. Outward arrowheads around
 the blast ring make that consequence visible during planning without text.
@@ -847,7 +845,7 @@ later.
 
 ### Destructible cover
 
-Terrain **never damages a player** — only knives do.
+Terrain **never damages a player**. Only knives do.
 
 Platforms carry hit points and chip away as knives strike them, so cover is
 temporary and the arena reshapes over a match. Remaining hits show as pips above
@@ -873,12 +871,12 @@ destroying one opens new firing lines rather than closing the game down.
 **One caveat worth knowing:** if a knife destroys a platform mid-window, anyone
 standing on it falls, and the ghost that promised solid ground was drawn before
 the floor went away. That is the one case where the preview can be wrong, and
-it is deliberate — breaking the floor under an opponent is a legitimate play.
+it is deliberate: breaking the floor under an opponent is a legitimate play.
 
 ## Sound
 
 Gameplay impacts keep their sharp procedural transients, including a
-double-transient knife `clink–clink`, and now layer in quiet CC0 Kenney material
+double-transient knife `clink-clink`, and now layer in quiet CC0 Kenney material
 sounds for more body and variation. The imported title voice plays at natural
 pitch when a match starts. The SUPER cut-in keeps its procedurally synthesised
 voice-like chant; phase freeze, resume, orb blasts, and Temporal Core pickups
@@ -887,31 +885,30 @@ Everything shares a 16-voice pool. `M` mutes.
 
 ## Reading the preview
 
-* **Solid line from your feet** — the stretch you piloted.
-* **Dot where it changes to dotted** — where your stamina ran out.
-* **Dotted tail** — uncontrolled coast to the end of the window.
-* **Ring labelled `END`** — where you finish the execution window.
-* **Green→red bar over the ghost** — stamina left.
-* **Two notched dagger arcs** — the real fan direction and draw strength. Low
+* **Solid line from your feet**: the stretch you piloted.
+* **Dot where it changes to dotted**: where your stamina ran out.
+* **Dotted tail**: uncontrolled coast to the end of the window.
+* **Ring labelled `END`**: where you finish the execution window.
+* **Green→red bar over the ghost**: stamina left.
+* **Two notched dagger arcs**: the real fan direction and draw strength. Low
   power opens the fan and droops early; full power reaches farther and pulls the
   pair almost parallel. The compact arc uses live dagger drag and gravity without
-  revealing the complete landing point.
-  where you are *pointing*, **not where the knives land** — you still estimate
-  the ballistic arc yourself.
-* **Ringed dot labelled `FIRE`** — where and when along your path the volley releases.
-* **Red `THREAT` ring** — a known knife crosses the visible plan during the next
+  revealing the complete landing point. It shows where you are *pointing*. You
+  still estimate the landing yourself.
+* **Ringed dot labelled `FIRE`**: where and when along your path the volley releases.
+* **Red `THREAT` ring**: a known knife crosses the visible plan during the next
   execution window. It is a warning, not a guarantee: the rival can still alter
   the shared world.
-* **Rings labelled `+1`, `+2`, `+3`** — where a knife will be at the end of
+* **Rings labelled `+1`, `+2`, `+3`**: where a knife will be at the end of
   each future execution phase. A shot loosed mid-window reaches `+1` after less
   than a full window of flight, and the labels account for that.
-* **White vector with a number** — a frozen knife's current velocity.
-* **White ring around a player** — invulnerable this turn; knives pass through.
-* **Violet grade, clock marks, and suspended gold motes** — the world is frozen.
+* **White vector with a number**: a frozen knife's current velocity.
+* **White ring around a player**: invulnerable this turn; knives pass through.
+* **Violet grade, clock marks, and suspended gold motes**: the world is frozen.
   A violet/gold shock ring announces each freeze and a horizontal flash releases
   the next execution window.
 
-All of it disappears during execution; you just watch.
+All of it disappears during execution. You just watch.
 
 ## Tuning
 
@@ -942,7 +939,7 @@ shock_move_speed_scale   1.10   horizontal target speed: 286 px/s
 player_acceleration      1800
 player_air_acceleration  900
 jump_impulse             780     full hold: 211px rise, 1.10s air
-jump_cut                 0.40    tap: ~45px, ~0.5s — fits inside one window
+jump_cut                 0.40    tap: ~45px, ~0.5s, fits inside one window
 gravity                  1400
 max_fall_speed           1200
 
@@ -1011,7 +1008,7 @@ the thing this prototype exists to test.
 
 | File | Responsibility |
 |---|---|
-| `scripts/GameManager.gd` | Phase machine, timers, ghost piloting + stamina, confirm/rollback, all input, platform damage, all tuning exports. Steps every entity explicitly — "frozen" is the default state and an execution window is an exact tick count. |
+| `scripts/GameManager.gd` | Phase machine, timers, ghost piloting + stamina, confirm/rollback, all input, platform damage, all tuning exports. Steps every entity explicitly: "frozen" is the default state and an execution window is an exact tick count. |
 | `scripts/PlayerPlan.gd` | The recording: per-tick direction and jump, the tick the shot is pinned to, aim angle, power, and whether the committed shot is a super. Owns the aim vector / elevation math. |
 | `scripts/Player.gd` | Player state, rendering, and `sim_step(dt, tick, from_tick)` which replays one tick of the recording. Motion lives in a static, side-effect-free `step_state()` that resolves against the geometry as it will stand at the end of the tick. |
 | `scripts/Arrow.gd` | Knife integration, terrain/player hits, synchronised swept clash math, deflection and tumbling. The legacy class name remains internal. |
@@ -1029,7 +1026,7 @@ the thing this prototype exists to test.
 | `backend/src/room.ts` | Hibernating Durable Object room: player slots, plan relay, state-hash barrier, rematches and expiry. |
 | `scripts/Levels.gd` | The seven arena layouts and their 2P/3P/4P platform variants, wrap rules, platform hit points, mover motion data, orb placements and authored Temporal Core sockets. |
 | `scripts/Mover.gd` | Tick-indexed motion for moving geometry and orbs. A pure triangle wave: position is a function of the absolute tick, never an accumulated velocity. |
-| `scripts/Hazard.gd` | The pulse orb — drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
+| `scripts/Hazard.gd` | The pulse orb: drift, charge state, recharge countdown and the blast footprint drawn while time is stopped. |
 | `scripts/Arena.gd` | Platform rendering: gold caps for permanent, warm and cracked for breakable, violet caps and travel chevrons for moving. |
 | `scripts/Backdrop.gd` | Low-contrast procedural scenery families assigned across the five arenas: ruins, foundry heat stacks, sanctum stone, pulse cyan and descent shafts. |
 | `scripts/Effects.gd` | Impact sparks, platform shatters, hit bursts. Cosmetic only; runs on real time so it never consumes execution ticks. |
@@ -1045,7 +1042,7 @@ simulated.
 
 ## Developer tools
 
-Normal local matches ignore the F1–F10 timing, SUPER, secret-volley, restart
+Normal local matches ignore the F1-F10 timing, SUPER, secret-volley, restart
 and arena-switch shortcuts. To opt into those tools, run `Play.bat -- --dev-tools`.
 Sandbox retains its live tuning controls inside Experiments. Tests stay in
 `tests/` for development and are excluded from both export presets.

@@ -3,7 +3,7 @@ extends RefCounted
 ## Shared plumbing for the tests/*VisualTest.gd screenshot capture scripts.
 ##
 ## These captures are developer tools, not CI suites. Reading a frame back needs
-## a real render target, so they must be run WINDOWED — omit --headless:
+## a real render target, so they must be run WINDOWED (omit --headless):
 ##
 ##     Godot_v4.7.1-stable_win64_console.exe --path . --script tests/<X>VisualTest.gd
 ##

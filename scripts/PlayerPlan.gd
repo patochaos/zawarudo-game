@@ -6,7 +6,7 @@ class_name PlayerPlan
 ## captured here; execution replays it verbatim.
 ##
 ## Movement is bounded by stamina, so the recording is normally shorter than the
-## execution window — the remaining ticks run with no input (momentum, gravity).
+## execution window. The remaining ticks run with no input (momentum, gravity).
 
 var dirs: PackedByteArray = PackedByteArray()    # per tick: 0 = left, 1 = neutral, 2 = right
 var jumps: PackedByteArray = PackedByteArray()   # per tick: 1 = jump impulse on this tick

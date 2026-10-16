@@ -1,4 +1,4 @@
-# Character balance iteration — 2026-08-19
+# Character balance iteration, 2026-08-19
 
 > Historical baseline. The later class-speed, compact-dash, and multi-orb
 > changes are documented in `CHARACTER_KIT_FOLLOWUP_2026-08-19.md` and
@@ -105,7 +105,7 @@ was reverted; successful dashes retain their authored follow-through.
 All results below use first-to-five, the 60-turn cap, deterministic production
 AI, and all seven authored levels.
 
-### 2 players — 21 matches
+### 2 players: 21 matches
 
 | Result | Wins |
 |---|---:|
@@ -116,11 +116,11 @@ AI, and all seven authored levels.
 
 Head-to-head:
 
-- Dagger 4–3 Velocity
-- Dagger 3–3 Static Witch, one Shattered Sanctum draw
-- Static Witch 4–3 Velocity
+- Dagger 4-3 Velocity
+- Dagger 3-3 Static Witch, one Shattered Sanctum draw
+- Static Witch 4-3 Velocity
 
-### 3 players — 7 matches
+### 3 players: 7 matches
 
 | Kit | Wins | Hits / appearance |
 |---|---:|---:|
@@ -130,7 +130,7 @@ Head-to-head:
 
 All matches resolved; average length was 21.29 turns.
 
-### 4 players — 21 matches
+### 4 players: 21 matches
 
 | Kit | Wins | Hits / appearance |
 |---|---:|---:|
@@ -153,5 +153,5 @@ Across 49 matches and 48 resolved winners:
 - Unresolved: 1
 
 Every level produced wins for at least two kits across the 2P/3P/4P matrix. The
-remaining draw is Shattered Sanctum's cover-heavy Dagger–Static Witch duel and
+remaining draw is Shattered Sanctum's cover-heavy Dagger vs Static Witch duel and
 is retained as a level pacing observation rather than forced into a tiebreak.

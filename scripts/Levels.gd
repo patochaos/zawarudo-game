@@ -10,8 +10,8 @@ class_name Levels
 ## firing lines rather than closing the match down.
 ##
 ## WRAPPING (TowerFall style)
-##   wrap_x — leaving one side re-enters the other. Side walls are omitted.
-##   wrap_y — leaving the actual top or bottom of the screen re-enters at the
+##   wrap_x: leaving one side re-enters the other. Side walls are omitted.
+##   wrap_y: leaving the actual top or bottom of the screen re-enters at the
 ##            opposite edge. A wrap-y level MUST have a solid gate below the
 ##            HUD everywhere except a gap in the middle third, and its floor gap
 ##            must sit inside that top gap. Then re-entry always reaches open,
@@ -22,20 +22,20 @@ class_name Levels
 ## MOVING GEOMETRY
 ##   A platform may carry a `motion` dictionary (see Mover.gd). It then sweeps
 ##   between its authored position and `home + axis * travel`, driven purely by
-##   the absolute simulation tick — so it is frozen during planning and moves
+##   the absolute simulation tick, so it is frozen during planning and moves
 ##   only while time is running. Everything that reads geometry (collision, the
 ##   ghost preview, the AI, the lockstep digest) projects it from the same
 ##   function, so a moving ledge is a thing the player can plan around rather
 ##   than an ambush.
 ##
-##   A moving piece must remain legal at BOTH ends of its sweep — the layout
+##   A moving piece must remain legal at BOTH ends of its sweep. The layout
 ##   test checks every constraint at each extreme.
 ##
 ## HAZARDS
 ##   `hazards` lists pulse orbs (see Hazard.gd). An orb drifts on its own rail
 ##   and, when a knife strikes it, pushes fighters and relaunches knives radially
 ##   at full throw speed before going dark for a couple of windows. Place them where being pushed is
-##   interesting — over a gap, beside a seam, under the crown — not where a push
+##   interesting (over a gap, beside a seam, under the crown), not where a push
 ##   simply ends the round.
 ##
 ## Player counts: every arena is authored for four fighters. Pieces tagged
@@ -408,6 +408,8 @@ static func _stilled_hall() -> Dictionary:
 ## A fair opening with two contested pulse orbs. Both fighters have permanent
 ## stairs, an exposed inner perch and fragile cover below the blast footprint.
 ## The ground lane offers a quiet approach; taking height brings the orbs into play.
+## Lower bulkheads close the ground seam: a spawn-level throw or an orb push no
+## longer leaves the stage at once. The wrap is open from the side ledges up.
 static func _pulse_chamber() -> Dictionary:
 	return {
 		"name": "PULSE CHAMBER",
@@ -427,6 +429,10 @@ static func _pulse_chamber() -> Dictionary:
 		],
 		"core_spawns": [Vector2(220.0, 440.0), Vector2(640.0, 405.0), Vector2(1060.0, 440.0)],
 		"platforms": [
+			# Lower bulkheads, flush with the side ledges: the ground lane is
+			# walled while the seam stays open at ledge height and above.
+			{"rect": Rect2(0, 500, 80, 220), "hp": -1},
+			{"rect": Rect2(1200, 500, 80, 220), "hp": -1},
 			{"rect": Rect2(80, 500, 220, 16), "hp": -1},
 			{"rect": Rect2(980, 500, 220, 16), "hp": -1},
 			{"rect": Rect2(330, 340, 180, 16), "hp": -1},

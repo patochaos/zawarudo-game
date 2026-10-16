@@ -278,7 +278,7 @@ func _test_volley_filter_and_manager_resolution() -> void:
 		"the same pair must not grind through its cooldown")
 
 	# A previously deflected knife can be struck again. The second blow retains
-	# more energy, accumulates tumble and leaves the original collision plane —
+	# more energy, accumulates tumble and leaves the original collision plane,
 	# even while its cooldown with the first knife is still active.
 	a.prev_pos = Vector2(0.0, 0.0)
 	a.position = Vector2(12.0, 0.0)
