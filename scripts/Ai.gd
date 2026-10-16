@@ -40,6 +40,21 @@ const VELOCITY_DASH_DANGER_WEIGHT := 900.0
 const VELOCITY_PARRY_ALIGNMENT := 0.82
 const VELOCITY_PARRY_FAILURE_SCORE := -350.0
 const VELOCITY_WITHHOLD_SCORE := -220.0
+## A knife that lands after the window is seen by the opponent during their
+## next planning phase. The later it arrives (in the opponent's own time, since
+## a body in stasis reacts just as slowly), the surer the dodge; what remains
+## is the value of a hazard parked where they wanted to stand.
+const LATE_HIT_FADE_TICKS := 12.0
+const LATE_HIT_FLOOR := 0.15
+## Out of reach: no full-power probe throw reaches a hypothesis before the
+## window ends. Then a route is also judged by how soon a throw from where it
+## ends could arrive, so the CPU works toward a firing spot instead of
+## wandering on the tiebreak and lobbing knives that arrive turns later.
+const REACH_PROBE_ELEVATIONS := [5.0, 20.0, 35.0, 50.0]
+const PROBE_HIT_RADIUS := 40.0        # near enough for the refined search to land
+const TRAVEL_SAMPLE_PX := 32.0
+const BLOCKED_DETOUR_TICKS := 30.0
+const ENGAGE_WEIGHT := 1.0           # score per tick of arrival past the window
 
 var done: bool = false
 ## Per-opponent weights (see Opponents.NEUTRAL_STYLE). Neutral unless the slot
@@ -117,6 +132,12 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 
 	var threats := _threat_paths()
 	_futures = _foe_futures()
+	# Stasis fields and cover can put the rival beyond anything that lands this
+	# window. Measured with the real flight, so a knife that would crawl through
+	# a field for two turns does not count as reach.
+	var horizon: float = float(_horizon())
+	var out_of_reach: bool = not _gm.uses_dashblade(_idx) and not _gm.interception_mode \
+		and _arrival_from(_me.position) > horizon
 
 	# Rank movements by safety first — this part is cheap enough to do at once.
 	var scored: Array = []
@@ -140,6 +161,12 @@ func begin(gm, idx: int, foe_idx: int) -> void:
 		var engage_value: float = 0.0
 		if _gm.uses_dashblade(_idx):
 			engage_value = -_gm.wrap_delta(path[path.size() - 1], _foe.position).length() * 0.22
+		elif out_of_reach:
+			# A projectile kit that cannot land anything this window moves toward
+			# a spot a throw could land from, not merely toward the rival: a wall
+			# or a stasis field between the two is part of the distance.
+			engage_value = -ENGAGE_WEIGHT * maxf(0.0,
+				_arrival_from(path[path.size() - 1]) - horizon)
 		# Safety usually ties across candidates, and only the top few get a shot
 		# search — without a tiebreak the list order alone decides, so the jump
 		# options were never even considered. The jitter also makes the AI
@@ -690,7 +717,11 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 	var dir := Vector2(cos(r), -sin(r))
 	var launch: Vector2 = origin + Vector2(0.0, -6.0)
 	var covered := [false, false, false]
+	var hit_ticks := [-1, -1, -1]
 	var closest := 1e9
+	# The foe prediction ends with the window; past it the hypothesis is frozen
+	# where it stopped, which is a guess about the next turn, not a fact.
+	var horizon: int = _horizon()
 
 	for launch_vel in _gm.knife_launch_velocities(dir, power):
 		var knife_dir: Vector2 = launch_vel.normalized()
@@ -715,22 +746,162 @@ func _fire(origin: Vector2, side: int, elev: float, power: float, fire_tick: int
 				var fi: int = clampi(world_t, 0, f.size() - 1)
 				if not covered[h] and _hits_body(pos, raw, f[fi]):
 					covered[h] = true
-				closest = minf(closest, _gm.wrap_delta(nxt, f[fi]).length())
+					hit_ticks[h] = world_t
+				# A near miss only means something while the foe is where the
+				# prediction says; later the knife is approaching a guess.
+				if world_t <= horizon:
+					closest = minf(closest, _gm.wrap_delta(nxt, f[fi]).length())
 			pos = nxt
 			if not _gm.world_bounds.has_point(pos):
 				break
 
 	# covering more hypotheses beats covering one; near-misses still beat nothing
 	var hits := 0
-	for did_hit in covered:
-		if did_hit:
+	var late_hits := 0
+	var hit_value := 0.0
+	for h in covered.size():
+		if not covered[h]:
+			continue
+		if hit_ticks[h] <= horizon:
 			hits += 1
-	var score := float(hits) * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2
+			hit_value += 1.0
+		else:
+			late_hits += 1
+			var f: PackedVector2Array = _futures[h]
+			hit_value += _late_hit_value(hit_ticks[h] - horizon, f[f.size() - 1])
+	var score := hit_value * 1000.0 - closest * 0.05 - float(fire_tick) * 0.2
 	var parry_risk := _velocity_front_parry_risk(origin, dir,
 		_gm.knife_launch_velocity(dir, power).length(), fire_tick, candidate)
 	if parry_risk > 0.0:
 		score = lerpf(score, VELOCITY_PARRY_FAILURE_SCORE, parry_risk)
-	return {"score": score, "velocity_parry_risk": parry_risk, "knife_hits": hits}
+	return {"score": score, "velocity_parry_risk": parry_risk, "knife_hits": hits,
+		"late_hits": late_hits, "closest": closest, "hit_ticks": hit_ticks}
+
+
+## The last tick the foe prediction covers.
+func _horizon() -> int:
+	if _futures.is_empty():
+		return _gm.exec_ticks()
+	return _futures[0].size() - 1
+
+
+## Worth of a hit that lands `late_ticks` after the prediction ends, as a
+## fraction of a hit inside the window. The opponent plans again with the knife
+## in view, so the fraction falls with the time they get to step aside, counted
+## in their own clock: inside a stasis field the body is as slow as the knife.
+func _late_hit_value(late_ticks: int, foe_pos: Vector2) -> float:
+	var reaction: float = float(late_ticks) * _gm.time_scale_at(foe_pos)
+	return maxf(LATE_HIT_FLOOR, 1.0 - reaction / LATE_HIT_FADE_TICKS)
+
+
+## How many ticks the kit's best full-power probe throw from `origin` needs
+## to reach a foe hypothesis, flown with the real integrators so stasis
+## fields, the pillar in between and the world edge all count. A throw that
+## never arrives is charged the ground it still had to cover, priced along the
+## straight line to the target at the clock of every field on the way, plus a
+## detour when a wall blocks that line. At or under the horizon, a hit is on
+## the table this window.
+func _arrival_from(origin: Vector2) -> float:
+	var horizon: int = _horizon()
+	var best := INF
+	if _futures.is_empty():
+		return best
+	var targets := PackedVector2Array()
+	for f in _futures:
+		targets.append(f[f.size() - 1])
+	if _gm.uses_shock(_idx):
+		var pace: float = maxf(_gm.shock_plasma_speed_for_power(1.0) * _dt, 1.0)
+		for target in targets:
+			var direction := plasma_launch_direction(_gm, origin, target,
+				1.0 if _idx % 2 == 0 else -1.0)
+			var pos: Vector2 = Player.shoulder_at(origin) + direction * 24.0
+			var bolt: Vector2 = direction * _gm.shock_plasma_speed_for_power(1.0)
+			var reach_left: float = _gm.shock_plasma_range_for_power(1.0)
+			var flown := 0
+			for t in FLIGHT_CAP:
+				var flight := ShockPlasma.step_state(pos, bolt, _dt, _gm)
+				var raw: Vector2 = flight[0]
+				bolt = flight[1]
+				var step: float = pos.distance_to(raw)
+				if reach_left < step or _segment_blocked(pos, raw, t, ShockPlasma.COLLISION_RADIUS):
+					break
+				reach_left -= step
+				flown = t + 1
+				pos = _gm.wrap_point(raw)
+				if _gm.wrap_delta(pos, target).length() <= PROBE_HIT_RADIUS:
+					best = minf(best, float(flown))
+					break
+				if flown == horizon:
+					best = minf(best, float(flown) + _travel_cost(pos, target, pace, false))
+				if not _gm.world_bounds.has_point(pos):
+					break
+			if best <= float(horizon):
+				return best
+			best = minf(best, float(flown) + _travel_cost(pos, target, pace, false))
+		return best
+	var full_pace: float = maxf(_gm.arrow_speed_max * _dt, 1.0)
+	var launch: Vector2 = origin + Vector2(0.0, -6.0)
+	for side in _sides():
+		for elev in REACH_PROBE_ELEVATIONS:
+			var ang: float = elev if side > 0 else 180.0 - elev
+			var dir := Vector2(cos(deg_to_rad(ang)), -sin(deg_to_rad(ang)))
+			var vel: Vector2 = _gm.knife_launch_velocity(dir, 1.0)
+			var pos: Vector2 = launch + vel.normalized() * 22.0
+			var flown := 0
+			var arrived := false
+			for t in FLIGHT_CAP:
+				var st := Arrow.step_state(pos, vel, _dt, _gm)
+				vel = st[1]
+				if _segment_blocked(pos, st[2], t, 0.0):
+					break
+				pos = st[0]
+				flown = t + 1
+				for target in targets:
+					if _gm.wrap_delta(pos, target).length() <= PROBE_HIT_RADIUS:
+						arrived = true
+						best = minf(best, float(flown))
+				if arrived:
+					break
+				if flown == horizon:
+					for target in targets:
+						best = minf(best, float(flown) + _travel_cost(pos, target, full_pace, true))
+				if not _gm.world_bounds.has_point(pos):
+					break
+			if best <= float(horizon):
+				return best
+			if not arrived:
+				for target in targets:
+					best = minf(best, float(flown) + _travel_cost(pos, target, full_pace, true))
+	return best
+
+
+## Ticks a projectile already at `from` would still need to cover the straight
+## line to `target`, sampled through every stasis field on the way, plus a
+## detour when a solid blocks the line.
+func _travel_cost(from: Vector2, target: Vector2, pace: float, stasis: bool) -> float:
+	var delta: Vector2 = _gm.wrap_delta(from, target)
+	var length: float = delta.length()
+	var cost := 0.0
+	if stasis and length > 0.0:
+		var samples: int = maxi(1, int(ceil(length / TRAVEL_SAMPLE_PX)))
+		var step: float = length / float(samples)
+		for i in samples:
+			var at: Vector2 = _gm.wrap_point(from + delta * ((float(i) + 0.5) / float(samples)))
+			cost += step / (pace * _gm.time_scale_at(at))
+	else:
+		cost = length / pace
+	for solid: Rect2 in _gm.solids_at(_gm.world_tick):
+		var impact := Arrow.segment_rect_impact(from, from + delta, solid)
+		if not impact.is_empty() and float(impact[0]) > 0.01 and float(impact[0]) < 0.99:
+			return cost + BLOCKED_DETOUR_TICKS
+	return cost
+
+
+func _segment_blocked(from: Vector2, to: Vector2, t: int, radius: float) -> bool:
+	for solid: Rect2 in _gm.solids_at(_gm.world_tick + t + 1):
+		if Arrow.seg_hits_rect(from, to, solid.grow(radius) if radius > 0.0 else solid):
+			return true
+	return false
 
 
 ## What a named opponent wants from a route beyond staying alive: a distance
