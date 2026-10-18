@@ -1,9 +1,7 @@
 extends CanvasLayer
 
-## Three timed exercises using the ordinary planner and execution physics,
-## hosted by the one who stops time. He speaks of himself in the third person,
-## calls everything you do useless, and is never wrong. HOST_NAME is the only
-## place his name lives: every line reads it through %s.
+## Three timed exercises using the ordinary planner and execution physics.
+## Every line states only what to do next.
 var gm
 var active := false
 var lesson := 0
@@ -45,12 +43,14 @@ var _jump_visual_position := Vector2.ZERO
 var _jump_visual_scale := Vector2.ONE
 const JUMP_WINDUP_TICKS := 4
 const JUMP_HOLD_TICKS := 8
-const JUMP_HINT := "Gold ring. Three-quarters charge. Release. LOCK. Checkmate."
-const DODGE_HINT := "Leap the low knife. The second one is waiting for your landing."
-const LANDING_HINT := "Read the knife. Land where it is not."
-const TITLES := ["01  TIME, STOP. NOW WALK.", "02  THROW AT THE FUTURE", "03  KNIVES DON'T FORGET"]
+const MOVE_HINT := "Move the ghost into the gold zone, then LOCK."
+const JUMP_HINT := "Aim at the gold ring. Charge to 3/4, release, LOCK."
+const DODGE_HINT := "Jump over the low knife, then LOCK."
+const LANDING_HINT := "Land away from the second knife, then LOCK."
+const EXECUTING_HINT := "Time resumes."
+const TITLES := ["01  MOVE", "02  THROW", "03  DODGE"]
 const HOST_NAME := "DIO"
-const HOST_ROLE := "STOPS TIME. JUDGES YOU."
+const HOST_ROLE := "INSTRUCTOR"
 const PORTRAIT_SIZE := 150.0
 
 class Markers:
@@ -199,14 +199,14 @@ func show_briefing(message: String = "") -> void:
 	var jump_keys := _prompt(gm._menu._keys_text("jump"), "PAD A")
 	var lock_keys := _prompt("LEFT SHIFT", "START")
 	var throw_keys := _prompt("LEFT-CLICK", "R2")
-	# One beat per line. The clock rule is told once, on the first lesson.
+	# One step per line. The clock rule is told once, on the first lesson.
 	var instructions: Array[String] = [
-		"Za Warudo! Time, stop!\nStopped time is a realm for one man. Today I, %s, lend you a sliver of it.\nHold %s: your ghost walks into the gold zone. Your body stays frozen.\nLOCK with %s, and time resumes.\n\nEight seconds per attempt. Then whatever you planned happens. Even nothing." % [HOST_NAME, move_keys, lock_keys],
-		"Oh? The fool across from you is approaching the marked ledge.\nLet him. I reveal his route this once.\nAim at the gold ring on his landing ghost.\nHold %s to three-quarters, release, LOCK.\nHe will leap into your knife. If this were chess, I would call it checkmate." % throw_keys,
-		"Two knives already hang in the air. Mine.\nHold %s to leap the low one from the left.\nThe one from the right waits for your landing.\nAt the next freeze, read it and land elsewhere.\nSurvive both turns, and I may consider you a human worth stepping on." % jump_keys,
+		"Hold %s to walk your ghost into the gold zone.\nPress %s to LOCK. Your fighter follows the ghost.\n\nYou have 8 seconds to plan." % [move_keys, lock_keys],
+		"Your rival will jump onto the ledge.\nAim at the gold ring where the rival lands.\nHold %s to 3/4 charge, release, then LOCK." % throw_keys,
+		"Two knives are in the air.\nHold %s to jump over the low knife, then LOCK.\nNext turn, land away from the second knife." % jump_keys,
 	]
 	_body.text = message if not message.is_empty() else instructions[lesson]
-	_action.text = "ENTER  PLAYTIME IS OVER. FIGHT." if completed and lesson == 2 else ("ENTER  NEXT LESSON" if completed else "ENTER  TIME RESUMES · 8s")
+	_action.text = "ENTER  PLAY A DUEL" if completed and lesson == 2 else ("ENTER  NEXT LESSON" if completed else "ENTER  START · 8s")
 	if between_turns: _action.text = "ENTER  NEXT TURN · 8s"
 	_markers.queue_redraw()
 
@@ -311,7 +311,7 @@ func begin_attempt() -> void:
 	gm._telemetry.record("lesson_attempt", gm.turn, {"lesson": lesson + 1, "attempt": attempt})
 	_panel.visible = false
 	_hint.visible = true
-	_hint.text = ["Ghost into the gold zone, then LOCK. Anything else is USELESS.", JUMP_HINT,
+	_hint.text = [MOVE_HINT, JUMP_HINT,
 		LANDING_HINT if survival_windows > 0 else DODGE_HINT][lesson]
 	_markers.queue_redraw()
 
@@ -326,21 +326,21 @@ func finish_window() -> void:
 				if survival_windows < 2:
 					between_turns = true
 					gm._telemetry.record("lesson_window_survived", gm.turn, {"lesson": 3})
-					show_briefing("You cleared the jump.\nThe second knife is still coming. The world did not reset for your comfort.\nIf it crosses your ghost, land elsewhere. Left works.\nOne more turn, human.")
+					show_briefing("Jump cleared. The second knife is still coming.\nMove left so you land away from it, then LOCK.")
 					return
 				success = true
 	gm._telemetry.record("lesson_result", gm.turn, {"lesson": lesson + 1, "success": success})
 	completed = success
 	var messages: Array[String] = [
-		"Your ghost became flesh.\nWhat the ghost walked, your body walked.\nEven a human can learn this. Next: put a knife on that route.",
-		"You threw at a spot where nobody stood yet, and he walked into it.\nIn a real duel his route is hidden.\nRead his feet. Guess the landing.",
-		"Two knives, two turns, zero holes in you.\nA safe jump can still have a terrible landing. Read the threat at every freeze.\nThe playtime service is now over.\nGo fight the CPU, first to three hits. Do not embarrass me.",
+		"Done. Your fighter followed the ghost.",
+		"Hit. In a real duel the rival's route is hidden, so guess the landing.",
+		"Done. Next: a duel against the CPU, first to 3 hits.",
 	]
 	var retries: Array[String] = [
-		"USELESS.\nHold your right-move control until the ghost stands in the gold zone. Then LOCK.\nRESET wipes a bad route.\nAgain. I have all the time in the world. Literally.",
-		"USELESS, USELESS.\nStay on your ledge. Aim at the gold ring above the marked platform.\nThree-quarters charge, release, LOCK.\nThe jump repeats on every retry. Your aim does not have to.",
-		("The second knife met your landing.\nLeap the low one again, then steer left on the next plan.\nThe knives repeat their paths. Learn their habits, or remain a pincushion."
-			if survival_windows > 0 else "The low knife found you.\nHold jump before you LOCK.\nAt the next freeze, watch the second knife. It covers the straight-jump landing.\nOh? You thought a straight jump was clever?"),
+		"Try again. Hold %s until the ghost is in the gold zone, then LOCK." % _prompt(gm._menu._keys_text("right"), "LEFT STICK"),
+		"Missed. Aim at the gold ring, charge to 3/4, release, LOCK.",
+		("Hit by the second knife. Jump the low knife again, then move left next turn."
+			if survival_windows > 0 else "Hit by the low knife. Hold %s before you LOCK." % _prompt(gm._menu._keys_text("jump"), "PAD A")),
 	]
 	show_briefing(messages[lesson] if success else retries[lesson])
 
@@ -386,8 +386,8 @@ func _process(_delta: float) -> void:
 	if active:
 		_sync_jump_preparation()
 		if lesson == 1:
-			_hint.text = "Time resumes. Your knife has an appointment." if gm.state == Phase.EXECUTING else JUMP_HINT
+			_hint.text = EXECUTING_HINT if gm.state == Phase.EXECUTING else JUMP_HINT
 		elif lesson == 2:
-			_hint.text = "Time resumes. Knives don't forget." if gm.state == Phase.EXECUTING \
+			_hint.text = EXECUTING_HINT if gm.state == Phase.EXECUTING \
 				else (LANDING_HINT if survival_windows > 0 else DODGE_HINT)
 		_markers.queue_redraw()
