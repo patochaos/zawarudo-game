@@ -30,7 +30,7 @@ func _run() -> void:
 			game.Difficulty.NOVICE, game.Difficulty.RUTHLESS],
 	})
 	game._ui.refresh()
-	_check(not game._online_state_digest().is_empty(),
+	_check(not game._online._online_state_digest().is_empty(),
 		"the deterministic state digest must serialize every live player field")
 	_check(game.players.size() == 4, "four-player mode must spawn four fighters")
 	_check(game.hits_to_win == 5, "new matches must default to five hits")

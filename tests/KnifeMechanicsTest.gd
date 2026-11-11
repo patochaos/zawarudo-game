@@ -41,7 +41,6 @@ func _init() -> void:
 	_test_secret_triple_fan()
 	_test_charge_aware_dagger_reticle()
 	_test_dagger_aim_path_matches_real_flight()
-	_test_character_projectiles_share_aim_preview_cap()
 	_test_drag_collapses_the_arc()
 	_test_deflected_knives_fall_as_debris()
 	_test_preview_uses_platform_material_for_ricochet()
@@ -60,21 +59,21 @@ func _init() -> void:
 
 
 func _test_synchronised_sweep() -> void:
-	var head_on := Arrow.moving_points_closest(
+	var head_on := Knife.moving_points_closest(
 		Vector2(0.0, 0.0), Vector2(12.0, 0.0),
 		Vector2(24.0, 0.0), Vector2(12.0, 0.0))
 	_check(is_zero_approx(head_on[0]), "head-on swept knives must meet")
 
 	# These segments cross spatially, but each knife reaches the crossing point
 	# at a different fraction of the tick. A generic segment test false-hits it.
-	var different_times := Arrow.moving_points_closest(
+	var different_times := Knife.moving_points_closest(
 		Vector2(0.0, 0.0), Vector2(10.0, 0.0),
 		Vector2(8.0, -10.0), Vector2(8.0, 0.0))
 	_check(different_times[0] > 1.0, "different-time crossing must retain separation")
 
 
 func _test_velocity_response() -> void:
-	var bounced := Arrow.clash_velocities(
+	var bounced := Knife.clash_velocities(
 		Vector2(100.0, 0.0), Vector2(-100.0, 0.0), Vector2.LEFT, 0.35, 0.55)
 	_check(bounced[0].x < 0.0 and bounced[1].x > 0.0, "head-on knives must bounce apart")
 	_check(bounced[0].length() < 55.0 and bounced[1].length() < 55.0,
@@ -150,34 +149,6 @@ func _test_dagger_aim_path_matches_real_flight() -> void:
 	gm.free()
 
 
-func _test_character_projectiles_share_aim_preview_cap() -> void:
-	var gm = GAME_MANAGER.new()
-	var preview = PREVIEW_LAYER.new()
-	preview.gm = gm
-	var start := Vector2(100.0, 100.0)
-	var limit := preview._aim_preview_steps() + 1
-
-	var chakram := preview._chakram_trajectory_path(
-		start, Vector2(gm.chakram_speed_max, 0.0))
-	var orb := preview._shock_orb_trajectory_path(
-		start, Vector2(gm.shock_orb_speed_max, 0.0))
-	var full_plasma: PackedVector2Array = PredictionSystem.predict_plasma(
-		start, Vector2(gm.shock_plasma_speed, 0.0), gm,
-		gm.shock_plasma_range_full)["path"]
-	var plasma := preview._path_tick_limit(full_plasma, preview._aim_preview_steps())
-
-	_check(chakram.size() <= limit and orb.size() <= limit and plasma.size() <= limit,
-		"Eclipse and both Pulse attacks must share the Duelist's ten-percent preview cap")
-	_check(chakram[chakram.size() - 1].y > start.y \
-			and orb[orb.size() - 1].y > start.y \
-			and plasma[plasma.size() - 1].y > start.y,
-		"every ballistic class preview must expose its real opening bend")
-	_check(plasma.size() < full_plasma.size(),
-		"Pulse plasma must not reveal its complete range or impact")
-	preview.free()
-	gm.free()
-
-
 ## Drag has to bleed the throw, not the fall. If it damped both components it
 ## would cap the descent and turn a spent knife into a parachute, which is the
 ## opposite of the read being bought here.
@@ -242,7 +213,7 @@ func _test_preview_uses_platform_material_for_ricochet() -> void:
 
 func _fly(pos: Vector2, vel: Vector2, ticks: int, dt: float, cfg, clashed: bool) -> Dictionary:
 	for i in ticks:
-		var st := Arrow.step_state(pos, vel, dt, cfg, clashed)
+		var st := Knife.step_state(pos, vel, dt, cfg, clashed)
 		pos = st[0]
 		vel = st[1]
 	return {"pos": pos, "vel": vel}
@@ -359,8 +330,8 @@ func _test_super_waves_share_one_volley() -> void:
 		_check(knife.volley == volley, "every wave in one super must share a volley id")
 	for wave in range(1, gm.super_waves):
 		for knife_index in gm.super_knives_per_wave:
-			var first: Arrow = gm.arrows[knife_index]
-			var repeated: Arrow = gm.arrows[wave * gm.super_knives_per_wave + knife_index]
+			var first: Knife = gm.arrows[knife_index]
+			var repeated: Knife = gm.arrows[wave * gm.super_knives_per_wave + knife_index]
 			_check(first.vel.distance_to(repeated.vel) < 0.001,
 				"consecutive super waves must repeat the same narrow firing lane")
 	gm._resolve_clashes(gm.arrows)
@@ -494,8 +465,8 @@ func _test_temporal_core_same_tick_collection() -> void:
 	gm.free()
 
 
-func _knife(from: Vector2, to: Vector2, velocity: Vector2, volley: int) -> Arrow:
-	var knife := Arrow.new()
+func _knife(from: Vector2, to: Vector2, velocity: Vector2, volley: int) -> Knife:
+	var knife := Knife.new()
 	knife.prev_pos = from
 	knife.position = to
 	knife.vel = velocity

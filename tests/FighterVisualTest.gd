@@ -153,7 +153,7 @@ func _test_shot_state(gm, player: Player, visual: FighterVisual) -> void:
 	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == release + 1,
 		"SHOT must advance from the authoritative execution tick")
 	gm.state = Phase.REPLAY
-	gm._replay_frame_index = player.plan.shot_tick + step
+	gm._replay._replay_frame_index = player.plan.shot_tick + step
 	visual.sync_from_player()
 	_check(visual.body_state == FIGHTER_VISUAL.SHOT and visual.body_frame == release + 1,
 		"replay must reconstruct SHOT from its captured frame index")
@@ -186,14 +186,14 @@ func _test_planning_freeze_and_aim(gm, player: Player, visual: FighterVisual) ->
 
 
 func _test_cosmetics_are_digest_inert(gm, player: Player, visual: FighterVisual) -> void:
-	var before: String = gm._online_state_digest()
+	var before: String = gm._online._online_state_digest()
 	visual.skin.palette[&"body"] = Color(0.02, 0.98, 0.47)
 	visual.skin.visual_bounds = Rect2(-200.0, -200.0, 400.0, 400.0)
 	visual.skin.frames[FIGHTER_VISUAL.IDLE] = [
 		{&"bob": 99.0, &"lean": 99.0, &"stride": 99.0, &"coat": 99.0},
 	]
 	visual.body_frame = 37
-	var after: String = gm._online_state_digest()
+	var after: String = gm._online._online_state_digest()
 	_check(after == before, "skin, palette and visual frame changes must not alter online digest")
 	_check(player.rect().size.is_equal_approx(Vector2(32.0, 48.0)),
 		"extreme cosmetic bounds must not alter the 32x48 player rect")
@@ -203,7 +203,7 @@ func _test_cosmetics_are_digest_inert(gm, player: Player, visual: FighterVisual)
 
 
 func _test_replay_restoration(gm, player: Player, visual: FighterVisual) -> void:
-	gm._replay_frames.clear()
+	gm._replay._replay_frames.clear()
 	gm.state = Phase.EXECUTING
 	gm.world_tick = 27
 	player.alive = true
@@ -212,7 +212,7 @@ func _test_replay_restoration(gm, player: Player, visual: FighterVisual) -> void
 	player.facing = -1
 	player.plan.confirmed = true
 	player.plan.aim_angle = 135.0
-	gm._capture_replay_frame()
+	gm._replay._capture_replay_frame()
 	visual.sync_from_player()
 	var expected_body := visual.body_signature()
 	var expected_muzzle := player.muzzle()
@@ -222,7 +222,7 @@ func _test_replay_restoration(gm, player: Player, visual: FighterVisual) -> void
 	player.plan.aim_angle = 0.0
 	gm.world_tick = 2
 	gm.state = Phase.REPLAY
-	gm._apply_replay_frame(gm._replay_frames.back())
+	gm._replay._apply_replay_frame(gm._replay._replay_frames.back())
 	visual.sync_from_player()
 	_check(visual.body_signature() == expected_body,
 		"replay frame restoration must reproduce visual state and stepped frame")

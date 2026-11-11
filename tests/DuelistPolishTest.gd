@@ -42,12 +42,12 @@ func _run() -> void:
 	plan.confirmed = false
 	game.online_mode = true
 	game.online_player = 0
-	game._online_plan_sent = true
+	game._online._online_plan_sent = true
 	game._rewind_plan(0, 0)
 	_check(plan.recorded_ticks() == 6, "A submitted online plan is immutable")
 	_check(game._ui._planning_timeline.visible_players() == [0], "Timeline never exposes the remote plan")
 	game.online_mode = false
-	game._online_plan_sent = false
+	game._online._online_plan_sent = false
 	game._rewind_plan(0, 0)
 	_check(plan.recorded_ticks() == 0 and game.ghost_pos[0] == game.players[0].position, "Full rewind restores live start state")
 	# Force a bank on the left wall; a sample must still represent exactly one tick.
@@ -66,14 +66,14 @@ func _run() -> void:
 	game._begin_execution()
 	for tick in 12:
 		game._sim_tick(game.tick_dt())
-		game._capture_replay_frame()
+		game._replay._capture_replay_frame()
 	game._end_execution()
-	var digest: String = game._online_state_digest()
+	var digest: String = game._online._online_state_digest()
 	var timer: float = game.planning_time_left
 	_check(game._ui._turn_review.open_last_turn(), "Offline last-turn review opens")
 	game._ui._turn_review.seek(4)
 	game._physics_process(0.5)
-	_check(game.planning_time_left == timer and game._online_state_digest() == digest,
+	_check(game.planning_time_left == timer and game._online._online_state_digest() == digest,
 		"Review pauses planning without installing historical state")
 	game._ui._turn_review.visible = false
 	game.online_mode = true

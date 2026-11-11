@@ -101,7 +101,7 @@ func _test_visible_projectile_changes_route() -> void:
 	# A descending knife crosses the direct approach during this execution.
 	var impact_tick := 26
 	var dt: float = gm.tick_dt()
-	var knife := Arrow.new()
+	var knife := Knife.new()
 	knife.cfg = gm
 	knife.shooter = 0
 	knife.position = direct[impact_tick] - Vector2(0.0, 100.0)

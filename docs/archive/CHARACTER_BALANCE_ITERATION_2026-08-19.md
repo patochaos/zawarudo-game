@@ -13,7 +13,7 @@ This pass covers the selectable prototype roster:
 - The Velocity
 - The Static Witch
 
-The repeatable tournament lives in `tests/CharacterBalanceSimulation.gd`. It
+The repeatable tournament lives in `tools/sims/CharacterBalanceSimulation.gd`. It
 drives every slot with the production planner, rotates roster order, uses the
 real first-to-five match length, caps a stalled match at 60 turns, and reports
 wins, hits, duration, unresolved matches, slot results, head-to-head results,
@@ -23,7 +23,7 @@ Run the full seven-level matrix:
 
 ```powershell
 & 'D:\Godot\godot.cmd' --headless --path . `
-  --script res://tests/CharacterBalanceSimulation.gd -- --samples=1
+  --script res://tools/sims/CharacterBalanceSimulation.gd -- --samples=1
 ```
 
 Use `--players=2`, `--players=3`, or `--players=4` for a focused pass. Increase

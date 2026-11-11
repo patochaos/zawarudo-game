@@ -10,6 +10,18 @@ extends Node2D
 ## Nothing in the world has its own _physics_process. GameManager steps every
 ## entity explicitly, so "frozen" is the default and execution is an exact,
 ## deterministic number of physics ticks.
+##
+## Four subsystems live in helper objects this node creates with itself. Each
+## holds a `gm` back-reference to this node:
+##   OnlineSession.gd (`_online`): rooms, the online selection screens, room
+##     messages, online match start, plan relay and validation, and the
+##     lockstep state digest. `online_mode` and `online_player` stay here.
+##   MatchReplay.gd (`_replay`): end-of-match replay capture and playback.
+##   SettingsStore.gd (`_settings_store`): saved options, applying them, and
+##     key rebinding.
+##   PlayerInput.gd (`_player_input`): key, pointer, pad and touch handling,
+##     device to slot mapping and planning-input polling. `_unhandled_input`
+##     and `_unhandled_key_input` stay here as forwarders.
 
 const PREVIEW_SCRIPT := preload("res://scripts/PreviewLayer.gd")
 const UI_SCRIPT := preload("res://scripts/UI.gd")
@@ -23,8 +35,6 @@ const TUNING_SCRIPT := preload("res://scripts/TuningLayer.gd")
 const OFFLINE_TUNING_SCRIPT := preload("res://scripts/OfflineTuning.gd")
 const OFFLINE_TUNING_LAYER_SCRIPT := preload("res://scripts/OfflineTuningLayer.gd")
 const TEMPORAL_CORE_SCRIPT := preload("res://scripts/TemporalCore.gd")
-const ONLINE_CLIENT_SCRIPT := preload("res://scripts/OnlineClient.gd")
-const ONLINE_LOBBY_SCRIPT := preload("res://scripts/OnlineLobby.gd")
 const TOUCH_CONTROLS_SCRIPT := preload("res://scripts/TouchControls.gd")
 const HAZARD_SCRIPT := preload("res://scripts/Hazard.gd")
 const CAMERA_SCRIPT := preload("res://scripts/DuelCamera.gd")
@@ -33,10 +43,6 @@ const TELEMETRY_SCRIPT := preload("res://scripts/Telemetry.gd")
 const TRANSITION_SCRIPT := preload("res://scripts/TransitionLayer.gd")
 const FIGHTER_VISUAL_SCRIPT := preload("res://scripts/FighterVisual.gd")
 const FIGHTER_SKIN_SCRIPT := preload("res://scripts/FighterSkin.gd")
-const DASHBLADE_SCRIPT := preload("res://scripts/Dashblade.gd")
-const CHAKRAM_SCRIPT := preload("res://scripts/Chakram.gd")
-const SHOCK_PLASMA_SCRIPT := preload("res://scripts/ShockPlasma.gd")
-const SHOCK_ORB_SCRIPT := preload("res://scripts/ShockOrb.gd")
 const ROSTER_SCRIPT := preload("res://scripts/RosterLayer.gd")
 const MATCH_SETUP_SCRIPT := preload("res://scripts/MatchSetupLayer.gd")
 
@@ -55,13 +61,6 @@ const SUPER_DODGE_CREDITS_PER_WINDOW := 3
 
 # Rival aristocratic palettes: antique gold versus imperial violet. Both remain
 # bright enough to read over the near-black arenas and planning overlays.
-## Window presets, in the order the options row cycles them.
-const DISPLAY_720 := 0
-const DISPLAY_900 := 1
-const DISPLAY_1080 := 2
-const DISPLAY_MAXIMIZED := 3
-const DISPLAY_FULLSCREEN := 4
-const DISPLAY_SIZES := [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080)]
 
 const MAX_PLAYERS := 4
 ## Sentinel device ids: the keyboard-and-mouse seat, and "nobody claimed this".
@@ -80,10 +79,10 @@ const PLAYER_COLORS := [
 const TEAM_COLORS := [Color(0.93, 0.19, 0.28), Color(0.16, 0.66, 0.98)]
 const TEAM_NAMES := ["CRIMSON", "AZURE"]
 
-enum AimSrc { MOUSE, PAD, KEYS, TOUCH }
-## Ids are append-only and id 1 stays vacant where the retired Grenadier sat,
-## so old captures and telemetry cannot silently reinterpret a kit.
-enum Weapon { KNIVES = 0, DASHBLADE = 2, CHAKRAM = 3, SHOCK = 4 }
+## Ids are append-only. Ids 1 to 4 are retired (Grenadier, Rook, Eclipse, Pulse)
+## and must never be reused: old telemetry, captures and the deployed room
+## server still know them.
+enum Weapon { KNIVES = 0 }
 
 # ------------------------------------------------------------------ tuning ---
 
@@ -165,8 +164,8 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## moves the whole roster together while preserving the differences between
 ## fighters.
 ##
-## Approximate full-jump rises at the default 780 impulse / 1400 gravity:
-## Duelist 217px, Rook 0px, Pulse 176px, Eclipse 263px.
+## Approximate full-jump rise at the default 780 impulse / 1400 gravity:
+## Duelist 217px.
 @export_group("Class Movement")
 @export_subgroup("The Duelist")
 @export_range(0.1, 2.0, 0.05) var dagger_move_speed_scale: float = 1.0
@@ -174,29 +173,6 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export_range(0.0, 2.0, 0.05) var dagger_air_jump_impulse_scale: float = 0.82
 @export_range(0, 2, 1) var dagger_air_jumps: int = 1
 @export_range(0.1, 2.0, 0.05) var dagger_fall_speed_scale: float = 1.0
-
-@export_subgroup("The Rook")
-@export_range(0.1, 2.0, 0.05) var velocity_move_speed_scale: float = 0.90
-## The Rook has no ordinary jump. Her freely aimed CUT TO END is her vertical
-## traversal verb, and the faster fall keeps a missed aerial cut committal.
-@export_range(0.0, 2.0, 0.05) var velocity_jump_impulse_scale: float = 0.0
-@export_range(0.0, 2.0, 0.05) var velocity_air_jump_impulse_scale: float = 0.0
-@export_range(0, 2, 1) var velocity_air_jumps: int = 0
-@export_range(0.1, 2.0, 0.05) var velocity_fall_speed_scale: float = 1.10
-
-@export_subgroup("The Pulse")
-@export_range(0.1, 2.0, 0.05) var shock_move_speed_scale: float = 0.90
-@export_range(0.0, 2.0, 0.05) var shock_jump_impulse_scale: float = 0.90
-@export_range(0.0, 2.0, 0.05) var shock_air_jump_impulse_scale: float = 0.0
-@export_range(0, 2, 1) var shock_air_jumps: int = 0
-@export_range(0.1, 2.0, 0.05) var shock_fall_speed_scale: float = 0.85
-
-@export_subgroup("The Eclipse")
-@export_range(0.1, 2.0, 0.05) var chakram_move_speed_scale: float = 1.05
-@export_range(0.0, 2.0, 0.05) var chakram_jump_impulse_scale: float = 1.10
-@export_range(0.0, 2.0, 0.05) var chakram_air_jump_impulse_scale: float = 0.72
-@export_range(0, 2, 1) var chakram_air_jumps: int = 1
-@export_range(0.1, 2.0, 0.05) var chakram_fall_speed_scale: float = 0.90
 
 @export_group("Movement")
 @export var player_acceleration: float = 1800.0
@@ -225,9 +201,6 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## not a shot, and should leave the board rather than float for its full age cap.
 @export_range(1.0, 6.0, 0.1) var arrow_clashed_gravity_scale: float = 2.2
 @export var charge_time: float = 1.1          # seconds to go from 0% to 100%
-## Real Time mode only. Time never stops there, so the pacing a turn gave a
-## throw is replaced by a per-fighter cooldown that starts when an attack leaves.
-@export_range(0.0, 5.0, 0.05) var real_time_throw_cooldown: float = 1.2
 ## On a fully wrapping arena a knife has no edge to leave through, so it is
 ## aged out instead. 900 ticks is 15s, twenty execution phases.
 @export var arrow_max_ticks: int = 900
@@ -238,52 +211,6 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 @export var knife_spread_max: float = 26.0    # degrees, at 0% draw
 @export var knife_spread_min: float = 4.0     # degrees, at 100% draw
 
-@export_group("Character Prototypes")
-@export var dash_speed_min: float = 660.0
-@export var dash_speed_max: float = 980.0
-@export var dash_duration_ticks_min: int = 8
-@export var dash_duration_ticks_max: int = 15
-@export var dash_guard_durability: int = 2
-@export_range(0.0, 1.0, 0.01) var dash_exit_momentum_retention: float = 0.28
-## The Rook moves at nine tenths of the shared pace. The horizontal distance
-## denied by that ratio becomes Frame Debt: every completed cell adds one dash
-## tick, and a full three-cell cut adds one front-parry point.
-@export_range(1, 6, 1) var frame_debt_max_cells: int = 3
-@export_range(1.0, 32.0, 0.25) var frame_debt_distance_per_cell: float = 2.75
-@export_range(0, 4, 1) var frame_debt_dash_ticks_per_cell: int = 1
-@export_range(0, 3, 1) var frame_debt_full_guard_bonus: int = 1
-@export var chakram_speed_min: float = 300.0
-@export var chakram_speed_max: float = 520.0
-## The normal throw follows the committed aim exactly.
-@export var shock_plasma_speed_min: float = 860.0
-@export var shock_plasma_speed: float = 1160.0
-## The lance falls. Every other projectile in the game does, and a flat shot was
-## the one attack in a game about prediction that needed none: it crossed 870px
-## of a 1280px arena inside a single execution window while a fighter can move
-## about 195px, so there was no leading it and no reading it. Charge now buys a
-## flatter arc as well as speed, which is what makes a full draw worth waiting
-## for instead of merely stronger.
-@export var shock_plasma_gravity: float = 420.0
-@export var shock_plasma_range_min: float = 320.0
-@export var shock_plasma_range_partial_max: float = 1040.0
-@export var shock_plasma_range_full: float = 1440.0
-@export var shock_orb_speed_min: float = 280.0
-@export var shock_orb_speed_max: float = 520.0
-@export var shock_orb_arm_ticks: int = 30
-## How many of her orbs may be live at once. There was no cap at all: the two
-## the AI keeps come from Ai.SHOCK_SETUP_ORB_TARGET, a planner convention a
-## human was never bound by. Casting past the cap pops the oldest, so the throw
-## still does something rather than being silently eaten.
-@export_range(1, 6, 1) var shock_max_live_orbs: int = 2
-## Execution ticks an uncollected orb keeps its square. At 360 it outlived
-## eight planning phases, which is long enough that placing one was rarely a
-## decision. 180 is four windows: still persistent, no longer permanent.
-@export var shock_orb_lifetime_ticks: int = 180
-@export var shock_small_radius: float = 84.0
-@export var shock_combo_radius_min: float = 190.0
-@export var shock_combo_radius: float = 280.0
-@export var shock_small_impulse: float = 460.0
-@export var shock_combo_impulse: float = 980.0
 @export_group("Knife Clash")
 ## Knives collide with each other in mid-air. Both survive, both get knocked off
 ## line and slowed, so a deflected pair falls in floaty arcs that nobody planned
@@ -314,7 +241,7 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## are paced for an ACTIVE human turn (quick lock, full route, full throw, one
 ## clash, one dodge) to earn about 0.18, so a fighter who plays that way fills
 ## the meter every five or six rounds while passive play takes far longer.
-## tests/SuperMeterPaceSimulation.gd measures both that estimate and the slower
+## tools/sims/SuperMeterPaceSimulation.gd measures both that estimate and the slower
 ## cadence two AI Duelists produce.
 ## A clean opposing-knife clash grants this much meter if the owner is moving.
 @export_range(0.01, 1.0, 0.005) var super_charge_per_clash: float = 0.06
@@ -327,7 +254,7 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## Distance covered during an execution window earns meter linearly, reaching
 ## this much at `super_travel_reference` pixels. A full piloted half-second run
 ## plus its coast covers about 120px, so a committed route earns most of it and
-## a jump or a dash kit earns the rest.
+## a jump earns the rest.
 @export_range(0.0, 1.0, 0.005) var super_charge_per_window_travel: float = 0.03
 @export var super_travel_reference: float = 140.0
 ## Locking a plan before the planning clock runs out earns up to this much,
@@ -373,20 +300,6 @@ enum Difficulty { NOVICE, STANDARD, RUTHLESS }
 ## Visible opening of a newly aimed projectile's path, in moving seconds.
 @export var aim_preview_duration: float = 0.45
 
-@export_group("Close Camera Mode")
-## These values belong only to the dedicated prototype mode. Normal Play never
-## reads them, which keeps the shipped rules and arena rotation untouched.
-@export var close_camera_jump_impulse: float = 600.0
-@export var close_camera_planning_duration: float = 3.5
-@export var close_camera_commit_delay: float = 0.20
-@export var close_camera_auto_ready: bool = true
-@export var close_camera_ready_grace: float = 0.6
-@export_range(2.0, 20.0, 1.0) var close_camera_secondary_lob_angle: float = 10.0
-@export var close_camera_boost_alignment: float = 0.82
-@export var close_camera_boost_min_closing_speed: float = 80.0
-@export var close_camera_boost_transfer: float = 0.72
-@export var close_camera_boost_speed_cap: float = 1.35
-
 @export_group("Knife Terrain Ricochet")
 @export var knife_ricochet_min_speed: float = 560.0
 @export_range(0.1, 1.0, 0.05) var knife_ricochet_retention: float = 0.72
@@ -410,13 +323,7 @@ var respawn_points: Array[Vector2] = []
 var _last_respawn_choice: Array[int] = [-1, -1, -1, -1]
 var score: Array[int] = [0, 0, 0, 0]
 var team_mode: bool = false
-## A self-contained restoration of the former Close Camera prototype. It owns
-## its arena, camera, and tuning and is never selected by ordinary Play.
-var class_lab := false
-var real_time_mode: bool = false
 var interception_mode: bool = false
-var real_time_aim_guide: bool = true
-var close_camera_mode: bool = false
 ## Trial 01 replaces score with one asymmetric objective: survive a short,
 ## authored sequence whose hostile plan is public before every execution.
 var fate_trial_mode: bool = false
@@ -461,15 +368,6 @@ var winner: int = -1
 var rematch_level_index: int = 0
 var rematch_level_name: String = ""
 
-## Visual snapshots of execution ticks. Replaying snapshots instead of running
-## the simulation again keeps the online result immutable and includes every
-## persistent knife and damaged platform without re-triggering game rules.
-var _replay_frames: Array[Dictionary] = []
-var _replay_terminal_frame: Dictionary = {}
-var _replay_frame_index: int = 0
-var _replay_accum: float = 0.0
-const REPLAY_COMPACTION_SLACK_SECONDS := 2.0
-
 var platforms: Array = []
 var solid_rects: Array[Rect2] = []
 var world_bounds := Rect2(-160.0, -1600.0, 1600.0, 2600.0)
@@ -503,43 +401,17 @@ const SEAM_MARGIN := 340.0   # how far from an edge a platform gets a seam copy
 
 var players: Array = []
 var arrows: Array = []
-var dashblades: Array = []
-var chakrams: Array = []
-var shock_plasmas: Array = []
-var shock_orbs: Array = []
 var player_weapons: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
 var local_weapon_choices: Array[int] = [Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES, Weapon.KNIVES]
 var _next_volley: int = 1
 var _next_arrow_id: int = 1
-var _next_character_projectile_id: int = 100000
 
 ## Online mode is lockstep: this browser records only its assigned player and
 ## receives the rival plan after both sides confirm.
 var online_mode: bool = false
 var online_player: int = -1
-var online_room: String = ""
-var online_peer_connected: bool = false
-var _online_connected: Array = [true, true]
-## One nickname per online seat, as the room reports them. An empty entry means
-## that seat shows its P1..P4 tag.
-var online_names: Array = []
-## True from the moment an opponent drops out of a live match until they come
-## back or the match is claimed. banner_time expires; being stranded does not,
-## so the way out has to stay on screen rather than flash past.
-var online_peer_lost: bool = false
-## Set when the room reports a desync or rejects a plan. Neither side can be
-## trusted as the winner, so the only honest exit is back to the menu.
-var online_match_broken: bool = false
-var _online_seed: int = 0
-var _online_plan_sent: bool = false
-var _online_match_reported: bool = false
-var _online_waiting_rematch: bool = false
 
-var aim_source: Array[int] = [AimSrc.MOUSE, AimSrc.KEYS, AimSrc.KEYS, AimSrc.KEYS]
 var charging: Array[bool] = [false, false, false, false]
-## Attack captured when a charge begins. Shock uses 0 for LMB plasma and 1 for
-## RMB orb; other kits leave this at zero.
-var charge_attack_mode: Array[int] = [0, 0, 0, 0]
 var stamina: Array[float] = [0.0, 0.0, 0.0, 0.0]
 ## Persistent for the whole match. It only resets when the super is actually
 ## released (or the match restarts), not between turns or after taking a hit.
@@ -553,15 +425,6 @@ var _dodge_credits: Array[int] = [0, 0, 0, 0]
 ## before placing the shot. The choice persists between turns until changed or
 ## the burst is actually released.
 var super_armed: Array[bool] = [false, false, false, false]
-## Completed Lost Frame cells plus the sub-cell distance progress, retained
-## between turns. Progress is stored as thousandths of a pixel so lockstep state
-## never depends on repeatedly adding an imprecise display float.
-var frame_debt_cells: Array[int] = [0, 0, 0, 0]
-var frame_debt_units: Array[int] = [0, 0, 0, 0]
-## CUT TO END locks earning for the rest of that execution, preventing an early
-## dash from immediately reloading itself through its remaining movement plan.
-## Free Play has no turn boundary and deliberately ignores this lock.
-var frame_debt_locked: Array[bool] = [false, false, false, false]
 
 ## A location is telegraphed for one full turn before it becomes collectible.
 ## Once active it lasts for `core_active_turns` executions. A same-tick touch
@@ -585,9 +448,6 @@ var ghost_air_jumps: Array[int] = [
 ]
 var ghost_drop: Array[int] = [0, 0, 0, 0]
 var ghost_drop_from: Array[float] = [0.0, 0.0, 0.0, 0.0]
-## Combat-free copies of dashes that crossed a time-stop boundary. They advance
-## with the piloted ghost so ignored inputs and exit momentum match execution.
-var ghost_dash: Array = [null, null, null, null]
 ## Recorded path plus the coasted tail, always exactly one full window long.
 var ghost_path: Array[PackedVector2Array] = [
 	PackedVector2Array(), PackedVector2Array(), PackedVector2Array(), PackedVector2Array(),
@@ -604,15 +464,6 @@ var ghost_ground_path: Array[PackedByteArray] = [
 ## recorded movement. Most planning frames change neither, so rebuild lazily.
 var _ghost_path_dirty: Array[bool] = [true, true, true, true]
 
-var _pads: Array[int] = [-1, -1, -1, -1]
-var _pad_btn_prev: Array[Dictionary] = [{}, {}, {}, {}]
-var _jump_prev: Array[bool] = [false, false, false, false]
-var _charge_t: Array[float] = [0.0, 0.0, 0.0, 0.0]
-## Seconds until each fighter may attack again in Real Time mode.
-var throw_cooldown_left: Array[float] = [0.0, 0.0, 0.0, 0.0]
-var _pilot_accum: Array[float] = [0.0, 0.0, 0.0, 0.0]
-var _prev_mouse := Vector2.ZERO
-
 var _backdrop: Node2D
 var _arena: Arena
 var _arrow_layer: Node2D
@@ -621,8 +472,6 @@ var _preview: Node2D
 var _temporal_core: TemporalCore
 var _hazard_layer: Node2D
 var _camera: DuelCamera
-var _close_plan_idle: Array[float] = [0.0, 0.0, 0.0, 0.0]
-var _close_plan_ticks_seen: Array[int] = [0, 0, 0, 0]
 var _effects
 var _sfx
 var _time_stop
@@ -636,15 +485,14 @@ var _super_pause_left: float = 0.0
 const EVENT_DIRECTION_SCRIPT := preload("res://scripts/EventDirection.gd")
 var _event_direction
 var _ui
-var _online_client: OnlineClient
-var _online_lobby: OnlineLobby
-## The custom-match lineup and rules screens, run over the network once every
-## seat is connected (room protocol 4).
-var _online_roster: OnlineRosterLayer
-var _online_setup: OnlineSetupLayer
-## This machine's pending pick. The room echoes it back, but the local copy wins
-## so a fast double press never snaps back to a stale echo.
-var _online_pick := {"weapon": Roster.DUELIST, "level": 0, "lives": 5, "ready": false}
+## Online lockstep session: rooms, selection, plan relay, digest (OnlineSession.gd).
+var _online: OnlineSession = OnlineSession.new(self)
+## End-of-match replay recording and playback (MatchReplay.gd).
+var _replay: MatchReplay = MatchReplay.new(self)
+## Saved options and key bindings (SettingsStore.gd).
+var _settings_store: SettingsStore = SettingsStore.new(self)
+## Keyboard, mouse, pad and touch input (PlayerInput.gd).
+var _player_input: PlayerInput = PlayerInput.new(self)
 var _touch_controls: TouchControls
 var _tutorial
 var tutorial_mode: bool = false
@@ -667,23 +515,6 @@ var _kill_slowmo_left: float = 0.0
 var _kill_recover_left: float = 0.0
 var _hit_pause_used_this_execution: bool = false
 var _secret_triple_match: bool = false
-var _settings: Dictionary = {
-	"sfx": 1.0,
-	"voice": 1.0,
-	"hit_freeze": true,
-	"reduced_flashes": false,
-	"high_contrast_previews": true,
-	"display": DISPLAY_MAXIMIZED,
-	"bindings": {},
-	"telemetry": true,
-	## Rungs of the Start Duel opponent ladder beaten so far.
-	"ladder_progress": 0,
-	## Nickname registered with online rooms; empty shows the seat number.
-	"nickname": "",
-}
-## Tests can point persistence at a disposable file without touching the
-## player's actual preferences.
-var settings_path: String = "user://settings.cfg"
 var offline_tuning_path: String = "user://offline_tuning.cfg"
 var offline_tuning
 var _offline_tuning_layer
@@ -691,9 +522,6 @@ var _offline_tuning_layer
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
-	for pending_dash in ghost_dash:
-		if pending_dash != null and is_instance_valid(pending_dash):
-			pending_dash.free()
 
 
 func _ready() -> void:
@@ -746,13 +574,13 @@ func _ready() -> void:
 	add_child(_touch_controls)
 	var touch_enabled := force_touch_controls or DisplayServer.is_touchscreen_available()
 	_touch_controls.configure(self, touch_enabled)
-	_touch_controls.confirm_requested.connect(_on_touch_confirm)
-	_touch_controls.rollback_requested.connect(_on_touch_rollback)
-	_touch_controls.reset_requested.connect(_on_touch_reset)
-	_touch_controls.super_requested.connect(_on_touch_super)
-	_touch_controls.menu_requested.connect(_on_touch_menu)
-	_touch_controls.rematch_requested.connect(_on_touch_rematch)
-	_touch_controls.replay_requested.connect(_on_touch_replay)
+	_touch_controls.confirm_requested.connect(_player_input._on_touch_confirm)
+	_touch_controls.rollback_requested.connect(_player_input._on_touch_rollback)
+	_touch_controls.reset_requested.connect(_player_input._on_touch_reset)
+	_touch_controls.super_requested.connect(_player_input._on_touch_super)
+	_touch_controls.menu_requested.connect(_player_input._on_touch_menu)
+	_touch_controls.rematch_requested.connect(_player_input._on_touch_rematch)
+	_touch_controls.replay_requested.connect(_player_input._on_touch_replay)
 	_touch_controls.report_requested.connect(copy_match_report)
 	_touch_controls.level_previous_requested.connect(func(): _cycle_rematch_level(-1))
 	_touch_controls.level_next_requested.connect(func(): _cycle_rematch_level(1))
@@ -785,19 +613,13 @@ func _ready() -> void:
 	_menu.quit_requested.connect(quit_demo)
 	_menu.roster_requested.connect(_open_roster)
 	_menu.fate_trial_requested.connect(start_fate_trial)
-	_menu.close_camera_requested.connect(start_close_camera)
 	_menu.sandbox_requested.connect(start_sandbox)
 	_menu.tuning_requested.connect(_open_offline_tuning)
-	_menu.real_time_requested.connect(start_real_time)
-	_menu.class_lab_requested.connect(func(): ClassLab.start(self))
-	var live_hud = preload("res://scripts/RealTimeHud.gd").new()
-	live_hud.gm = self
-	add_child(live_hud)
-	_menu.online_requested.connect(_on_menu_online)
+	_menu.online_requested.connect(_online._on_menu_online)
 	_menu.tutorial_requested.connect(_on_menu_tutorial)
-	_menu.option_changed.connect(_on_option_changed)
-	_menu.binding_changed.connect(_on_binding_changed)
-	_menu.bindings_reset.connect(_on_bindings_reset)
+	_menu.option_changed.connect(_settings_store._on_option_changed)
+	_menu.binding_changed.connect(_settings_store._on_binding_changed)
+	_menu.bindings_reset.connect(_settings_store._on_bindings_reset)
 	_menu.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_menu.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
@@ -815,41 +637,7 @@ func _ready() -> void:
 	_setup.ui_navigated.connect(func(): _sfx.play("ui_move"))
 	_setup.ui_accepted.connect(func(): _sfx.play("ui_accept"))
 
-	_online_client = ONLINE_CLIENT_SCRIPT.new()
-	add_child(_online_client)
-	_online_client.room_ready.connect(_on_online_room_ready)
-	_online_client.message_received.connect(_on_online_message)
-	_online_client.status_changed.connect(_on_online_status)
-
-	_online_lobby = ONLINE_LOBBY_SCRIPT.new()
-	add_child(_online_lobby)
-	_online_lobby.create_requested.connect(_on_online_create)
-	_online_lobby.join_requested.connect(_on_online_join)
-	_online_lobby.cancel_requested.connect(_leave_online)
-	_online_lobby.ui_navigated.connect(func(): _sfx.play("ui_move"))
-	_online_lobby.ui_accepted.connect(func(): _sfx.play("ui_accept"))
-	_online_client.room_lost.connect(_on_online_room_lost)
-
-	_online_roster = OnlineRosterLayer.new()
-	add_child(_online_roster)
-	_online_roster.pick_changed.connect(func(weapon: int):
-		_online_pick["weapon"] = weapon
-		_send_online_pick())
-	_online_roster.lineup_confirmed.connect(func(_lineup: Dictionary): _open_online_setup())
-	_online_roster.canceled.connect(_leave_online)
-	_online_setup = OnlineSetupLayer.new()
-	add_child(_online_setup)
-	_online_setup.vote_changed.connect(func(vote_level: int, vote_lives: int):
-		_online_pick["level"] = vote_level
-		_online_pick["lives"] = vote_lives
-		_send_online_pick())
-	_online_setup.ready_changed.connect(func(is_ready: bool):
-		_online_pick["ready"] = is_ready
-		_send_online_pick())
-	_online_setup.canceled.connect(func(): _online_roster.open())
-	for layer_node in [_online_roster, _online_setup]:
-		layer_node.ui_navigated.connect(func(): _sfx.play("ui_move"))
-		layer_node.ui_accepted.connect(func(): _sfx.play("ui_accept"))
+	_online.build()
 
 	_tuning = TUNING_SCRIPT.new()
 	add_child(_tuning)
@@ -863,20 +651,20 @@ func _ready() -> void:
 	_spawn_players()
 	_tuning.build(self)
 	_tuning.visible = false
-	_load_settings()
+	_settings_store._load_settings()
 	offline_tuning = OFFLINE_TUNING_SCRIPT.new()
 	offline_tuning.initialize(self, offline_tuning_path)
 	_offline_tuning_layer = OFFLINE_TUNING_LAYER_SCRIPT.new()
 	add_child(_offline_tuning_layer)
 	_offline_tuning_layer.build(self)
 	_offline_tuning_layer.closed.connect(_close_offline_tuning)
-	_menu.configure_options(_settings)
-	_assign_pads()
+	_menu.configure_options(_settings_store._settings)
+	_player_input._assign_pads()
 	Input.joy_connection_changed.connect(func(_d, _c):
-		_assign_pads()
+		_player_input._assign_pads()
 		if _roster != null:
 			_roster.refresh_connections())
-	_prev_mouse = get_viewport().get_mouse_position()
+	_player_input._prev_mouse = get_viewport().get_mouse_position()
 	_begin_planning(true)
 	_open_menu()
 	if "--vs-3-cpu" in user_args:
@@ -921,9 +709,6 @@ func ai_moves_searched_for(player_index: int) -> int:
 func ai_think_range_for(player_index: int) -> Vector2:
 	var tuning := _ai_tuning_for(player_index)
 	var out := Vector2(float(tuning["think_min"]), float(tuning["think_max"]))
-	if close_camera_mode:
-		out.x = minf(out.x, close_camera_planning_duration * 0.25)
-		out.y = minf(out.y, close_camera_planning_duration * 0.60)
 	return out
 
 
@@ -958,30 +743,16 @@ func set_player_opponent(player_index: int, rung: int) -> void:
 		rematch_opponent = demo_opponent
 
 
-## The nickname an online seat registered, or "" when it has none or the match
-## is local. Local and CPU matches never carry names, so their labels stay P1..P4.
-func online_nickname(player_index: int) -> String:
-	if not online_mode or player_index < 0 or player_index >= online_names.size():
-		return ""
-	return str(online_names[player_index]).strip_edges()
-
-
 ## Short seat label for tags and score lines: the nickname online, else "P1".
 func player_tag(player_index: int) -> String:
-	var nick := online_nickname(player_index)
+	var nick := _online.online_nickname(player_index)
 	return nick if not nick.is_empty() else "P%d" % (player_index + 1)
 
 
 ## Long seat label for banners: the nickname online, else "PLAYER 1".
 func player_title(player_index: int) -> String:
-	var nick := online_nickname(player_index)
+	var nick := _online.online_nickname(player_index)
 	return nick if not nick.is_empty() else "PLAYER %d" % (player_index + 1)
-
-
-func _set_online_names(names: Array, seats: int) -> void:
-	online_names.resize(seats)
-	for i in seats:
-		online_names[i] = str(names[i]).strip_edges() if i < names.size() else ""
 
 
 ## The opponent's name where the HUD would otherwise show the fighter kit.
@@ -998,12 +769,11 @@ func slot_display_name(player_index: int) -> String:
 func player_facing_labels() -> bool:
 	if _practice != null and _practice.active:
 		return true
-	return not (class_lab or real_time_mode or fate_trial_mode \
-		or close_camera_mode or state == Phase.FREEPLAY)
+	return not (fate_trial_mode or state == Phase.FREEPLAY)
 
 
 func ladder_progress() -> int:
-	return clampi(int(_settings.get("ladder_progress", 0)), 0, Opponents.count())
+	return clampi(int(_settings_store._settings.get("ladder_progress", 0)), 0, Opponents.count())
 
 
 ## Start Duel plays the first opponent not yet beaten; after the last one, it
@@ -1038,8 +808,8 @@ func _record_ladder_result(scorer: int) -> void:
 	if not demo_match or demo_opponent < 0 or scorer != 0:
 		return
 	if demo_opponent >= ladder_progress():
-		_settings["ladder_progress"] = demo_opponent + 1
-		_save_settings()
+		_settings_store._settings["ladder_progress"] = demo_opponent + 1
+		_settings_store._save_settings()
 
 
 func _difficulty_tuning(level: int) -> Dictionary:
@@ -1089,8 +859,8 @@ func _open_menu() -> void:
 	_abandon_match("menu")
 	if _practice != null: _practice.stop()
 	if state == Phase.REPLAY:
-		_finish_match_replay()
-	_set_close_camera_mode(false)
+		_replay._finish_match_replay()
+	_reset_experiment_modes()
 	_cancel_super_cutin()
 	if _event_direction != null:
 		_event_direction.clear()
@@ -1105,9 +875,9 @@ func _open_menu() -> void:
 	banner_time = 0.0
 	_ui.visible = false     # the arena stays as a backdrop; the HUD would be noise
 	_tuning.visible = false
-	if _online_lobby != null:
-		_online_lobby.close()
-	_close_online_selection()
+	if _online._online_lobby != null:
+		_online._online_lobby.close()
+	_online._close_online_selection()
 	if _roster != null:
 		_roster.close()
 	if _setup != null:
@@ -1135,7 +905,7 @@ func _close_offline_tuning() -> void:
 ## One screen owns every local-match decision, so there is exactly one way in
 ## and exactly one configuration coming back out of it.
 func _open_roster() -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	fate_trial_mode = false
 	tutorial_mode = false
 	online_mode = false
@@ -1228,64 +998,16 @@ func start_quick_freeplay(lvl: int) -> void:
 	_start_freeplay(lvl, [])
 
 
-## Direct title-screen route for rapid iteration. It intentionally ignores the
-## last roster/setup choices: every visit starts from the same known baseline.
-func start_real_time() -> void:
-	_start_freeplay(0, [Weapon.KNIVES, Weapon.KNIVES], 2,
-		["HUMAN", "AI"], [KEYBOARD_DEVICE, NO_DEVICE])
-	real_time_mode = true
-	real_time_aim_guide = true
-	vs_ai = true
-	_tuning.visible = false
-	_ui.visible = false
-	_reset_sandbox_ai_cycle()
-	_transition.play("REAL TIME // DUELIST VS CPU", "TIME FLOWS", PLAYER_COLORS[0], reduced_flashes)
-
-
 func start_sandbox() -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	fate_trial_mode = false
 	team_mode = false
 	_start_freeplay(0, [Weapon.KNIVES], 1, ["HUMAN"], [KEYBOARD_DEVICE])
 
 
-## Direct restoration of the former close-camera experiment. It remains a
-## separate mode: ordinary Play never loads this arena or reads this tuning.
-func start_close_camera() -> void:
-	team_mode = false
-	fate_trial_mode = false
-	tutorial_mode = false
-	online_mode = false
-	online_player = -1
-	winning_team = -1
-	team_score = [0, 0]
-	for i in MAX_PLAYERS:
-		player_teams[i] = -1
-		player_roles[i] = "HUMAN" if i == 0 else "AI"
-		player_devices[i] = KEYBOARD_DEVICE if i == 0 else NO_DEVICE
-	player_weapons.fill(Weapon.KNIVES)
-	local_weapon_choices[0] = Weapon.KNIVES
-	local_weapon_choices[1] = Weapon.KNIVES
-	vs_ai = true
-	hits_to_win = DEFAULT_HITS_TO_WIN
-	_set_close_camera_mode(true)
-	_set_player_count(2)
-	_ui.visible = true
-	_tuning.visible = false
-	_menu.close()
-	_roster.close()
-	_setup.close()
-	_load_level(0)
-	restart()
-	_sfx.play("match_start")
-	_begin_match_telemetry("ai_close_camera")
-	_transition.play("CLOSE CAMERA // KNIFE COURT",
-		"PLAN CLOSE · WATCH IT WHOLE", PLAYER_COLORS[0], reduced_flashes)
-
-
 ## Fixed local experiment. Saved offline tuning is restored when this mode exits.
 func start_interception() -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	if _practice != null:
 		_practice.stop()
 	interception_mode = true
@@ -1326,25 +1048,24 @@ func start_interception() -> void:
 		PLAYER_COLORS[0], reduced_flashes)
 
 
-func _set_close_camera_mode(enabled: bool) -> void:
+## Leaves every experiment mode: restores offline tuning after Interception,
+## clears the demo flag and switches the kill camera off.
+func _reset_experiment_modes() -> void:
 	if interception_mode:
 		interception_mode = false
 		if offline_tuning != null:
 			offline_tuning.apply_offline()
 	demo_match = false
-	class_lab = false
-	real_time_mode = false
-	close_camera_mode = enabled
 	if _camera == null:
 		return
-	_camera.enabled = enabled
+	_camera.enabled = false
 	_camera.reset_view()
 
 
 ## Direct single-player prototype. The hostile Duelist is not a general-purpose
 ## bot: its complete plan is authored and visible before the player commits.
 func start_fate_trial() -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	team_mode = false
 	fate_trial_mode = true
 	fate_trial_windows_survived = 0
@@ -1453,7 +1174,7 @@ func _sandbox_banner(text: String, color: Color) -> void:
 func _start_local_match(lvl: int, requested_players: int, weapons: Array,
 		setup: Dictionary) -> void:
 	demo_match = false
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	fate_trial_mode = false
 	tutorial_mode = false
 	online_mode = false
@@ -1538,7 +1259,7 @@ func _on_menu_tutorial() -> void:
 
 
 func _open_reference_briefing() -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	team_mode = false
 	fate_trial_mode = false
 	tutorial_mode = true
@@ -1552,430 +1273,12 @@ func _open_reference_briefing() -> void:
 	_transition.visible = false
 
 
-func _on_menu_online() -> void:
-	_set_close_camera_mode(false)
-	team_mode = false
-	fate_trial_mode = false
-	tutorial_mode = false
-	if offline_tuning != null:
-		offline_tuning.apply_standard()
-	_menu.close()
-	_ui.visible = false
-	_tuning.visible = false
-	state = Phase.ONLINE_LOBBY
-	# The lobby starts from the arena and fighter the roster screen last held,
-	# then lets each side choose its own before the room opens.
-	_online_lobby.open(_setup.level, local_weapon_choices[0], str(_settings.get("nickname", "")))
-	_transition.play("ONLINE MATCH", "PRIVATE PLANS", PLAYER_COLORS[1], reduced_flashes)
-
-
-func _on_online_create(lvl: int, weapon: int, capacity: int = 4) -> void:
-	_online_lobby.set_status("CREATING PRIVATE ROOM…", false)
-	_online_client.create_room(lvl, weapon, capacity, _remember_nickname())
-
-
-func _on_online_join(code: String, weapon: int) -> void:
-	_online_client.join_room(code, weapon, _remember_nickname())
-
-
-## The lobby's nickname is saved with the other options the moment it is used
-## for a room, so the next session starts with it filled in.
-func _remember_nickname() -> String:
-	var nick: String = _online_lobby.nickname
-	if nick != str(_settings.get("nickname", "")):
-		_on_option_changed("nickname", nick)
-	return nick
-
-
-func _on_online_room_ready(code: String, player_slot: int) -> void:
-	online_room = code
-	online_player = player_slot
-	_online_lobby.show_room(code, player_slot)
-
-
-func _on_online_status(text: String, is_error: bool) -> void:
-	if state == Phase.ONLINE_LOBBY:
-		_online_lobby.set_status(text, is_error)
-	elif online_mode:
-		online_peer_connected = _online_client.is_socket_open()
-		banner_text = text
-		banner_color = Color(1.0, 0.40, 0.35) if is_error else Color(0.62, 0.85, 0.72)
-		banner_time = 1.8
-
-
-func _leave_online() -> void:
-	_online_client.disconnect_from_room()
-	_reset_online_session()
-	_online_lobby.close()
-	_open_menu()
-
-
-func _reset_online_session() -> void:
-	if state == Phase.REPLAY:
-		_finish_match_replay()
-	online_mode = false
-	online_player = -1
-	online_room = ""
-	online_peer_connected = false
-	online_peer_lost = false
-	online_match_broken = false
-	_online_waiting_rematch = false
-	_online_connected = [true, true]
-	online_names = []
-	_close_online_selection()
-
-
-## The room or this seat is gone for good (host closed it, or the seat went to
-## someone else). Land back on the lobby with the reason instead of retrying.
-func _on_online_room_lost(reason: String) -> void:
-	if online_room.is_empty() and not online_mode:
-		return
-	_reset_online_session()
-	_ui.visible = false
-	state = Phase.ONLINE_LOBBY
-	_online_lobby.open(_setup.level, int(_online_pick["weapon"]), str(_settings.get("nickname", "")))
-	_online_lobby.set_status(reason, true)
-
-
-func _close_online_selection() -> void:
-	if _online_roster != null:
-		_online_roster.close()
-	if _online_setup != null:
-		_online_setup.close()
-
-
-func _send_online_pick() -> void:
-	_online_client.send_select(int(_online_pick["weapon"]), int(_online_pick["level"]),
-		int(_online_pick["lives"]), bool(_online_pick["ready"]))
-
-
-## Feeds the room's view of every seat to both selection screens and opens the
-## lineup screen the first time the room reaches the selection phase.
-func _on_online_selection(message: Dictionary) -> void:
-	var seats := int(message.get("capacity", 2))
-	var room_weapons: Array = message.get("weapons", [])
-	var votes: Array = message.get("level_votes", [])
-	var lives: Array = message.get("lives_votes", [])
-	var ready: Array = message.get("ready", [])
-	var connected: Array = message.get("connected", [])
-	if message.has("names"):
-		_set_online_names(message["names"], seats)
-	if not connected.is_empty():
-		_online_connected = connected.duplicate()
-	var entering := state != Phase.ONLINE_SELECT
-	if entering:
-		if state == Phase.REPLAY:
-			_finish_match_replay()
-		var me := online_player
-		_online_pick = {
-			"weapon": int(room_weapons[me]) if me < room_weapons.size() else Roster.DUELIST,
-			"level": posmod(int(votes[me]), Levels.count()) if me < votes.size() and int(votes[me]) >= 0 \
-				else _online_lobby.level,
-			"lives": int(lives[me]) if me < lives.size() else DEFAULT_HITS_TO_WIN,
-			"ready": false,
-		}
-		online_mode = false
-		_online_waiting_rematch = false
-		_online_lobby.close()
-		_ui.visible = false
-		state = Phase.ONLINE_SELECT
-	_online_roster.configure_room(online_player, seats, online_names, _online_connected,
-		room_weapons, ready, entering)
-	var lineup := room_weapons.duplicate()
-	if online_player < lineup.size():
-		lineup[online_player] = _online_pick["weapon"]
-	_online_setup.configure_room(online_player, online_names, lineup, votes, lives, ready)
-	if entering:
-		_online_roster.open()
-
-
-func _open_online_setup() -> void:
-	_online_roster.close()
-	_online_setup.open_vote(int(_online_pick["level"]), int(_online_pick["lives"]),
-		bool(_online_pick["ready"]))
-
-
-## Someone left before or between matches; the room is waiting for a full table
-## again, so show the code and seats instead of the selection screens.
-func _return_to_online_room(note: String) -> void:
-	_close_online_selection()
-	if state == Phase.REPLAY:
-		_finish_match_replay()
-	online_mode = false
-	_online_waiting_rematch = false
-	_ui.visible = false
-	state = Phase.ONLINE_LOBBY
-	_online_lobby.visible = true
-	_online_lobby.show_room(online_room, online_player)
-	_online_lobby.update_room(_online_connected, _online_connected.size(), _online_lobby.level,
-		online_names)
-	_online_lobby.set_status(note, true)
-
-
-func _refresh_online_connections() -> void:
-	online_peer_lost = false
-	for i in _online_connected.size():
-		if i != online_player and not bool(_online_connected[i]):
-			online_peer_lost = true
-	online_peer_connected = not online_peer_lost
-
-
-func _on_online_message(message: Dictionary) -> void:
-	var kind := str(message.get("type", ""))
-	match kind:
-		"connected":
-			online_peer_connected = true
-			if not online_mode:
-				_online_connected.resize(int(message.get("capacity", 2)))
-				_online_connected.fill(false)
-			if message.has("names"):
-				_set_online_names(message["names"], int(message.get("capacity", _online_connected.size())))
-		"room_state":
-			var connected: Array = message.get("connected", [])
-			_online_connected = connected.duplicate()
-			_refresh_online_connections()
-			if message.has("names"):
-				_set_online_names(message["names"], int(message.get("capacity", connected.size())))
-			if state == Phase.ONLINE_LOBBY:
-				_online_lobby.update_room(connected, int(message.get("capacity", connected.size())),
-					int(message.get("level", 0)), online_names)
-			# Recover server transitions missed while our socket was disconnected.
-			var server_phase := str(message.get("phase", "waiting"))
-			var server_turn := int(message.get("turn", 1))
-			if server_phase == "desync":
-				_on_online_message({"type": "desync"})
-			elif server_phase == "selecting":
-				var selection := message.duplicate()
-				selection["type"] = "selection_state"
-				_on_online_selection(selection)
-			elif server_phase == "planning":
-				if online_mode and state == Phase.ONLINE_WAIT and server_turn == turn + 1:
-					_begin_planning(false)
-				elif server_turn == 1 and (not online_mode or \
-						(_online_waiting_rematch and int(message.get("seed", 0)) != _online_seed)):
-					_start_online_match(int(message.get("level", 0)),
-						int(message.get("seed", 0)), server_turn, message.get("weapons", []),
-						message.get("names", []), int(message.get("lives", DEFAULT_HITS_TO_WIN)))
-		"selection_state":
-			if str(message.get("phase", "")) == "selecting":
-				_on_online_selection(message)
-		"peer_left":
-			var left_slot := int(message.get("player", -1))
-			if state in [Phase.ONLINE_SELECT, Phase.GAME_OVER, Phase.REPLAY, Phase.ONLINE_LOBBY]:
-				_return_to_online_room("%s LEFT · WAITING FOR A NEW PLAYER" \
-					% OnlineLobby.seat_tag(left_slot, online_names))
-		"room_closed":
-			_online_client.disconnect_from_room()
-			_on_online_room_lost("THE HOST CLOSED THE ROOM")
-		"peer_status":
-			var peer_slot := int(message.get("player", -1))
-			var connected := bool(message.get("connected", false))
-			if peer_slot >= 0 and peer_slot < _online_connected.size():
-				_online_connected[peer_slot] = connected
-				_refresh_online_connections()
-				# A newcomer's name arrives only here: room_state went to their socket.
-				if message.has("name"):
-					if online_names.size() < _online_connected.size():
-						_set_online_names(online_names, _online_connected.size())
-					online_names[peer_slot] = str(message["name"]).strip_edges()
-				if state == Phase.ONLINE_LOBBY:
-					_online_lobby.update_room(_online_connected, _online_connected.size(),
-						_online_lobby.level, online_names)
-				if state == Phase.ONLINE_SELECT:
-					_online_roster.seat_connected = _online_connected.duplicate()
-					_online_roster.refresh_connections()
-				if online_mode and peer_slot != online_player:
-					banner_text = "%s RECONNECTED" % player_title(peer_slot) if connected \
-						else ("%s DISCONNECTED · WAIT FOR RECONNECT OR ESC TO LEAVE" % player_title(peer_slot) \
-						if player_count > 2 else "OPPONENT DISCONNECTED · ENTER CLAIMS THE MATCH")
-					banner_color = Color(0.52, 0.95, 0.70) if connected else Color(1.0, 0.45, 0.35)
-					banner_time = 2.0
-		"match_start":
-			_start_online_match(int(message.get("level", 0)),
-				int(message.get("seed", 0)), int(message.get("turn", 1)),
-				message.get("weapons", [Weapon.KNIVES, Weapon.KNIVES]),
-				message.get("names", []), int(message.get("lives", DEFAULT_HITS_TO_WIN)))
-		"plan_ack":
-			banner_text = "PLAN LOCKED · WAITING FOR PLAYERS"
-			banner_color = PLAYER_COLORS[online_player].lightened(0.3)
-			banner_time = 1.0
-		"turn_plans":
-			_apply_online_turn_plans(message)
-		"turn_complete_ack":
-			banner_text = "TURN COMPLETE · WAITING FOR PLAYERS"
-			banner_color = Color(0.62, 0.78, 0.70)
-			banner_time = 1.0
-		"turn_start":
-			var next_turn := int(message.get("turn", -1))
-			if online_mode and state == Phase.ONLINE_WAIT and next_turn == turn + 1:
-				_begin_planning(false)
-		"match_over":
-			banner_text = "MATCH VERIFIED · RESULTS READY"
-			banner_color = PLAYER_COLORS[winner].lightened(0.3) if winner >= 0 else Color.WHITE
-			banner_time = 2.2
-		"rematch_status":
-			var ready: Array = message.get("ready", [])
-			# Guests follow the host's arena. The host keeps its own pick: a guest
-			# readying up first echoes the old arena, which must not undo a choice
-			# the host has not sent yet.
-			if message.has("level") and online_player != 0:
-				rematch_level_index = posmod(int(message["level"]), Levels.count())
-				rematch_level_name = str(Levels.build(rematch_level_index)["name"])
-			banner_text = "REMATCH %d / %d READY" % [ready.size(), player_count]
-			banner_color = Color(0.86, 0.68, 1.0)
-			banner_time = 1.4
-		"opponent_left":
-			_finish_abandoned_match(int(message.get("winner", online_player)))
-		"desync":
-			state = Phase.ONLINE_WAIT
-			online_match_broken = true
-			banner_text = "MATCH DESYNC DETECTED · ESC RETURNS TO THE MENU"
-			banner_color = Color(1.0, 0.24, 0.20)
-			banner_time = 999.0
-		"error":
-			banner_text = str(message.get("message", "ONLINE ERROR"))
-			banner_color = Color(1.0, 0.35, 0.30)
-			banner_time = 2.4
-
-
-## `names` carries one nickname per seat; when the message has none, the names
-## learned in the lobby stay in force.
-func _start_online_match(lvl: int, seed_value: int, server_turn: int,
-		weapons: Array = [Weapon.KNIVES, Weapon.KNIVES], names: Array = [],
-		lives: int = DEFAULT_HITS_TO_WIN) -> void:
-	if weapons.size() not in [2, 4] or online_player < 0 or online_player >= weapons.size():
-		_online_lobby.set_status("ROOM RETURNED AN INVALID PLAYER LINEUP", true)
-		return
-	# A socket reconnect must never restart an already-running first turn.
-	if online_mode and state == Phase.REPLAY and _online_waiting_rematch and seed_value != _online_seed:
-		_finish_match_replay()
-	if online_mode and state != Phase.GAME_OVER:
-		return
-	# Older clients may still send benched kits. Do not silently simulate a
-	# different lineup from the peer.
-	for weapon in weapons:
-		if int(weapon) not in Roster.ORDER:
-			_online_lobby.set_status("ROOM USES UNAVAILABLE FIGHTERS; CREATE A DUELIST ROOM", true)
-			return
-	if server_turn != 1:
-		# Live reconnects retain their local simulation. A full page reload cannot
-		# safely reconstruct an in-progress match from only the current turn.
-		if online_mode:
-			return
-		_online_lobby.set_status("ROOM ALREADY HAS A MATCH IN PROGRESS", true)
-		return
-	online_mode = true
-	if _practice != null: _practice.stop()
-	_set_close_camera_mode(false)
-	demo_match = false
-	class_lab = false
-	real_time_mode = false
-	fate_trial_mode = false
-	tutorial_mode = false
-	team_mode = false
-	player_teams.fill(-1)
-	player_roles.fill("HUMAN")
-	# Restore every exposed property, including values changed in the sandbox.
-	# The saved offline profile is kept intact for the next local match.
-	if offline_tuning != null:
-		offline_tuning.apply_standard()
-	planning_duration = 4.0
-	planning_shrink_per_round = 0.0
-	execution_duration = 0.75
-	movement_budget = 0.50
-	vs_ai = false
-	# The room's vote; every client receives the same number, so lockstep holds.
-	hits_to_win = clampi(lives, 3, MAX_HITS_TO_WIN)
-	player_weapons.fill(Weapon.KNIVES)
-	for i in weapons.size():
-		player_weapons[i] = _roster_weapon_or_default(int(weapons[i]))
-	_set_player_count(weapons.size())
-	_online_connected.resize(player_count)
-	_online_connected.fill(true)
-	_set_online_names(names if not names.is_empty() else online_names, player_count)
-	_assign_pads()
-	_online_seed = seed_value
-	rng.seed = _online_seed
-	_online_plan_sent = false
-	_online_match_reported = false
-	_online_waiting_rematch = false
-	online_peer_lost = false
-	online_match_broken = false
-	_online_lobby.close()
-	_close_online_selection()
-	_ui.visible = true
-	_tuning.visible = false
-	_load_level(lvl)
-	restart()
-	_sfx.play("match_start")
-	_begin_match_telemetry("online")
-	_transition.play("ONLINE // ROOM %s" % online_room, "%d PLAYERS CONNECTED" % player_count,
-		PLAYER_COLORS[online_player], reduced_flashes)
-
-
-func _apply_online_turn_plans(message: Dictionary) -> void:
-	if not online_mode or state != Phase.PLANNING or int(message.get("turn", -1)) != turn:
-		return
-	var plans: Array = message.get("plans", [])
-	if plans.size() != player_count:
-		return
-	for i in player_count:
-		if not plans[i] is Dictionary:
-			return
-	for i in player_count:
-		var invalid_reason := _online_plan_invalid_reason(i, plans[i])
-		if not invalid_reason.is_empty():
-			state = Phase.ONLINE_WAIT
-			online_match_broken = true
-			var owner := "YOUR" if i == online_player else "OPPONENT"
-			banner_text = "%s PLAN FAILED VALIDATION · ESC RETURNS TO THE MENU" % owner
-			banner_color = Color(1.0, 0.24, 0.20)
-			banner_time = 999.0
-			push_error("Online plan rejected for player %d: %s" % [i + 1, invalid_reason])
-			return
-	for i in player_count:
-		players[i].plan.apply_network_dict(plans[i])
-	_rebuild_ghost_paths()
-	_update_facing()
-	_begin_commit()
-
-
-func _online_plan_is_legal(i: int, data: Dictionary) -> bool:
-	return _online_plan_invalid_reason(i, data).is_empty()
-
-
-func _online_plan_invalid_reason(i: int, data: Dictionary) -> String:
-	var dirs: Array = data.get("dirs", [])
-	var jumps: Array = data.get("jumps", [])
-	var holds: Array = data.get("holds", [])
-	var drops: Array = data.get("drops", [])
-	if dirs.size() != jumps.size() or dirs.size() != holds.size() or dirs.size() != drops.size():
-		return "recording arrays have different lengths"
-	# The same cap the room service enforces. Both ends derive it from the
-	# movement budget, so neither can accept a recording the other rejects.
-	var max_recorded := mini(exec_ticks(), movement_tick_budget())
-	if dirs.size() > max_recorded:
-		return "movement has %d ticks; maximum is %d" % [dirs.size(), max_recorded]
-	var shot_tick := int(data.get("shot_tick", -1))
-	if shot_tick < -1 or shot_tick > dirs.size():
-		return "shot tick %d is outside the recording" % shot_tick
-	var attack_mode := int(data.get("attack_mode", 0))
-	if attack_mode < 0 or attack_mode > 1:
-		return "attack mode %d is outside 0..1" % attack_mode
-	if bool(data.get("super_shot", false)) and (shot_tick < 0 or super_meter[i] < 1.0):
-		return "SUPER was requested without a legal charged shot"
-	var lock_permille := int(data.get("lock_permille", 0))
-	if lock_permille < 0 or lock_permille > 1000:
-		return "lock share %d is outside 0..1000" % lock_permille
-	return ""
-
-
 ## Free play: no turns, no freeze. Players under continuous control so the
 ## movement and shooting can be judged by feel, with the tuning values editable
 ## live. Whatever you set here is what the real match uses afterwards.
 func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 		configured_roles: Array = [], configured_devices: Array = []) -> void:
-	_set_close_camera_mode(false)
+	_reset_experiment_modes()
 	fate_trial_mode = false
 	team_mode = false
 	winning_team = -1
@@ -2005,144 +1308,10 @@ func _start_freeplay(lvl: int, weapons: Array, requested_players: int = 2,
 	_transition.play("FREE PLAY // %s" % level_name, "TIME FLOWS", PLAYER_COLORS[0], reduced_flashes)
 
 
-func _load_settings() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(settings_path) == OK:
-		for key in _settings.keys():
-			_settings[key] = cfg.get_value("options", key, _settings[key])
-		# Preserve preferences written before effects/voice and the display preset
-		# became separate options. Saving once after the next change retires these
-		# legacy keys naturally.
-		if not cfg.has_section_key("options", "sfx") \
-				and cfg.has_section_key("options", "sound"):
-			_settings["sfx"] = cfg.get_value("options", "sound", 1.0)
-		if not cfg.has_section_key("options", "voice") \
-				and cfg.has_section_key("options", "sound"):
-			_settings["voice"] = cfg.get_value("options", "sound", 1.0)
-		if not cfg.has_section_key("options", "display") \
-				and cfg.has_section_key("options", "maximized"):
-			_settings["display"] = DISPLAY_MAXIMIZED \
-				if bool(cfg.get_value("options", "maximized", true)) else DISPLAY_720
-	_apply_settings()
-
-
-func _save_settings() -> void:
-	var cfg := ConfigFile.new()
-	for key in _settings.keys():
-		cfg.set_value("options", key, _settings[key])
-	var error := cfg.save(settings_path)
-	if error != OK:
-		push_warning("Could not save options (error %d)" % error)
-
-
-func _on_option_changed(key: String, value: Variant) -> void:
-	if not _settings.has(key):
-		return
-	_settings[key] = value
-	_apply_setting(key)
-	_save_settings()
-
-
-## A stored layout only replaces the actions it actually names, so a binding
-## added later still arrives with its shipped default rather than unbound.
-func _apply_bindings() -> void:
-	key_bindings = DEFAULT_BINDINGS.duplicate(true)
-	var stored: Dictionary = _settings.get("bindings", {})
-	for action in stored.keys():
-		if action in key_bindings:
-			key_bindings[action] = Array(stored[action])
-	if _menu != null:
-		_menu.configure_bindings(key_bindings)
-
-
-## Rebinding is exclusive: a key can drive exactly one action, so taking it
-## leaves whichever action held it empty until the player sets that one too.
-func _on_binding_changed(action: String, codes: Array) -> void:
-	if action not in DEFAULT_BINDINGS:
-		return
-	var stored: Dictionary = _settings.get("bindings", {}).duplicate(true)
-	for other in key_bindings.keys():
-		if other == action:
-			continue
-		var kept: Array = []
-		for code in key_bindings[other]:
-			if code not in codes:
-				kept.append(code)
-		if kept.size() != key_bindings[other].size():
-			stored[other] = kept
-	stored[action] = codes.duplicate()
-	_on_option_changed("bindings", stored)
-
-
-func _on_bindings_reset() -> void:
-	_on_option_changed("bindings", {})
-
-
-func _apply_settings() -> void:
-	for key in _settings:
-		_apply_setting(str(key))
-
-
-func _apply_setting(key: String) -> void:
-	match key:
-		"sfx":
-			if _sfx != null:
-				_sfx.set_sfx_volume(float(_settings["sfx"]))
-		"voice":
-			if _sfx != null:
-				_sfx.set_voice_volume(float(_settings["voice"]))
-		"hit_freeze":
-			hit_freeze_enabled = bool(_settings["hit_freeze"])
-		"reduced_flashes":
-			reduced_flashes = bool(_settings["reduced_flashes"])
-			if _time_stop != null:
-				_time_stop.reduced_flashes = reduced_flashes
-			if _event_direction != null:
-				_event_direction.reduced_flashes = reduced_flashes
-			if _effects != null:
-				_effects.reduced_flashes = reduced_flashes
-		"high_contrast_previews":
-			if _preview != null:
-				_preview.high_contrast = bool(_settings["high_contrast_previews"])
-				_preview.queue_redraw()
-		"telemetry":
-			if _telemetry != null:
-				_telemetry.enabled = bool(_settings["telemetry"])
-		"bindings":
-			_apply_bindings()
-		"display":
-			if DisplayServer.get_name() != "headless":
-				_apply_display(int(_settings["display"]))
-
-
-## One row owns the whole window decision, so a size and a mode can never
-## disagree about what the player asked for.
-func _apply_display(preset: int) -> void:
-	var desired := DisplayServer.WINDOW_MODE_WINDOWED
-	if preset == DISPLAY_MAXIMIZED:
-		desired = DisplayServer.WINDOW_MODE_MAXIMIZED
-	elif preset == DISPLAY_FULLSCREEN:
-		desired = DisplayServer.WINDOW_MODE_FULLSCREEN
-	if DisplayServer.window_get_mode() != desired:
-		DisplayServer.window_set_mode(desired)
-	if preset >= DISPLAY_SIZES.size():
-		return
-	var size: Vector2i = DISPLAY_SIZES[preset]
-	if DisplayServer.window_get_size() != size:
-		DisplayServer.window_set_size(size)
-		# Resizing from the top-left corner walks the window off screen over a few
-		# changes, so it is re-centred on the screen it already lives on.
-		var screen := DisplayServer.window_get_current_screen()
-		DisplayServer.window_set_position(
-			DisplayServer.screen_get_position(screen)
-			+ (DisplayServer.screen_get_size(screen) - size) / 2)
-
-
 func _reset_freeplay() -> void:
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	_clear_character_projectiles()
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
@@ -2162,16 +1331,12 @@ func _reset_freeplay() -> void:
 		p.plan.power = 0.5
 		super_meter[i] = 0.0
 		super_armed[i] = false
-		frame_debt_cells[i] = 0
-		frame_debt_units[i] = 0
-		frame_debt_locked[i] = false
 		p.queue_redraw()
 	charging[0] = false
-	_charge_t[0] = 0.0
-	_jump_prev[0] = _jump_input_held(0)
+	_player_input._charge_t[0] = 0.0
+	_player_input._jump_prev[0] = _player_input._jump_input_held(0)
 	_reset_temporal_core()
 	banner_time = 0.0
-	throw_cooldown_left.fill(0.0)
 	_reset_sandbox_ai_cycle()
 	if _tuning != null:
 		_tuning.refresh()
@@ -2184,17 +1349,6 @@ func _reset_sandbox_ai_cycle() -> void:
 	if sandbox_has_ai() and players.size() > 1:
 		players[1].plan.start_new_turn()
 		_reset_pilot(1)
-
-
-func _clear_character_projectiles() -> void:
-	for group in [dashblades, chakrams, shock_plasmas, shock_orbs]:
-		for entity in group:
-			if is_instance_valid(entity):
-				entity.queue_free()
-	dashblades.clear()
-	chakrams.clear()
-	shock_plasmas.clear()
-	shock_orbs.clear()
 
 
 ## Wraps a point back into the arena. Vertical wrapping uses the actual screen
@@ -2379,9 +1533,8 @@ func _apply_movers(abs_tick: int) -> void:
 
 func _load_level(index: int) -> void:
 	level_index = posmod(index, Levels.count())
-	var lv := Levels.build_close_camera() if close_camera_mode else \
-		(Levels.build_fate_trial_crossfire() if fate_trial_mode else \
-		(Levels.build_tutorial() if tutorial_mode else Levels.build(level_index, player_count)))
+	var lv := Levels.build_fate_trial_crossfire() if fate_trial_mode else \
+		(Levels.build_tutorial() if tutorial_mode else Levels.build(level_index, player_count))
 	if interception_mode:
 		lv = Levels.build_interception()
 	if _practice != null and _practice.active:
@@ -2418,8 +1571,6 @@ func _load_level(index: int) -> void:
 	_rebuild_solids()
 	_arena.setup(platforms)
 	_load_hazards(lv.get("hazards", []))
-	if class_lab:
-		ClassLab.configure_arena(self)
 
 
 ## A single human against one CPU always opens on the authored left socket, so
@@ -2440,11 +1591,11 @@ func _seat_human_left() -> void:
 
 
 ## Other versus matches deal opening positions at random. Authored situations
-## (lessons, trials, Close Camera, Interception, the class lab) keep theirs.
+## (lessons, trials, Interception) keep theirs.
 func _uses_random_spawns(lv: Dictionary) -> bool:
-	if not randomize_spawns or not level_override.is_empty() or close_camera_mode:
+	if not randomize_spawns or not level_override.is_empty():
 		return false
-	if fate_trial_mode or tutorial_mode or interception_mode or class_lab:
+	if fate_trial_mode or tutorial_mode or interception_mode:
 		return false
 	if _practice != null and _practice.active:
 		return false
@@ -2565,12 +1716,6 @@ func _fighter_skin_for(i: int):
 	# what separates two people who picked it, so the roster's duplicate rule
 	# stays legible instead of putting two identical figures on the board.
 	var identity: Color = PLAYER_COLORS[i % PLAYER_COLORS.size()]
-	if player_weapons[i] == Weapon.DASHBLADE:
-		return FIGHTER_SKIN_SCRIPT.animated_fighter(&"rook_animated_v2", identity)
-	if player_weapons[i] == Weapon.SHOCK:
-		return FIGHTER_SKIN_SCRIPT.animated_fighter(&"pulse_animated_v2", identity)
-	if player_weapons[i] == Weapon.CHAKRAM:
-		return FIGHTER_SKIN_SCRIPT.animated_fighter(&"eclipse_animated_v1", identity)
 	if player_weapons[i] == Weapon.KNIVES:
 		return FIGHTER_SKIN_SCRIPT.animated_executor_proof(identity)
 	return null
@@ -2606,226 +1751,45 @@ func _set_player_count(requested: int) -> void:
 		p.queue_free()
 	while players.size() < player_count:
 		_add_player(players.size())
-	_assign_pads()
+	_player_input._assign_pads()
 
 
 func _default_aim_vector(i: int) -> Vector2:
 	return Vector2(1.0 if spawns[i].x < ARENA_W * 0.5 else -1.0, -0.45)
 
 
-func _assign_pads() -> void:
-	var list := Input.get_connected_joypads()
-	_pads.fill(-1)
-	if list.is_empty():
-		return
-	# Online maps the first pad to the server-assigned local fighter, because
-	# there is only ever one person on this machine.
-	if online_mode and online_player >= 0:
-		_pads[online_player] = list[0]
-		return
-	# Local play follows what the roster screen recorded: a pad drives the slot
-	# it claimed. Entry points with no roster behind them (tutorial, free play
-	# defaults) keep the old split of P1 keyboard, first pad on P2.
-	var claimed := false
-	for i in mini(players.size(), player_devices.size()):
-		var device := player_devices[i]
-		if device >= 0 and device in list and not is_ai(i):
-			_pads[i] = device
-			claimed = true
-	if claimed:
-		return
-	# A lone person against AI or a dummy (LEARN TO PLAY, the ladder from the
-	# menu) gets the first pad alongside the keyboard. The old P2 split only
-	# makes sense when a second person could be holding that pad.
-	var humans: Array[int] = []
-	for i in mini(players.size(), player_roles.size()):
-		if player_roles[i] == "HUMAN":
-			humans.append(i)
-	if humans.size() == 1:
-		_pads[humans[0]] = list[0]
-	elif players.size() > 1:
-		_pads[1] = list[0]
-
-
 func arrow_speed_for(power: float) -> float:
 	return lerpf(arrow_speed_min, arrow_speed_max, clampf(power, 0.0, 1.0))
-
-
-func uses_dashblade(i: int) -> bool:
-	if class_lab:
-		return false
-	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.DASHBLADE
-
-
-func uses_chakram(i: int) -> bool:
-	if class_lab:
-		return false
-	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.CHAKRAM
-
-
-func uses_shock(i: int) -> bool:
-	if class_lab:
-		return false
-	return i >= 0 and i < players.size() and player_weapons[i] == Weapon.SHOCK
 
 
 func can_pilot_move(i: int) -> bool:
 	return i >= 0 and i < players.size()
 
 
-func movement_speed_scale(i: int) -> float:
-	return _weapon_move_speed_scale(i)
+## Per-fighter movement stats. The slot index is unused while the Duelist is
+## the only fighter; it stays in each signature so a new kit can branch here.
+func movement_speed_scale(_i: int) -> float:
+	return dagger_move_speed_scale
 
 
-func _weapon_move_speed_scale(i: int) -> float:
-	if class_lab:
-		return dagger_move_speed_scale
-	if i < 0 or i >= player_weapons.size():
-		return dagger_move_speed_scale
-	match player_weapons[i]:
-		Weapon.DASHBLADE:
-			return velocity_move_speed_scale
-		Weapon.CHAKRAM:
-			return chakram_move_speed_scale
-		Weapon.SHOCK:
-			return shock_move_speed_scale
-		_:
-			return dagger_move_speed_scale
+func jump_impulse_for(_i: int) -> float:
+	return jump_impulse * dagger_jump_impulse_scale / jump_duration_scale
 
 
-func jump_impulse_for(i: int) -> float:
-	var base := close_camera_jump_impulse if close_camera_mode else jump_impulse
-	return base * _class_movement_scale(i, "jump") / jump_duration_scale
+func air_jump_impulse_for(_i: int) -> float:
+	return jump_impulse * dagger_air_jump_impulse_scale / jump_duration_scale if double_jump_enabled else 0.0
 
 
-func air_jump_impulse_for(i: int) -> float:
-	var base := close_camera_jump_impulse if close_camera_mode else jump_impulse
-	return base * _class_movement_scale(i, "air_jump") / jump_duration_scale if double_jump_enabled else 0.0
+func air_jumps_for(_i: int) -> int:
+	return dagger_air_jumps if double_jump_enabled else 0
 
 
-func air_jumps_for(i: int) -> int:
-	if not double_jump_enabled:
-		return 0
-	if class_lab:
-		return dagger_air_jumps
-	if i < 0 or i >= player_weapons.size():
-		return dagger_air_jumps
-	match player_weapons[i]:
-		Weapon.DASHBLADE: return velocity_air_jumps
-		Weapon.CHAKRAM: return chakram_air_jumps
-		Weapon.SHOCK: return shock_air_jumps
-		_: return dagger_air_jumps
-
-
-func max_fall_speed_for(i: int) -> float:
-	return max_fall_speed * _class_movement_scale(i, "fall") / jump_duration_scale
+func max_fall_speed_for(_i: int) -> float:
+	return max_fall_speed * dagger_fall_speed_scale / jump_duration_scale
 
 
 func movement_gravity() -> float:
 	return gravity / (jump_duration_scale * jump_duration_scale)
-
-
-func _class_movement_scale(i: int, stat: String) -> float:
-	var weapon := player_weapons[i] if not class_lab and i >= 0 and i < player_weapons.size() else Weapon.KNIVES
-	match weapon:
-		Weapon.DASHBLADE:
-			match stat:
-				"jump": return velocity_jump_impulse_scale
-				"air_jump": return velocity_air_jump_impulse_scale
-				_: return velocity_fall_speed_scale
-		Weapon.CHAKRAM:
-			match stat:
-				"jump": return chakram_jump_impulse_scale
-				"air_jump": return chakram_air_jump_impulse_scale
-				_: return chakram_fall_speed_scale
-		Weapon.SHOCK:
-			match stat:
-				"jump": return shock_jump_impulse_scale
-				"air_jump": return shock_air_jump_impulse_scale
-				_: return shock_fall_speed_scale
-		_:
-			match stat:
-				"jump": return dagger_jump_impulse_scale
-				"air_jump": return dagger_air_jump_impulse_scale
-				_: return dagger_fall_speed_scale
-
-
-func _frame_debt_threshold_units() -> int:
-	return maxi(1, roundi(maxf(0.001, frame_debt_distance_per_cell) * 1000.0))
-
-
-## Convert real horizontal displacement into the distance The Rook was denied
-## by her class multiplier. At 90%, every nine travelled pixels represent one
-## deleted pixel. Pressing into a wall earns nothing because no movement exists
-## to edit out of the sequence.
-func _frame_debt_units_between(i: int, from: Vector2, to: Vector2) -> int:
-	var scale := movement_speed_scale(i)
-	if scale <= 0.0 or scale >= 1.0:
-		return 0
-	var travelled := absf(wrap_delta(from, to).x)
-	var missing_ratio := 1.0 / scale - 1.0
-	return maxi(0, roundi(travelled * missing_ratio * 1000.0))
-
-
-func _accrue_frame_debt(i: int, from: Vector2, to: Vector2, input_dir: int) -> void:
-	if not uses_dashblade(i) or input_dir == 0 or frame_debt_cells[i] >= frame_debt_max_cells \
-			or (frame_debt_locked[i] and state != Phase.FREEPLAY):
-		return
-	var total := frame_debt_units[i] + _frame_debt_units_between(i, from, to)
-	var threshold := _frame_debt_threshold_units()
-	var gained := total / threshold
-	if gained <= 0:
-		frame_debt_units[i] = total
-		return
-	frame_debt_cells[i] = mini(frame_debt_max_cells, frame_debt_cells[i] + gained)
-	frame_debt_units[i] = 0 if frame_debt_cells[i] >= frame_debt_max_cells else total % threshold
-	players[i].queue_redraw()
-
-
-func _projected_frame_debt_from_path(i: int, path: PackedVector2Array,
-		through_tick: int, input_at: Callable) -> int:
-	if not uses_dashblade(i):
-		return 0
-	var threshold := _frame_debt_threshold_units()
-	var total := frame_debt_cells[i] * threshold + frame_debt_units[i]
-	var steps := mini(maxi(0, through_tick), maxi(0, path.size() - 1))
-	for t in steps:
-		if int(input_at.call(t)) != 0:
-			total += _frame_debt_units_between(i, path[t], path[t + 1])
-	return mini(frame_debt_max_cells, total / threshold)
-
-
-## Planning preview counterpart to live accumulation. `ghost_path` is built by
-## the same movement primitive as execution, so the promised dash endpoint also
-## includes every cell that will exist before its chosen release tick.
-func projected_frame_debt(i: int, through_tick: int = -1) -> int:
-	if i < 0 or i >= players.size() or not uses_dashblade(i):
-		return 0
-	var pl: PlayerPlan = players[i].plan
-	var limit := pl.recorded_ticks() if through_tick < 0 else through_tick
-	return _projected_frame_debt_from_path(i, ghost_path[i], limit,
-		func(t: int) -> int: return pl.dir_at(t))
-
-
-func projected_frame_debt_for_constant_path(i: int, path: PackedVector2Array,
-		through_tick: int, input_dir: int) -> int:
-	return _projected_frame_debt_from_path(i, path, through_tick,
-		func(_t: int) -> int: return input_dir)
-
-
-func dash_frame_debt_spent(i: int) -> int:
-	for dash in dashblades:
-		if dash.active and dash.owner_index == i:
-			return dash.frame_debt_spent
-	return 0
-
-
-func shock_orb_count(i: int) -> int:
-	var count := 0
-	for orb in shock_orbs:
-		if orb.shooter == i:
-			count += 1
-	return count
 
 
 func _roster_weapon_or_default(value: int) -> int:
@@ -2833,26 +1797,8 @@ func _roster_weapon_or_default(value: int) -> int:
 
 
 func weapon_short_name(i: int) -> String:
-	match player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES:
-		Weapon.DASHBLADE: return "ROOK"
-		Weapon.CHAKRAM: return "ECLIPSE"
-		Weapon.SHOCK: return "PULSE"
-		_: return "DUELIST"
-
-
-func chakram_launch_velocities(aim: Vector2, power: float,
-		empowered: bool = false) -> Array[Vector2]:
-	var direct := aim.normalized()
-	if direct.is_zero_approx():
-		direct = Vector2.RIGHT
-	var speed := lerpf(chakram_speed_min, chakram_speed_max,
-		clampf(power, 0.0, 1.0))
-	var offsets := PackedFloat32Array([-14.0, 0.0, 14.0]) if empowered else \
-		PackedFloat32Array([0.0])
-	var launches: Array[Vector2] = []
-	for offset in offsets:
-		launches.append(direct.rotated(deg_to_rad(offset)) * speed)
-	return launches
+	return Roster.short_name(
+		player_weapons[i] if i >= 0 and i < player_weapons.size() else Weapon.KNIVES)
 
 
 ## Authored launch: power changes speed, while the player's aim owns direction.
@@ -2863,28 +1809,20 @@ func knife_launch_velocity(aim: Vector2, power: float) -> Vector2:
 	return direct * arrow_speed_for(power)
 
 
-## One direct knife plus one small upward branch in Close Camera. The upward
-## sign mirrors with facing, so the second knife rises on both sides.
+## One launch velocity per knife in the fan, rotated about the aim line.
 func knife_launch_velocities(aim: Vector2, power: float, secret_triple: bool = false) -> Array[Vector2]:
 	secret_triple = secret_triple or _secret_triple_match
 	var base: Vector2 = knife_launch_velocity(aim, power)
-	var side: float = -1.0 if base.x < 0.0 else 1.0
 	var offsets: PackedFloat32Array = knife_offsets(power)
 	if secret_triple:
 		offsets.clear()
-		if close_camera_mode:
-			offsets.append(-close_camera_secondary_lob_angle)
-			offsets.append(0.0)
-			offsets.append(close_camera_secondary_lob_angle)
-		else:
-			var half_spread := knife_spread_for(power) * 0.5
-			offsets.append(-half_spread)
-			offsets.append(0.0)
-			offsets.append(half_spread)
+		var half_spread := knife_spread_for(power) * 0.5
+		offsets.append(-half_spread)
+		offsets.append(0.0)
+		offsets.append(half_spread)
 	var out: Array[Vector2] = []
 	for off in offsets:
-		var signed_offset: float = -side * off if close_camera_mode else off
-		out.append(base.rotated(deg_to_rad(signed_offset)))
+		out.append(base.rotated(deg_to_rad(off)))
 	return out
 
 
@@ -2900,17 +1838,6 @@ func knife_spread_for(power: float) -> float:
 func knife_offsets(power: float) -> PackedFloat32Array:
 	var n: int = maxi(1, knives_per_shot)
 	var out := PackedFloat32Array()
-	if close_camera_mode:
-		if n == 1:
-			out.append(0.0)
-		elif n == 2:
-			out.append(0.0)
-			out.append(close_camera_secondary_lob_angle)
-		else:
-			for i in n:
-				out.append((float(i) / float(n - 1) - 0.5) \
-					* close_camera_secondary_lob_angle * 2.0)
-		return out
 	if n == 1:
 		out.append(0.0)
 		return out
@@ -2954,7 +1881,7 @@ func tick_dt() -> float:
 func replay_time_left() -> float:
 	if state != Phase.REPLAY:
 		return 0.0
-	return float(maxi(0, _replay_frames.size() - 1 - _replay_frame_index)) \
+	return float(maxi(0, _replay._replay_frames.size() - 1 - _replay._replay_frame_index)) \
 		/ float(Engine.physics_ticks_per_second) / maxf(replay_speed, 0.01)
 
 
@@ -3034,28 +1961,27 @@ func _physics_process(delta: float) -> void:
 		Phase.PLANNING:
 			if _ui._turn_review.visible:
 				return
-			_poll_planning_input(delta)
+			_player_input._poll_planning_input(delta)
 			var tutorial_waiting: bool = tutorial_mode and _tutorial != null \
 				and not _tutorial.timed_turns_started
 			if tutorial_waiting and _tutorial.observe_planning():
 				_ui.refresh()
 				return
-			_auto_ready_close_camera_plans(delta)
 			_tick_ai(delta)
 			_update_facing()
 			_refresh_dirty_ghost_paths()
 			if not tutorial_waiting:
 				if planning_time_left > 0.0 and planning_time_left <= delta and _telemetry != null:
 					_telemetry.record("planning_timeout", turn, {"live_knives": arrows.size(),
-						"movement_ticks": players[_keyboard_player()].plan.recorded_ticks(),
-						"has_throw": players[_keyboard_player()].plan.has_shot()})
+						"movement_ticks": players[_player_input._keyboard_player()].plan.recorded_ticks(),
+						"has_throw": players[_player_input._keyboard_player()].plan.has_shot()})
 				planning_time_left -= delta
 			if not tutorial_waiting and planning_time_left <= 0.0:
 				planning_time_left = 0.0
 				if online_mode:
 					# Each client submits independently; execution only begins after
 					# Cloudflare has both private plans.
-					if not _online_plan_sent:
+					if not _online._online_plan_sent:
 						_confirm(online_player)
 				else:
 					# Local modes lock whatever is on the table and fire at once.
@@ -3084,21 +2010,21 @@ func _physics_process(delta: float) -> void:
 				# or the plan the player committed to stops being the one that runs.
 				_sim_tick(tick_dt())
 				if not _super_pause_active():
-					_capture_replay_frame()
+					_replay._capture_replay_frame()
 					if online_mode and state == Phase.GAME_OVER:
 						exec_tick += 1
-						_report_online_match_over()
+						_online._report_online_match_over()
 					elif state == Phase.EXECUTING:
 						exec_tick += 1
 						# A kill on the final tick must not be undone by ending the window.
 						if exec_tick >= exec_ticks_total and _kill_slowmo_left <= 0.0:
 							_end_execution()
 		Phase.GAME_OVER:
-			_poll_game_over_pad()
+			_player_input._poll_game_over_pad()
 		Phase.REPLAY:
-			_poll_replay_pad()
+			_player_input._poll_replay_pad()
 			if state == Phase.REPLAY:
-				_tick_match_replay(delta)
+				_replay._tick_match_replay(delta)
 
 	if banner_time > 0.0:
 		banner_time = maxf(0.0, banner_time - delta)
@@ -3107,9 +2033,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _sim_tick(dt: float) -> void:
-	if class_lab:
-		for fighter in players:
-			fighter.plan.super_shot = false
 	# Announce every SUPER scheduled for this tick before spawning anything. If
 	# both players fire together, their cut-ins play in player order and the
 	# shared simulation tick remains untouched until both are finished.
@@ -3134,13 +2057,10 @@ func _sim_tick(dt: float) -> void:
 			continue
 		if p.plan.super_shot:
 			var since_launch: int = exec_tick - p.plan.shot_tick
-			if player_weapons[p.index] == Weapon.KNIVES \
-					and since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
+			if since_launch >= 0 and since_launch % maxi(1, super_wave_interval_ticks) == 0:
 				var wave: int = since_launch / maxi(1, super_wave_interval_ticks)
 				if wave < maxi(1, super_waves):
 					_spawn_super_wave(p, wave)
-			elif since_launch == 0:
-				_spawn_character_super(p)
 		elif p.plan.shot_tick == exec_tick:
 			_spawn_player_attack(p)
 
@@ -3152,10 +2072,7 @@ func _sim_tick(dt: float) -> void:
 	_apply_movers(world_tick)
 
 	for p in players:
-		if not _player_is_dashing(p.index):
-			var move_from: Vector2 = p.position
-			p.sim_step(dt, exec_tick, from_tick)
-			_accrue_frame_debt(p.index, move_from, p.position, p.plan.dir_at(exec_tick))
+		p.sim_step(dt, exec_tick, from_tick)
 	_accrue_window_travel()
 	_check_core_collection()
 	_step_arrows(dt)
@@ -3165,28 +2082,22 @@ func _sim_tick(dt: float) -> void:
 ## targets; a sandbox CPU runs plans authored by the same Ai.gd used in matches.
 func _freeplay_tick(delta: float) -> void:
 	var p: Player = players[0]
-	for i in throw_cooldown_left.size():
-		throw_cooldown_left[i] = maxf(0.0, throw_cooldown_left[i] - delta)
 
 	var dir := 0
-	if _held(key_bindings["left"]) or _pad_left(_pads[0]) or _touch_controls.left_held:
+	if _player_input._held(_player_input.key_bindings["left"]) or _player_input._pad_left(_player_input._pads[0]) or _touch_controls.left_held:
 		dir -= 1
-	if _held(key_bindings["right"]) or _pad_right(_pads[0]) or _touch_controls.right_held:
+	if _player_input._held(_player_input.key_bindings["right"]) or _player_input._pad_right(_player_input._pads[0]) or _touch_controls.right_held:
 		dir += 1
-	var jump_now: bool = _held(key_bindings["jump"]) \
-		or (_pads[0] >= 0 and Input.is_joy_button_pressed(_pads[0], JOY_BUTTON_A)) \
+	var jump_now: bool = _player_input._held(_player_input.key_bindings["jump"]) \
+		or (_player_input._pads[0] >= 0 and Input.is_joy_button_pressed(_player_input._pads[0], JOY_BUTTON_A)) \
 		or _touch_controls.jump_held
-	var jump_edge: bool = jump_now and not _jump_prev[0]
-	_jump_prev[0] = jump_now
-	var wait_now: bool = _held(key_bindings["wait"]) or _pad_down(_pads[0]) \
+	var jump_edge: bool = jump_now and not _player_input._jump_prev[0]
+	_player_input._jump_prev[0] = jump_now
+	var wait_now: bool = _player_input._held(_player_input.key_bindings["wait"]) or _player_input._pad_down(_player_input._pads[0]) \
 		or _touch_controls.wait_held
 	var drop_now: bool = jump_edge and wait_now
 
-	var was_dashing := _player_is_dashing(0)
-	var move_from: Vector2 = p.position
 	p.sim_free(delta, dir, jump_edge and not drop_now, jump_now and not drop_now, drop_now)
-	if not was_dashing:
-		_accrue_frame_debt(0, move_from, p.position, dir)
 	for i in range(1, players.size()):
 		if is_ai(i):
 			_sandbox_ai_tick(delta, i)
@@ -3205,34 +2116,21 @@ func _freeplay_tick(delta: float) -> void:
 	_update_facing()
 
 	# hold to draw, release to loose immediately, no turn to wait for
-	var primary_held: bool = _held(key_bindings["charge"]) or _touch_controls.charge_held
-	var can_absolve: bool = uses_chakram(0) and oldest_recallable_chakram(0) != null
-	var secondary_held: bool = (uses_shock(0) or can_absolve) \
-		and not _touch_controls.has_active_touches() \
-		and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	var primary_held: bool = _player_input._held(_player_input.key_bindings["charge"]) or _touch_controls.charge_held
 	if not _touch_controls.has_active_touches() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		primary_held = true
-	if _pads[0] >= 0 and Input.get_joy_axis(_pads[0], JOY_AXIS_TRIGGER_RIGHT) > trigger_threshold:
+	if _player_input._pads[0] >= 0 and Input.get_joy_axis(_player_input._pads[0], JOY_AXIS_TRIGGER_RIGHT) > trigger_threshold:
 		primary_held = true
-	if _pads[0] >= 0 and can_absolve \
-			and Input.get_joy_axis(_pads[0], JOY_AXIS_TRIGGER_LEFT) > trigger_threshold:
-		secondary_held = true
-	var held: bool = secondary_held or primary_held
-	# Holding through the cooldown starts the draw the moment it ends.
-	if held and throw_ready(0):
+	if primary_held:
 		if not charging[0]:
 			charging[0] = true
-			_charge_t[0] = 0.0
-			charge_attack_mode[0] = 1 if secondary_held and not primary_held else 0
-			if uses_shock(0) or uses_chakram(0):
-				p.plan.attack_mode = charge_attack_mode[0]
+			_player_input._charge_t[0] = 0.0
 		else:
-			_charge_t[0] = minf(_charge_t[0] + delta, charge_time)
-		p.plan.power = _charge_t[0] / charge_time
+			_player_input._charge_t[0] = minf(_player_input._charge_t[0] + delta, charge_time)
+		p.plan.power = _player_input._charge_t[0] / charge_time
 	elif charging[0]:
 		charging[0] = false
 		_spawn_player_attack(p)
-		_start_throw_cooldown(0)
 
 	_step_arrows(delta)
 
@@ -3248,26 +2146,15 @@ func _freeplay_tick(delta: float) -> void:
 		players[i].alive = true
 		players[i].plan = PlayerPlan.new()
 		players[i].queue_redraw()
-		throw_cooldown_left[i] = 0.0
 		_sandbox_banner("%s HIT" % ("P1" if i == 0 else "CPU"),
 			PLAYER_COLORS[i])
 		if i == 1 and is_ai(i):
 			_reset_sandbox_ai_cycle()
 
 
-## Free play outside Real Time mode keeps its unrestricted tuning throws.
-func throw_ready(i: int) -> bool:
-	return not real_time_mode or throw_cooldown_left[i] <= 0.0
-
-
-func _start_throw_cooldown(i: int) -> void:
-	if real_time_mode:
-		throw_cooldown_left[i] = real_time_throw_cooldown
-
-
 ## Search while the sandbox keeps running, then replay the authored plan as one
-## ordinary execution window. This preserves the shipped AI's movement, aim,
-## class attacks and difficulty presets without forcing time-stop between tests.
+## ordinary execution window. This preserves the shipped AI's movement, aim
+## and difficulty presets without forcing time-stop between tests.
 func _sandbox_ai_tick(delta: float, player_index: int) -> void:
 	if player_index != 1 or not sandbox_has_ai() or not players[player_index].alive:
 		return
@@ -3289,12 +2176,9 @@ func _sandbox_ai_tick(delta: float, player_index: int) -> void:
 	var dt := tick_dt()
 	while _sandbox_ai_accum >= dt and _sandbox_ai_exec_tick >= 0:
 		_sandbox_ai_accum -= dt
-		if cpu.plan.has_shot() and cpu.plan.shot_tick == _sandbox_ai_exec_tick \
-				and throw_ready(player_index):
+		if cpu.plan.has_shot() and cpu.plan.shot_tick == _sandbox_ai_exec_tick:
 			_spawn_player_attack(cpu)
-			_start_throw_cooldown(player_index)
-		if not _player_is_dashing(player_index):
-			cpu.sim_step(dt, _sandbox_ai_exec_tick)
+		cpu.sim_step(dt, _sandbox_ai_exec_tick)
 		_sandbox_ai_exec_tick += 1
 		if _sandbox_ai_exec_tick >= exec_ticks():
 			_reset_sandbox_ai_cycle()
@@ -3305,13 +2189,10 @@ func _sandbox_ai_tick(delta: float, player_index: int) -> void:
 func _step_arrows(dt: float) -> void:
 	var survivors: Array = []
 	var damaged: Array[int] = []
-	var hittable_players: Array = players.filter(func(p): return not _player_is_dashing(p.index))
 	for a in arrows:
-		var res: Dictionary = a.sim_step(dt, hittable_players)
-		if res.get("burst", false):
-			ClassLab.split(self, a, survivors)
+		var res: Dictionary = a.sim_step(dt, players)
 		if res["hit_player"] < 0 and not res.get("ricochet", false):
-			_credit_dodges(a, hittable_players)
+			_credit_dodges(a, players)
 		if res["hit_player"] >= 0:
 			_sfx.play("knife_hit")
 			if _telemetry != null:
@@ -3333,419 +2214,10 @@ func _step_arrows(dt: float) -> void:
 		else:
 			a.queue_free()
 	survivors = _resolve_hazard_strikes(survivors)
-	_step_dashblades(dt, survivors)
 	_resolve_clashes(survivors)
 	arrows = survivors.filter(func(a): return not a.is_queued_for_deletion())
-	_step_chakrams(dt)
-	_step_shock_weapons(dt)
 	if not damaged.is_empty():
 		_apply_platform_damage(damaged)
-
-
-func _player_is_dashing(player_index: int) -> bool:
-	for dash in dashblades:
-		if dash.active and dash.owner_index == player_index:
-			return true
-	return false
-
-
-func _step_dashblades(dt: float, live_arrows: Array) -> void:
-	var live: Array = []
-	for dash in dashblades:
-		var owner: Player = players[dash.owner_index]
-		var from: Vector2 = dash.position
-		var result: Dictionary = dash.sim_step(dt, live_arrows, players, platforms)
-		owner.position = wrap_point(result["position"])
-		owner.vel = result["velocity"]
-		owner.queue_redraw()
-		for victim: int in result["hit_fighters"]:
-			_sfx.play("dash_hit")
-			_on_player_hit(victim, players[victim].position, dash.owner_index)
-		for projectile in result["owner_hit_projectiles"]:
-			if live_arrows.has(projectile):
-				live_arrows.erase(projectile)
-				projectile.queue_free()
-				_sfx.play("knife_hit")
-				_on_player_hit(dash.owner_index, owner.position, projectile.shooter)
-		for orb in shock_orbs.duplicate():
-			var closest := Arrow.moving_points_closest(from, dash.position,
-				orb.prev_pos, orb.position)
-			if closest[0] > Dashblade.DEFAULT_GUARD_HALF_LENGTH + ShockOrb.COLLISION_RADIUS:
-				continue
-			if orb.is_armed():
-				_detonate_shock_orb(orb, false, dash.owner_index)
-			else:
-				orb.vel = dash.velocity * 0.72
-				orb.resting = false
-				orb.support_platform = -1
-				_sfx.play("dash_guard")
-		# A guarded CUT TO END can clear one corona, but it spends the same guard
-		# resource that would otherwise answer incoming fire. Unguarded body contact
-		# remains dangerous and is resolved by the corona's ordinary player sweep.
-		for chakram in chakrams.duplicate():
-			if chakram.shooter == dash.owner_index:
-				continue
-			var contact: Dictionary = dash.swept_projectile_contact(
-				chakram.prev_pos, chakram.position, Chakram.COLLISION_RADIUS)
-			if float(contact["guard_time"]) > float(contact["body_time"]) \
-					or float(contact["guard_time"]) == INF or not dash.spend_guard():
-				continue
-			var clash: Dictionary = chakram.resolve_projectile_clash(
-				dash.velocity, dash.owner_index, 2)
-			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
-			_remember_aftermath("CORONA CUT", chakram.position, chakram.color)
-			_sfx.play("dash_guard")
-			if not clash["alive"]:
-				chakrams.erase(chakram)
-				chakram.queue_free()
-		if result["stopped_by_hard"]:
-			_effects.add(Effects.Kind.CLASH, owner.position, owner.color.lightened(0.45))
-			_sfx.play("dash_wall")
-		if result["active"] and owner.alive:
-			live.append(dash)
-		else:
-			dash.queue_free()
-	dashblades = live
-
-
-func _step_chakrams(dt: float) -> void:
-	var live: Array = []
-	for chakram in chakrams:
-		var simulation_turn := -1 if state == Phase.FREEPLAY else turn
-		var result: Dictionary = chakram.sim_step(dt, players, simulation_turn)
-		if result["hit_player"] >= 0:
-			_sfx.play("chakram_hit")
-			_on_player_hit(result["hit_player"], chakram.position, chakram.shooter)
-		if result.get("bounced", false):
-			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.45))
-			_remember_aftermath("CHAKRAM RICOCHET", chakram.position, chakram.color)
-			_sfx.play("chakram_bounce")
-		if result.get("stuck", false):
-			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.35))
-			_remember_aftermath("CHAKRAM STUCK", chakram.position, chakram.color)
-			_sfx.play("chakram_stick")
-		if result["alive"]:
-			live.append(chakram)
-		else:
-			chakram.queue_free()
-	chakrams = live
-
-	# Denying a multi-turn corona is a real exchange. Every accepted dagger is
-	# spent; a normal two-integrity corona therefore asks for two clean contacts.
-	for chakram in chakrams.duplicate():
-		for arrow: Arrow in arrows.duplicate():
-			if not arrows.has(arrow):
-				continue
-			if chakram.shooter == arrow.shooter \
-					or not chakram.can_clash_with_projectile(arrow.stable_id()):
-				continue
-			var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
-				arrow.prev_pos, arrow.position)
-			if contact[0] > Chakram.COLLISION_RADIUS + knife_clash_radius * 0.5:
-				continue
-			var clash: Dictionary = chakram.resolve_projectile_clash(arrow.vel, arrow.stable_id())
-			if not clash["accepted"]:
-				continue
-			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
-			_sfx.play("chakram_clash")
-			if clash.get("destroy_other", false):
-				arrows.erase(arrow)
-				arrow.queue_free()
-			if not clash["alive"]:
-				chakrams.erase(chakram)
-				chakram.queue_free()
-				break
-
-	# Opposing chakrams are projectiles too. Uncalled coronas break on direct
-	# disc contact, but a returning corona is inviolable until Eclipse catches it.
-	var broken_chakrams: Array = []
-	for i in chakrams.size():
-		for j in range(i + 1, chakrams.size()):
-			var a = chakrams[i]
-			var b = chakrams[j]
-			if a.shooter == b.shooter:
-				continue
-			var contact := Arrow.moving_points_closest(a.prev_pos, a.position,
-				b.prev_pos, b.position)
-			if contact[0] <= Chakram.COLLISION_RADIUS * 2.0:
-				if not a.is_returning() and not broken_chakrams.has(a):
-					broken_chakrams.append(a)
-				if not b.is_returning() and not broken_chakrams.has(b):
-					broken_chakrams.append(b)
-	for chakram in broken_chakrams:
-		if chakrams.has(chakram):
-			chakrams.erase(chakram)
-			chakram.queue_free()
-			_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
-	if not broken_chakrams.is_empty():
-		_sfx.play("chakram_break")
-
-
-
-func _step_shock_weapons(dt: float) -> void:
-	# Expiration is a real small pop now, not a silent deletion. Iterate a copy
-	# because detonation removes the orb and may redirect every other live shot.
-	for orb in shock_orbs.duplicate():
-		if not shock_orbs.has(orb):
-			continue
-		var result: Dictionary = orb.sim_step(dt)
-		if not result["alive"] and result["expired"]:
-			_detonate_shock_orb(orb, false, orb.shooter)
-		elif not result["alive"]:
-			shock_orbs.erase(orb)
-			orb.queue_free()
-
-	var live_plasma: Array = []
-	for plasma in shock_plasmas:
-		# Dash bodies are resolved together with their moving front guards below;
-		# letting plasma hit the body first would make an interceptible bolt ignore
-		# the blade merely because the integration order reached it later.
-		var plasma_targets: Array = players.filter(
-			func(player): return not _player_is_dashing(player.index))
-		var result: Dictionary = plasma.sim_step(dt, plasma_targets)
-		var dash_contact: Dictionary = {}
-		for dash in dashblades:
-			if not dash.active:
-				continue
-			var contact: Dictionary = dash.swept_projectile_contact(
-				plasma.prev_pos, plasma.position, ShockPlasma.COLLISION_RADIUS)
-			var first_time: float = minf(contact["guard_time"], contact["body_time"])
-			if first_time < INF and (dash_contact.is_empty() \
-					or first_time < float(dash_contact["time"])):
-				dash_contact = {"dash": dash, "contact": contact, "time": first_time}
-		if not dash_contact.is_empty():
-			var struck_dash = dash_contact["dash"]
-			var contact: Dictionary = dash_contact["contact"]
-			var guard_first: bool = float(contact["guard_time"]) <= float(contact["body_time"])
-			if guard_first and struck_dash.spend_guard():
-				var parry_at: Vector2 = players[struck_dash.owner_index].position \
-					+ struck_dash.direction * struck_dash.guard_offset
-				_effects.add(Effects.Kind.CLASH, parry_at, plasma.color.lightened(0.25))
-				_remember_aftermath("PLASMA PARRY", parry_at, plasma.color)
-				_sfx.play("dash_guard")
-				plasma.queue_free()
-				continue
-			elif float(contact["body_time"]) < INF:
-				_sfx.play("plasma_hit")
-				_on_player_hit(struck_dash.owner_index,
-					players[struck_dash.owner_index].position, plasma.shooter)
-				plasma.queue_free()
-				continue
-		# Plasma is heavy enough to spend both integrity at once, but the bolt is
-		# consumed too: clearing Eclipse's setup costs Pulse her committed attack.
-		var spent_on_chakram := false
-		for chakram in chakrams.duplicate():
-			if chakram.shooter == plasma.shooter:
-				continue
-			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
-				chakram.prev_pos, chakram.position)
-			if contact[0] <= ShockPlasma.COLLISION_RADIUS + Chakram.COLLISION_RADIUS:
-				var clash: Dictionary = chakram.resolve_projectile_clash(
-					plasma.vel, plasma.network_id, 2)
-				if not clash["alive"]:
-					chakrams.erase(chakram)
-					chakram.queue_free()
-				_effects.add(Effects.Kind.CLASH, chakram.position, plasma.color)
-				_sfx.play("plasma_impact")
-				spent_on_chakram = true
-				break
-		if spent_on_chakram:
-			plasma.queue_free()
-			continue
-		var combo_orb = null
-		var combo_time := INF
-		for orb in shock_orbs:
-			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
-				orb.prev_pos, orb.position)
-			if contact[0] <= ShockPlasma.COLLISION_RADIUS + ShockOrb.COLLISION_RADIUS \
-					and contact[3] < combo_time:
-				var request: Dictionary = orb.request_plasma_hit(plasma.shooter)
-				if request["detonate"]:
-					combo_orb = orb
-					combo_time = contact[3]
-		var blocking_arrow = null
-		var block_time := INF
-		for arrow: Arrow in arrows:
-			if arrow.shooter == plasma.shooter:
-				continue
-			var contact := Arrow.moving_points_closest(plasma.prev_pos, plasma.position,
-				arrow.prev_pos, arrow.position)
-			if contact[0] <= ShockPlasma.COLLISION_RADIUS + knife_clash_radius * 0.5 \
-					and contact[3] < block_time:
-				blocking_arrow = arrow
-				block_time = contact[3]
-		if blocking_arrow != null and block_time <= combo_time:
-			_effects.add(Effects.Kind.CLASH, blocking_arrow.position, plasma.color)
-			_sfx.play("plasma_impact")
-			arrows.erase(blocking_arrow)
-			blocking_arrow.queue_free()
-			# One dagger attenuates the lance instead of buying an entire Witch turn.
-			# The spent bolt can be intercepted again on a later tick, while a clean
-			# single blade still strips most of its threat and range.
-			plasma.vel *= 0.45
-			live_plasma.append(plasma)
-			continue
-		if combo_orb != null:
-			_detonate_shock_orb(combo_orb, true, plasma.shooter,
-				plasma.charge_power, plasma)
-			plasma.queue_free()
-			continue
-		if result["hit_player"] >= 0:
-			_sfx.play("plasma_hit")
-			_on_player_hit(result["hit_player"], result["contact_position"], plasma.shooter)
-		if result["hit_platform"] >= 0:
-			_effects.add(Effects.Kind.SPARK, result["contact_position"], plasma.color)
-			_sfx.play("plasma_impact")
-		if result["alive"]:
-			live_plasma.append(plasma)
-		else:
-			plasma.queue_free()
-	shock_plasmas = live_plasma
-
-	# Ordinary projectiles can deny an armed orb for its small blast. Before
-	# arming, contact merely bats both objects apart so setup cannot be erased by
-	# an invisible exception.
-	for orb in shock_orbs.duplicate():
-		var trigger = null
-		for arrow: Arrow in arrows:
-			var contact := Arrow.moving_points_closest(arrow.prev_pos, arrow.position,
-				orb.prev_pos, orb.position)
-			if contact[0] <= ShockOrb.COLLISION_RADIUS + knife_clash_radius * 0.5:
-				trigger = arrow
-				break
-		if trigger == null:
-			for chakram in chakrams:
-				var contact := Arrow.moving_points_closest(chakram.prev_pos, chakram.position,
-					orb.prev_pos, orb.position)
-				if contact[0] <= ShockOrb.COLLISION_RADIUS + Chakram.COLLISION_RADIUS:
-					trigger = chakram
-					break
-		if trigger == null:
-			continue
-		if trigger is Chakram:
-			# Armed return paths are guaranteed. The orb may still detonate or be
-			# batted by the contact, but it cannot consume a returning corona.
-			if not trigger.is_returning():
-				chakrams.erase(trigger)
-				trigger.queue_free()
-		if orb.is_armed():
-			_detonate_shock_orb(orb, false, trigger.shooter)
-		else:
-			orb.vel += trigger.vel * 0.28
-			orb.resting = false
-			orb.support_platform = -1
-			_sfx.play("orb_deflect")
-			if trigger is Arrow:
-				trigger.deflect(trigger.vel * 0.55, knife_clash_spin,
-					knife_clash_cooldown, orb.network_id)
-
-
-func shock_plasma_speed_for_power(power: float) -> float:
-	return lerpf(shock_plasma_speed_min, shock_plasma_speed, clampf(power, 0.0, 1.0))
-
-
-func shock_plasma_range_for_power(power: float) -> float:
-	var amount := clampf(power, 0.0, 1.0)
-	# Full charge is a deliberate breakpoint: partial shots trade screen coverage
-	# for speed of release, while only a completed draw crosses the whole arena.
-	if amount >= 1.0:
-		return shock_plasma_range_full
-	return lerpf(shock_plasma_range_min, shock_plasma_range_partial_max,
-		pow(amount, 1.35))
-
-
-func shock_combo_radius_for_power(power: float) -> float:
-	return lerpf(shock_combo_radius_min, shock_combo_radius, clampf(power, 0.0, 1.0))
-
-
-func _detonate_shock_orb(orb, combo: bool, trigger_shooter: int,
-		combo_power: float = 1.0, source_projectile = null) -> void:
-	if not shock_orbs.has(orb):
-		return
-	var radius: float = shock_combo_radius_for_power(combo_power) \
-		if combo else shock_small_radius
-	var impulse: float = shock_combo_impulse if combo else shock_small_impulse
-	# Opponents may deny the large combo with a regular hit, but they do not
-	# steal ownership of the Witch's smaller trap. A plasma combo remains owned
-	# by the fighter who supplied the plasma, enabling deliberate cross-Witch play.
-	var scorer: int = trigger_shooter if combo and trigger_shooter >= 0 else orb.shooter
-	var blast_color: Color = Color(0.35, 0.95, 1.0) if combo else orb.color
-	_blasts_this_execution += 1
-	_effects.add(Effects.Kind.EXPLOSION, orb.position, blast_color,
-		clampf(radius / 108.0, 0.75, 2.75))
-	_remember_aftermath("SHOCK COMBO" if combo else "SHOCK POP", orb.position, blast_color)
-	_sfx.play("orb_combo" if combo else "orb_pop")
-	for player: Player in players:
-		if not combo and player.index == orb.shooter:
-			continue
-		var blast_contact := _shock_blast_player_contact(orb.position, radius, player)
-		if player.alive and not player.is_invulnerable() \
-				and blast_contact.is_finite() \
-				and _blast_reaches(orb.position, blast_contact):
-			_on_player_hit(player.index, player.position, scorer)
-	for arrow: Arrow in arrows:
-		var local_position: Vector2 = orb.position + wrap_delta(orb.position, arrow.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			arrow.vel, impulse, radius)
-		if not redirected.is_equal_approx(arrow.vel):
-			arrow.relaunch(redirected)
-	for chakram in chakrams:
-		var local_position: Vector2 = orb.position + wrap_delta(orb.position, chakram.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			chakram.vel, impulse, radius)
-		if not redirected.is_equal_approx(chakram.vel):
-			chakram.vel = redirected
-			chakram.force_recall()
-	for other_plasma in shock_plasmas:
-		if other_plasma == source_projectile:
-			continue
-		var local_position: Vector2 = orb.position \
-			+ wrap_delta(orb.position, other_plasma.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			other_plasma.vel, impulse, radius)
-		if not redirected.is_equal_approx(other_plasma.vel):
-			other_plasma.vel = redirected
-			other_plasma.prev_pos = other_plasma.position
-			other_plasma.rotation = redirected.angle()
-	for other_orb in shock_orbs:
-		if other_orb == orb:
-			continue
-		var local_position: Vector2 = orb.position + wrap_delta(orb.position, other_orb.position)
-		var redirected: Vector2 = ShockOrb.revector_velocity(orb.position, local_position,
-			other_orb.vel, impulse, radius)
-		if not redirected.is_equal_approx(other_orb.vel):
-			other_orb.vel = redirected
-			other_orb.prev_pos = other_orb.position
-			other_orb.resting = false
-			other_orb.support_platform = -1
-	shock_orbs.erase(orb)
-	orb.queue_free()
-
-
-## Returns the nearest point where the radial blast touches the fighter's real
-## body rectangle (including seam copies), or INF when there is no contact.
-func _shock_blast_player_contact(origin: Vector2, radius: float,
-		player: Player) -> Vector2:
-	var nearest := Vector2(INF, INF)
-	var nearest_distance_sq := INF
-	for body: Rect2 in body_rects(player):
-		var contact := Vector2(
-			clampf(origin.x, body.position.x, body.end.x),
-			clampf(origin.y, body.position.y, body.end.y))
-		var distance_sq := origin.distance_squared_to(contact)
-		if distance_sq <= radius * radius and distance_sq < nearest_distance_sq:
-			nearest = contact
-			nearest_distance_sq = distance_sq
-	return nearest
-
-
-func _blast_reaches(origin: Vector2, target: Vector2) -> bool:
-	var endpoint := origin + wrap_delta(origin, target)
-	for r: Rect2 in solid_rects:
-		var impact := Arrow.segment_rect_impact(origin, endpoint, r)
-		if not impact.is_empty() and impact[0] > 0.025 and impact[0] < 0.975:
-			return false
-	return true
 
 
 ## A knife that reaches a charged orb is spent on it and the orb detonates.
@@ -3756,12 +2228,12 @@ func _resolve_hazard_strikes(live: Array) -> Array:
 		return live
 	var triggered: Array = []
 	var kept: Array = []
-	for a: Arrow in live:
+	for a: Knife in live:
 		var struck: Hazard = null
 		for h: Hazard in hazards:
 			if not h.charged or triggered.has(h):
 				continue
-			if Arrow.moving_points_closest(a.prev_pos, a.position, h.position, h.position)[0] \
+			if Knife.moving_points_closest(a.prev_pos, a.position, h.position, h.position)[0] \
 					<= Hazard.RADIUS + knife_clash_radius * 0.5:
 				struck = h
 				break
@@ -3771,7 +2243,7 @@ func _resolve_hazard_strikes(live: Array) -> Array:
 		triggered.append(struck)
 		# The triggering knife survives. Snap it to the contact point so radial
 		# launch points back out of the face it entered instead of beyond the orb.
-		var contact := Arrow.moving_points_closest(
+		var contact := Knife.moving_points_closest(
 			a.prev_pos, a.position, struck.position, struck.position)
 		a.position = contact[1]
 		a.prev_pos = a.position
@@ -3801,7 +2273,7 @@ func _detonate(h: Hazard, affected_arrows: Array) -> void:
 		# simply resolves it back down onto the surface it was resting on.
 		if p.vel.y < 0.0:
 			p.on_ground = false
-	for a: Arrow in affected_arrows:
+	for a: Knife in affected_arrows:
 		var offset: Vector2 = wrap_delta(h.position, a.position)
 		if offset.length() >= h.blast_radius:
 			continue
@@ -3832,14 +2304,14 @@ func _resolve_clashes(live: Array) -> void:
 	if not knife_clash_enabled or live.size() < 2:
 		return
 	for i in live.size() - 1:
-		var a: Arrow = live[i]
+		var a: Knife = live[i]
 		for j in range(i + 1, live.size()):
-			var b: Arrow = live[j]
+			var b: Knife = live[j]
 			if a.is_queued_for_deletion() or b.is_queued_for_deletion():
 				continue
 			if a.volley == b.volley or not a.can_clash_with(b) or not b.can_clash_with(a):
 				continue
-			var hit := Arrow.moving_points_closest(a.prev_pos, a.position, b.prev_pos, b.position)
+			var hit := Knife.moving_points_closest(a.prev_pos, a.position, b.prev_pos, b.position)
 			if hit[0] > knife_clash_radius:
 				continue
 
@@ -3854,18 +2326,10 @@ func _resolve_clashes(live: Array) -> void:
 				continue
 
 			var at: Vector2 = (hit[1] + hit[2]) * 0.5
-			if a is InterceptProjectile or b is InterceptProjectile:
-				a.queue_free()
-				b.queue_free()
-				_effects.add(Effects.Kind.CLASH, at, a.color)
-				_remember_aftermath("INTERCEPTED", at, a.color)
-				break
-			if close_camera_mode and _try_close_camera_trailing_boost(a, b, at):
-				break
 			var prior_hits: int = maxi(a.clash_count, b.clash_count)
 			var damping: float = minf(knife_reclash_damping_cap,
 				knife_clash_damping + float(prior_hits) * knife_reclash_damping_bonus)
-			var bounced := Arrow.clash_velocities(a.vel, b.vel, normal,
+			var bounced := Knife.clash_velocities(a.vel, b.vel, normal,
 				knife_clash_restitution, damping)
 			if prior_hits > 0:
 				var chaos_seed: int = posmod(a.volley * 31 + b.volley * 17
@@ -3891,37 +2355,6 @@ func _resolve_clashes(live: Array) -> void:
 			break
 
 
-## Same-direction contact in Close Camera relays a faster trailing knife into
-## the leader. This vocabulary remains contained to that mode.
-func _try_close_camera_trailing_boost(a: Arrow, b: Arrow, at: Vector2) -> bool:
-	var sa: float = a.vel.length()
-	var sb: float = b.vel.length()
-	if sa <= 0.001 or sb <= 0.001:
-		return false
-	if a.vel.normalized().dot(b.vel.normalized()) < close_camera_boost_alignment:
-		return false
-	var chaser: Arrow = a if sa > sb else b
-	var leader: Arrow = b if chaser == a else a
-	if chaser.vel.length() - leader.vel.length() < close_camera_boost_min_closing_speed:
-		return false
-	var travel: Vector2 = chaser.vel.normalized()
-	if (leader.prev_pos - chaser.prev_pos).dot(travel) < -knife_clash_radius * 0.25:
-		return false
-
-	var relayed: Vector2 = leader.vel + chaser.vel * close_camera_boost_transfer
-	var cap: float = arrow_speed_max * close_camera_boost_speed_cap
-	if relayed.length() > cap:
-		relayed = relayed.normalized() * cap
-	leader.boost(relayed, knife_clash_cooldown, chaser.stable_id())
-	leader.ricochet_count = maxi(0, leader.ricochet_count - 1)
-	chaser.deflect(chaser.vel * 0.18, knife_clash_spin, knife_clash_cooldown,
-		leader.stable_id())
-	_effects.add(Effects.Kind.CLASH, at, Color(1.0, 0.72, 0.18))
-	_remember_aftermath("BOOST", at, Color(1.0, 0.72, 0.18))
-	_sfx.play("knife_clash")
-	return true
-
-
 func _award_super_charge(shooter: int) -> void:
 	if shooter < 0 or shooter >= players.size():
 		return
@@ -3933,7 +2366,7 @@ func _award_super_charge(shooter: int) -> void:
 
 ## The single entry for every meter source. Capped at full, announced once.
 func _gain_super(i: int, amount: float, reason: String) -> void:
-	if class_lab or amount <= 0.0:
+	if amount <= 0.0:
 		return
 	if i < 0 or i >= players.size() or i >= super_meter.size() or super_meter[i] >= 1.0:
 		return
@@ -3953,7 +2386,7 @@ func _gain_super(i: int, amount: float, reason: String) -> void:
 ## A rival knife passing close to a moving body without touching it. The swept
 ## segment is tested against the body grown by the dodge radius; the body itself
 ## was already cleared by the arrow's own hit test this tick.
-func _credit_dodges(a: Arrow, candidates: Array) -> void:
+func _credit_dodges(a: Knife, candidates: Array) -> void:
 	if super_charge_per_dodge <= 0.0 or a.prev_pos.is_equal_approx(a.position):
 		return
 	for p in candidates:
@@ -3968,7 +2401,7 @@ func _credit_dodges(a: Arrow, candidates: Array) -> void:
 			continue
 		var near := false
 		for r in body_rects(p):
-			if Arrow.seg_hits_rect(a.prev_pos, a.position, r.grow(super_dodge_radius)):
+			if Knife.seg_hits_rect(a.prev_pos, a.position, r.grow(super_dodge_radius)):
 				near = true
 				break
 		if not near:
@@ -3979,7 +2412,7 @@ func _credit_dodges(a: Arrow, candidates: Array) -> void:
 		_remember_aftermath("DODGE", p.position, p.color.lightened(0.3))
 
 
-## Called once per simulated tick so coasting, dashes and carried movement all
+## Called once per simulated tick so coasting and carried movement both
 ## count. Only living bodies accumulate; a respawn starts from zero next window.
 func _accrue_window_travel() -> void:
 	for p in players:
@@ -3995,8 +2428,6 @@ func _accrue_window_travel() -> void:
 ## Advances only at execution boundaries, so the telegraph and active lifetime
 ## are expressed in whole player decisions rather than wall-clock seconds.
 func _advance_temporal_core() -> void:
-	if class_lab:
-		return
 	if tutorial_mode:
 		return
 	if _core_collected_this_execution:
@@ -4207,7 +2638,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 			state = Phase.GAME_OVER
 			winner = scorer
 			winning_team = scoring_team
-			_prime_game_over_pad_state()
+			_player_input._prime_game_over_pad_state()
 			banner_text = "TEAM %s WINS" % TEAM_NAMES[scoring_team]
 			banner_color = TEAM_COLORS[scoring_team]
 			_sfx.play("victory")
@@ -4220,7 +2651,7 @@ func _on_player_hit(victim_idx: int, at: Vector2, shooter_idx: int = -1) -> void
 	if score[scorer] >= hits_to_win:
 		state = Phase.GAME_OVER
 		winner = scorer
-		_prime_game_over_pad_state()
+		_player_input._prime_game_over_pad_state()
 		banner_text = "%s  WINS" % player_tag(scorer)
 		banner_color = PLAYER_COLORS[scorer]
 		_sfx.play("victory")
@@ -4270,41 +2701,19 @@ func _apply_platform_damage(idxs: Array[int]) -> void:
 
 # ------------------------------------------------------------ phase changes --
 
-## In Close Camera, finishing the action is the commitment. A throw may still
-## be followed by movement; readiness begins only after input has gone idle.
-func _auto_ready_close_camera_plans(delta: float) -> void:
-	if not close_camera_mode or not close_camera_auto_ready:
-		return
-	for i in players.size():
-		if not _is_locally_controlled(i) or is_ai(i):
-			continue
-		var p: Player = players[i]
-		if not p.alive or p.plan.confirmed:
-			continue
-		var recorded: int = p.plan.recorded_ticks()
-		if charging[i] or recorded != _close_plan_ticks_seen[i] or not p.plan.has_shot():
-			_close_plan_ticks_seen[i] = recorded
-			_close_plan_idle[i] = 0.0
-			continue
-		_close_plan_idle[i] += delta
-		if _close_plan_idle[i] >= close_camera_ready_grace:
-			_confirm(i)
-
-
 func _begin_planning(first: bool) -> void:
 	if _super_freeze != null:
 		_cancel_super_cutin()
 	state = Phase.PLANNING
-	_online_plan_sent = false
-	_online_match_reported = false
+	_online._online_plan_sent = false
+	_online._online_match_reported = false
 	if not first:
 		turn += 1
-	_advance_chakrams_for_turn()
 	planning_window_duration = _planning_duration_for_turn(turn)
 	planning_time_left = planning_window_duration
 	for i in players.size():
 		charging[i] = false
-		_charge_t[i] = 0.0
+		_player_input._charge_t[i] = 0.0
 		if not players[i].alive:
 			_respawn(i)
 		players[i].plan.start_new_turn()
@@ -4370,19 +2779,7 @@ func _author_fate_trial_plan() -> void:
 	banner_time = 1.8
 
 
-func _advance_chakrams_for_turn() -> void:
-	var live: Array = []
-	for chakram in chakrams:
-		if chakram.advance_to_turn(turn):
-			live.append(chakram)
-		else:
-			chakram.queue_free()
-	chakrams = live
-
-
 func _planning_duration_for_turn(turn_number: int) -> float:
-	if close_camera_mode:
-		return close_camera_planning_duration
 	if fate_trial_mode:
 		return FATE_TRIAL_PLANNING_DURATION
 	if tutorial_mode:
@@ -4454,7 +2851,7 @@ func _ai_target_for(ai_idx: int) -> int:
 
 func _begin_commit() -> void:
 	state = Phase.COMMITTING
-	commit_time_left = close_camera_commit_delay if close_camera_mode else commit_delay
+	commit_time_left = commit_delay
 
 
 func _begin_execution() -> void:
@@ -4488,7 +2885,6 @@ func _begin_execution() -> void:
 	_hit_this_execution = false
 	_core_collected_this_execution = false
 	_blasts_this_execution = 0
-	frame_debt_locked.fill(false)
 	_dodge_credits.fill(0)
 	_exec_travel.fill(0.0)
 	for p in players:
@@ -4503,247 +2899,12 @@ func _begin_execution() -> void:
 		_time_stop.phase_changed(Phase.EXECUTING)
 	if _sfx != null:
 		_sfx.play("time_resume")
-	_capture_replay_frame()
+	_replay._capture_replay_frame()
 
 
 func _remember_aftermath(label: String, at: Vector2, col: Color) -> void:
 	if state == Phase.EXECUTING and _effects != null and _effects.has_method("remember"):
 		_effects.remember(label, at, col)
-
-
-# -------------------------------------------------------------- replay -------
-
-## Store the drawn state after each simulation tick. No planning frame reaches
-## this method, which is what makes the finished replay one continuous burst.
-func _capture_replay_frame() -> void:
-	if state != Phase.EXECUTING and state != Phase.GAME_OVER:
-		return
-	var player_frames: Array[Dictionary] = []
-	for p: Player in players:
-		player_frames.append({
-			"position": p.position,
-			"vel": p.vel,
-			"on_ground": p.on_ground,
-			"air_jumps_left": p.air_jumps_left,
-			"drop_ticks": p.drop_ticks,
-			"drop_from_y": p.drop_from_y,
-			"alive": p.alive,
-			"facing": p.facing,
-			"invuln_turns": p.invuln_turns,
-			"aim_angle": p.plan.aim_angle,
-			"power": p.plan.power,
-			"anim_time": p._anim_time,
-		})
-
-	var arrow_frames: Array[Dictionary] = []
-	for a: Arrow in arrows:
-		arrow_frames.append({
-			"lab": a.lab_state() if a is InterceptProjectile else {},
-			"network_id": a.network_id,
-			"shooter": a.shooter,
-			"volley": a.volley,
-			"position": a.position,
-			"prev_pos": a.prev_pos,
-			"vel": a.vel,
-			"rotation": a.rotation,
-			"color": a.color,
-			"age_ticks": a.age_ticks,
-			"clashed": a.clashed,
-			"spin": a.spin,
-			"clash_count": a.clash_count,
-			"boost_count": a.boost_count,
-			"ricochet_count": a.ricochet_count,
-			"trail": a.trail.duplicate(),
-		})
-
-	var hazard_frames: Array[Dictionary] = []
-	for h: Hazard in hazards:
-		hazard_frames.append({
-			"position": h.position,
-			"charged": h.charged,
-			"windows_left": h.windows_left,
-			"flash": h.flash,
-		})
-
-	_replay_frames.append({
-		"turn": turn,
-		"score": score.duplicate(),
-		"players": player_frames,
-		"arrows": arrow_frames,
-		"hazards": hazard_frames,
-		"world_tick": world_tick,
-		"platforms": platforms.duplicate(true),
-		"super_meter": super_meter.duplicate(),
-		"super_armed": super_armed.duplicate(),
-		"frame_debt_cells": frame_debt_cells.duplicate(),
-		"frame_debt_units": frame_debt_units.duplicate(),
-		"core_position": core_position,
-		"core_announced": core_announced,
-		"core_active": core_active,
-		"core_turns_left": core_turns_left,
-		"core_time": _temporal_core._time if _temporal_core != null else 0.0,
-		"effects": _effects._fx.duplicate(true) if _effects != null else [],
-	})
-	_trim_replay_history()
-
-
-func replay_frame_capacity() -> int:
-	return maxi(1, int(ceil(replay_history_seconds * float(Engine.physics_ticks_per_second))))
-
-
-## Compact in batches rather than shifting a large Array every simulation tick.
-## The small slack is still a hard, predictable upper bound during a match; a
-## replay request forces the exact configured limit before playback begins.
-func _trim_replay_history(force: bool = false) -> void:
-	var capacity := replay_frame_capacity()
-	var slack := maxi(1, int(ceil(REPLAY_COMPACTION_SLACK_SECONDS \
-		* float(Engine.physics_ticks_per_second))))
-	if _replay_frames.size() <= capacity \
-			or (not force and _replay_frames.size() <= capacity + slack):
-		return
-	var compacted: Array[Dictionary] = []
-	compacted.assign(_replay_frames.slice(_replay_frames.size() - capacity))
-	_replay_frames = compacted
-
-
-func _start_match_replay() -> void:
-	if state != Phase.GAME_OVER or _replay_frames.is_empty():
-		return
-	_trim_replay_history(true)
-	_replay_terminal_frame = _replay_frames.back().duplicate(true)
-	_replay_frame_index = 0
-	_replay_accum = 0.0
-	state = Phase.REPLAY
-	if _super_freeze != null:
-		_cancel_super_cutin()
-	_apply_replay_frame(_replay_frames[0])
-	banner_time = 0.0
-	_preview.queue_redraw()
-	_ui.refresh()
-
-
-func _tick_match_replay(delta: float) -> void:
-	_replay_accum += delta * maxf(replay_speed, 0.01)
-	var frame_time := tick_dt()
-	while _replay_accum >= frame_time:
-		_replay_accum -= frame_time
-		_replay_frame_index += 1
-		if _replay_frame_index >= _replay_frames.size():
-			_finish_match_replay()
-			return
-		_apply_replay_frame(_replay_frames[_replay_frame_index])
-
-
-func _apply_replay_frame(frame: Dictionary) -> void:
-	turn = int(frame["turn"])
-	var frame_score: Array = frame["score"]
-	var frame_meter: Array = frame["super_meter"]
-	var frame_armed: Array = frame["super_armed"]
-	var frame_cells: Array = frame.get("frame_debt_cells", frame_debt_cells)
-	var frame_units: Array = frame.get("frame_debt_units", frame_debt_units)
-	for i in players.size():
-		score[i] = int(frame_score[i])
-		super_meter[i] = float(frame_meter[i])
-		super_armed[i] = bool(frame_armed[i])
-		frame_debt_cells[i] = int(frame_cells[i])
-		frame_debt_units[i] = int(frame_units[i])
-		var p: Player = players[i]
-		var data: Dictionary = frame["players"][i]
-		p.position = data["position"]
-		p.vel = data["vel"]
-		p.on_ground = bool(data["on_ground"])
-		p.air_jumps_left = int(data.get("air_jumps_left", air_jumps_for(i)))
-		p.drop_ticks = int(data.get("drop_ticks", 0))
-		p.drop_from_y = float(data.get("drop_from_y", 0.0))
-		p.alive = bool(data["alive"])
-		p.facing = int(data["facing"])
-		p.invuln_turns = int(data["invuln_turns"])
-		p.plan.aim_angle = float(data["aim_angle"])
-		p.plan.power = float(data["power"])
-		p._anim_time = float(data["anim_time"])
-		p.queue_redraw()
-
-	var arrow_by_id: Dictionary = {}
-	for child in _arrow_layer.get_children():
-		if child is Arrow:
-			arrow_by_id[child.network_id] = child
-			child.visible = false
-	var frame_arrows: Array = []
-	for data: Dictionary in frame["arrows"]:
-		var id := int(data["network_id"])
-		var a: Arrow = arrow_by_id.get(id)
-		if a == null:
-			a = InterceptProjectile.new() if not data.get("lab", {}).is_empty() else Arrow.new()
-			a.cfg = self
-			a.network_id = id
-			_arrow_layer.add_child(a)
-			arrow_by_id[id] = a
-		if a is InterceptProjectile:
-			for field in data.get("lab", {}):
-				a.set(field, data.lab[field])
-		a.visible = true
-		a.shooter = int(data["shooter"])
-		a.volley = int(data["volley"])
-		a.position = data["position"]
-		a.prev_pos = data["prev_pos"]
-		a.vel = data["vel"]
-		a.rotation = float(data["rotation"])
-		a.color = data["color"]
-		a.age_ticks = int(data["age_ticks"])
-		a.clashed = bool(data["clashed"])
-		a.spin = float(data["spin"])
-		a.clash_count = int(data["clash_count"])
-		a.boost_count = int(data.get("boost_count", 0))
-		a.ricochet_count = int(data.get("ricochet_count", 0))
-		a.trail = PackedVector2Array(data["trail"])
-		a.queue_redraw()
-		frame_arrows.append(a)
-	arrows = frame_arrows
-
-	world_tick = int(frame["world_tick"])
-	platforms = frame["platforms"].duplicate(true)
-	_rebuild_solids()
-	_arena.setup(platforms)
-	var hazard_frames: Array = frame["hazards"]
-	for i in mini(hazards.size(), hazard_frames.size()):
-		var h: Hazard = hazards[i]
-		var data: Dictionary = hazard_frames[i]
-		h.position = data["position"]
-		h.charged = bool(data["charged"])
-		h.windows_left = int(data["windows_left"])
-		h.flash = float(data["flash"])
-		h.queue_redraw()
-	core_position = frame["core_position"]
-	core_announced = bool(frame["core_announced"])
-	core_active = bool(frame["core_active"])
-	core_turns_left = int(frame["core_turns_left"])
-	_sync_temporal_core_visual()
-	if _temporal_core != null:
-		_temporal_core._time = float(frame["core_time"])
-	if _effects != null:
-		_effects._fx = frame["effects"].duplicate(true)
-		_effects._remembered.clear()
-		_effects.queue_redraw()
-
-
-func _finish_match_replay() -> void:
-	if not _replay_terminal_frame.is_empty():
-		_apply_replay_frame(_replay_terminal_frame)
-	for child in _arrow_layer.get_children():
-		if child is Arrow and not arrows.has(child):
-			child.queue_free()
-	state = Phase.GAME_OVER
-	banner_text = ("FATE DEFIED" if fate_trial_succeeded else "FATE CLAIMED YOU") \
-		if fate_trial_mode else ("TEAM %s WINS THE MATCH" % TEAM_NAMES[winning_team] \
-		if team_mode and winning_team >= 0 else \
-		("%s WINS THE MATCH" % player_title(winner) if winner >= 0 else "MATCH OVER"))
-	banner_color = (PLAYER_COLORS[0] if fate_trial_succeeded else PLAYER_COLORS[1]) \
-		if fate_trial_mode else (TEAM_COLORS[winning_team] if team_mode and winning_team >= 0 else \
-		(PLAYER_COLORS[winner] if winner >= 0 else Color.WHITE)
-		)
-	banner_time = banner_duration
-	_replay_frame_index = 0
-	_replay_accum = 0.0
 
 
 func _end_execution() -> void:
@@ -4777,7 +2938,7 @@ func _end_execution() -> void:
 	# Everything keeps its position / velocity. Nothing is cleared.
 	if online_mode:
 		state = Phase.ONLINE_WAIT
-		if not _online_client.send_turn_complete(turn, _online_state_digest()):
+		if not _online._online_client.send_turn_complete(turn, _online._online_state_digest()):
 			banner_text = "TURN SAVED LOCALLY · RECONNECTING TO OPPONENT"
 			banner_color = Color(1.0, 0.45, 0.35)
 			banner_time = 2.0
@@ -4791,7 +2952,7 @@ func _finish_fate_trial(success: bool) -> void:
 	fate_trial_succeeded = success
 	state = Phase.GAME_OVER
 	winner = 0 if success else 1
-	_prime_game_over_pad_state()
+	_player_input._prime_game_over_pad_state()
 	banner_text = "FATE DEFIED" if success else "FATE CLAIMED YOU"
 	banner_color = PLAYER_COLORS[0] if success else PLAYER_COLORS[1]
 	banner_time = banner_duration
@@ -4858,238 +3019,8 @@ func _choose_respawn_point(player_index: int) -> Vector2:
 func _spawn_player_attack(p: Player) -> void:
 	if _telemetry != null:
 		_telemetry.record("throw_fired", turn, {"player": p.index + 1, "power": p.plan.power})
-	if class_lab:
-		ClassLab.spawn(self, p)
-		return
 	_gain_super(p.index, super_charge_per_throw * clampf(p.plan.power, 0.0, 1.0), "throw")
-	match player_weapons[p.index]:
-		Weapon.DASHBLADE:
-			_spawn_dashblade(p, false)
-		Weapon.CHAKRAM:
-			if p.plan.attack_mode == 1:
-				_recall_all_chakrams(p)
-			else:
-				_spawn_chakram(p)
-		Weapon.SHOCK:
-			_spawn_shock_attack(p)
-		_:
-			_spawn_arrow(p)
-
-
-func _spawn_dashblade(p: Player, empowered: bool) -> void:
-	# One committed body trajectory at a time. Re-firing while an old dash is
-	# somehow still live ends the old action at its current physical position.
-	for old in dashblades.duplicate():
-		if old.owner_index == p.index:
-			dashblades.erase(old)
-			old.queue_free()
-	var lost_frames := frame_debt_max_cells if empowered else frame_debt_cells[p.index]
-	var dash_params := dash_parameters(p.plan.power, empowered, lost_frames)
-	var dash = DASHBLADE_SCRIPT.new()
-	dash.begin(p.position, p.aim_dir(), dash_params["speed"], dash_params["ticks"],
-		p.index, dash_params["durability"], lost_frames, dash_exit_momentum_retention)
-	_arrow_layer.add_child(dash)
-	dashblades.append(dash)
-	frame_debt_locked[p.index] = true
-	frame_debt_cells[p.index] = 0
-	if empowered:
-		frame_debt_units[p.index] = 0
-	if lost_frames > 0:
-		_effects.add(Effects.Kind.CLASH, p.position, Color(0.36, 0.96, 1.0))
-		_remember_aftermath("%d LOST FRAME%s" % [lost_frames,
-			"" if lost_frames == 1 else "S"], p.position, Color(0.36, 0.96, 1.0))
-	p.queue_redraw()
-	_sfx.play("dash_super" if empowered else "dash")
-
-
-func dash_parameters(power: float, empowered: bool = false,
-		lost_frames: int = 0) -> Dictionary:
-	var amount := clampf(power, 0.0, 1.0)
-	var speed := lerpf(dash_speed_min, dash_speed_max, amount)
-	var duration := roundi(lerpf(float(dash_duration_ticks_min),
-		float(dash_duration_ticks_max), amount))
-	var durability := dash_guard_durability
-	var committed := clampi(lost_frames, 0, frame_debt_max_cells)
-	duration += committed * frame_debt_dash_ticks_per_cell
-	if committed >= frame_debt_max_cells:
-		durability += frame_debt_full_guard_bonus
-	if empowered:
-		speed *= 1.28
-		duration += 6
-		durability += 3
-	return {"speed": speed, "ticks": duration, "durability": durability,
-		"lost_frames": committed}
-
-
-## Uses the exact dash primitive against the current frozen terrain. The preview
-## can therefore promise a body endpoint (including a wall shimmy) instead of
-## showing a dagger-shaped guess.
-func dash_preview_path(origin: Vector2, direction: Vector2, power: float,
-		empowered: bool = false, lost_frames: int = 0) -> PackedVector2Array:
-	var params := dash_parameters(power, empowered, lost_frames)
-	var preview_dash = DASHBLADE_SCRIPT.new()
-	preview_dash.begin(origin, direction, params["speed"], params["ticks"], -1,
-		params["durability"], lost_frames, dash_exit_momentum_retention)
-	var path := PackedVector2Array([origin])
-	var safety := 0
-	while preview_dash.active and safety < 64:
-		var result: Dictionary = preview_dash.sim_step(tick_dt(), [], [], platforms)
-		path.append(result["position"])
-		safety += 1
-	preview_dash.free()
-	return path
-
-
-func _spawn_chakram(p: Player, angle_offset: float = 0.0,
-		recall_scale: float = 1.0, integrity: int = 2, play_sound: bool = true) -> void:
-	var direct: Vector2 = p.aim_dir().rotated(deg_to_rad(angle_offset))
-	var chakram = CHAKRAM_SCRIPT.new()
-	chakram.cfg = self
-	chakram.shooter = p.index
-	chakram.volley = _next_volley
-	_next_volley += 1
-	chakram.network_id = _next_character_projectile_id
-	_next_character_projectile_id += 1
-	chakram.color = p.color
-	chakram.set_integrity(integrity)
-	chakram.begin_lifecycle(turn)
-	chakram.position = p.shoulder() + direct * 24.0
-	chakram.prev_pos = chakram.position
-	chakram.vel = direct * lerpf(chakram_speed_min, chakram_speed_max, p.plan.power)
-	chakram.freeplay_window_ticks = maxi(12, roundi(float(exec_ticks()) * recall_scale))
-	_arrow_layer.add_child(chakram)
-	chakrams.append(chakram)
-	if play_sound:
-		_sfx.play("chakram_throw")
-
-
-func recallable_chakrams(shooter: int) -> Array:
-	var recallable: Array = []
-	for chakram in chakrams:
-		if chakram.shooter != shooter or chakram.is_returning():
-			continue
-		recallable.append(chakram)
-	recallable.sort_custom(func(a, b):
-		if a.launch_turn != b.launch_turn:
-			return a.launch_turn < b.launch_turn
-		return a.network_id < b.network_id)
-	return recallable
-
-
-func oldest_recallable_chakram(shooter: int):
-	var recallable := recallable_chakrams(shooter)
-	return null if recallable.is_empty() else recallable[0]
-
-
-func recallable_chakram_count(shooter: int) -> int:
-	return recallable_chakrams(shooter).size()
-
-
-## ABSOLUTION spends this turn's attack to call every active corona home. The
-## stable launch/id ordering keeps effects and lockstep state deterministic.
-func _recall_all_chakrams(p: Player) -> bool:
-	var recallable := recallable_chakrams(p.index)
-	if recallable.is_empty():
-		return false
-	for chakram in recallable:
-		chakram.force_recall()
-		_effects.add(Effects.Kind.CLASH, chakram.position, chakram.color.lightened(0.4))
-	_remember_aftermath("ABSOLUTION ×%d" % recallable.size(), p.position, p.color)
-	_sfx.play("chakram_recall")
-	return true
-
-
-func _spawn_shock_attack(p: Player) -> void:
-	var direct := p.aim_dir()
-	if p.plan.attack_mode == 1:
-		_spawn_shock_orb(p, direct, false)
-	else:
-		_spawn_shock_plasma(p, direct)
-
-
-func _spawn_shock_plasma(p: Player, direct: Vector2, play_sound: bool = true) -> void:
-	var plasma = SHOCK_PLASMA_SCRIPT.new()
-	plasma.cfg = self
-	plasma.shooter = p.index
-	plasma.network_id = _next_character_projectile_id
-	_next_character_projectile_id += 1
-	plasma.color = p.color.lightened(0.35)
-	plasma.position = p.shoulder() + direct.normalized() * 24.0
-	plasma.configure_launch(direct, shock_plasma_speed_for_power(p.plan.power),
-		p.plan.power, shock_plasma_range_for_power(p.plan.power))
-	_arrow_layer.add_child(plasma)
-	shock_plasmas.append(plasma)
-	if play_sound:
-		_sfx.play("plasma")
-
-
-## Detonates this player's oldest orbs until one slot is free. Age is read from
-## age_ticks rather than list order so a restored replay frame retires the same
-## orb the live match did.
-func _retire_oldest_orb_over_cap(shooter: int) -> void:
-	var cap: int = maxi(1, shock_max_live_orbs)
-	while shock_orb_count(shooter) >= cap:
-		var oldest = null
-		for orb in shock_orbs:
-			if orb.shooter != shooter:
-				continue
-			if oldest == null or orb.age_ticks > oldest.age_ticks \
-					or (orb.age_ticks == oldest.age_ticks and orb.network_id < oldest.network_id):
-				oldest = orb
-		if oldest == null:
-			return
-		_detonate_shock_orb(oldest, false, shooter)
-
-
-func _spawn_shock_orb(p: Player, direct: Vector2, prearmed: bool,
-		play_sound: bool = true) -> void:
-	# The field is a resource with a ceiling, not an accumulation. Casting past the
-	# cap pops the oldest orb rather than refusing the throw, so the turn still
-	# resolves into something the player can read and plan around.
-	_retire_oldest_orb_over_cap(p.index)
-	var orb = SHOCK_ORB_SCRIPT.new()
-	orb.cfg = self
-	orb.shooter = p.index
-	orb.arm_ticks = maxi(1, shock_orb_arm_ticks)
-	orb.lifetime_ticks = maxi(orb.arm_ticks + 1, shock_orb_lifetime_ticks)
-	orb.network_id = _next_character_projectile_id
-	_next_character_projectile_id += 1
-	orb.color = p.color
-	orb.position = p.shoulder() + direct.normalized() * (180.0 if prearmed else 24.0)
-	orb.configure_lob(direct, 120.0 if prearmed else lerpf(
-		shock_orb_speed_min, shock_orb_speed_max, p.plan.power))
-	if prearmed:
-		orb.age_ticks = orb.arm_ticks
-	_arrow_layer.add_child(orb)
-	shock_orbs.append(orb)
-	if play_sound:
-		_sfx.play("orb_cast")
-
-
-func _spawn_character_super(p: Player) -> void:
-	if class_lab:
-		p.plan.super_shot = false
-		ClassLab.spawn(self, p)
-		return
-	super_meter[p.index] = 0.0
-	super_armed[p.index] = false
-	p.queue_redraw()
-	_effects.add(Effects.Kind.CLASH, p.shoulder(), Color(1.0, 0.92, 0.42))
-	banner_text = "%s · %s" % [player_title(p.index), weapon_short_name(p.index)]
-	banner_color = PLAYER_COLORS[p.index].lightened(0.35)
-	banner_time = 0.9
-	match player_weapons[p.index]:
-		Weapon.DASHBLADE:
-			_spawn_dashblade(p, true)
-		Weapon.CHAKRAM:
-			for launch in chakram_launch_velocities(p.aim_dir(), p.plan.power, true):
-				var offset := rad_to_deg(p.aim_dir().angle_to(launch))
-				_spawn_chakram(p, offset, 1.4, 1, false)
-			_sfx.play("chakram_super")
-		Weapon.SHOCK:
-			_spawn_shock_orb(p, p.aim_dir(), true, false)
-			_spawn_shock_plasma(p, p.aim_dir(), false)
-			_sfx.play("shock_super")
+	_spawn_arrow(p)
 
 
 func _spawn_arrow(p: Player) -> void:
@@ -5098,7 +3029,7 @@ func _spawn_arrow(p: Player) -> void:
 	var volley: int = _next_volley
 	_next_volley += 1
 	for launch in launches:
-		var a := Arrow.new()
+		var a := Knife.new()
 		a.cfg = self
 		a.shooter = p.index
 		a.volley = volley
@@ -5135,7 +3066,7 @@ func _spawn_super_wave(p: Player, wave: int) -> void:
 	var origin: Vector2 = p.shoulder() + aim * 22.0
 	for off in super_offsets():
 		var dir: Vector2 = aim.rotated(deg_to_rad(off))
-		var a := Arrow.new()
+		var a := Knife.new()
 		a.cfg = self
 		a.shooter = p.index
 		a.volley = p.plan.super_volley
@@ -5169,19 +3100,17 @@ func restart() -> void:
 	# under the previous match's faded palette.
 	if _event_direction != null:
 		_event_direction.clear()
-	_replay_frames.clear()
-	_replay_terminal_frame.clear()
-	_replay_frame_index = 0
-	_replay_accum = 0.0
+	_replay._replay_frames.clear()
+	_replay._replay_terminal_frame.clear()
+	_replay._replay_frame_index = 0
+	_replay._replay_accum = 0.0
 	if online_mode:
-		rng.seed = _online_seed
+		rng.seed = _online._online_seed
 	for a in arrows:
 		a.queue_free()
 	arrows.clear()
-	_clear_character_projectiles()
 	_next_volley = 1
 	_next_arrow_id = 1
-	_next_character_projectile_id = 100000
 	_effects.clear_all()
 	_load_level(level_index)
 	for i in players.size():
@@ -5212,9 +3141,6 @@ func restart() -> void:
 		_last_respawn_choice[i] = -1
 		super_meter[i] = 0.0
 		super_armed[i] = false
-		frame_debt_cells[i] = 0
-		frame_debt_units[i] = 0
-		frame_debt_locked[i] = false
 	_reset_temporal_core()
 	banner_time = 0.0
 	if fate_trial_mode:
@@ -5228,7 +3154,7 @@ func restart() -> void:
 ## back when Trial 01 opens. It uses the ordinary persistent projectile rules,
 ## so its complete future is visible and it may be blocked or deflected.
 func _seed_fate_trial_threat() -> void:
-	var echo := Arrow.new()
+	var echo := Knife.new()
 	echo.cfg = self
 	echo.shooter = 1
 	echo.volley = _next_volley
@@ -5248,9 +3174,6 @@ func _seed_fate_trial_threat() -> void:
 
 func _reset_pilot(i: int) -> void:
 	var p: Player = players[i]
-	if ghost_dash[i] != null and is_instance_valid(ghost_dash[i]):
-		ghost_dash[i].free()
-	ghost_dash[i] = _dash_prediction_copy(i)
 	p.plan.clear_path()
 	p.plan.shot_tick = -1
 	p.plan.super_shot = false
@@ -5262,14 +3185,12 @@ func _reset_pilot(i: int) -> void:
 	ghost_drop[i] = p.drop_ticks
 	ghost_drop_from[i] = p.drop_from_y
 	stamina[i] = movement_budget
-	_pilot_accum[i] = 0.0
+	_player_input._pilot_accum[i] = 0.0
 	charging[i] = false
-	_charge_t[i] = 0.0
-	_close_plan_idle[i] = 0.0
-	_close_plan_ticks_seen[i] = 0
+	_player_input._charge_t[i] = 0.0
 	# Planning may resume long after the previous input poll. Sampling the actual
 	# button prevents a stale edge from swallowing an airborne jump.
-	_jump_prev[i] = _jump_input_held(i)
+	_player_input._jump_prev[i] = _player_input._jump_input_held(i)
 	_mark_ghost_path_dirty(i)
 
 
@@ -5281,20 +3202,6 @@ func _pilot_step(i: int, dir: int, jump: bool, hold: bool, drop: bool = false) -
 	# The tick this step LEAVES, in absolute time. The moving world is projected
 	# forward from here, so the ghost meets the geometry the plan will meet.
 	var from_tick: int = world_tick + pl.recorded_ticks()
-	var pending_dash = ghost_dash[i]
-	if pending_dash != null and pending_dash.active:
-		# Execution ignores locomotion while a body dash owns this tick. Record the
-		# elapsed tick, but do not promise a jump or directional acceleration.
-		pl.record(dir, false, false, false)
-		var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
-		ghost_pos[i] = wrap_point(dash_result["position"])
-		ghost_vel[i] = dash_result["velocity"]
-		stamina[i] = maxf(0.0, stamina[i] - tick_dt())
-		if not pending_dash.active:
-			pending_dash.free()
-			ghost_dash[i] = null
-		_mark_ghost_path_dirty(i)
-		return true
 	var drop_result := Player.apply_drop(ghost_pos[i].y, ghost_vel[i], ghost_ground[i],
 		ghost_drop[i], ghost_drop_from[i], drop)
 	ghost_vel[i] = drop_result[0]
@@ -5354,19 +3261,10 @@ func _rebuild_ghost_path(i: int) -> void:
 	var air_jumps: int = p.air_jumps_left
 	var drop: int = p.drop_ticks
 	var drop_from: float = p.drop_from_y
-	var pending_dash = _dash_prediction_copy(i)
 	path.append(pos)
 	velocity_path.append(vel)
 	ground_path.append(1 if og else 0)
 	for t in exec_ticks():
-		if pending_dash != null and pending_dash.active:
-			var dash_result: Dictionary = pending_dash.sim_step(tick_dt(), [], [], platforms)
-			pos = wrap_point(dash_result["position"])
-			vel = dash_result["velocity"]
-			path.append(pos)
-			velocity_path.append(vel)
-			ground_path.append(1 if og else 0)
-			continue
 		var drop_result := Player.apply_drop(pos.y, vel, og, drop, drop_from, pl.drop_at(t))
 		vel = drop_result[0]
 		og = drop_result[1]
@@ -5388,19 +3286,10 @@ func _rebuild_ghost_path(i: int) -> void:
 		path.append(pos)
 		velocity_path.append(vel)
 		ground_path.append(1 if og else 0)
-	if pending_dash != null:
-		pending_dash.free()
 	ghost_path[i] = path
 	ghost_velocity_path[i] = velocity_path
 	ghost_ground_path[i] = ground_path
 	_ghost_path_dirty[i] = false
-
-
-func _dash_prediction_copy(i: int):
-	for dash in dashblades:
-		if dash.active and dash.owner_index == i:
-			return dash.prediction_copy()
-	return null
 
 
 ## Where the ghost currently stands: the point a shot would be loosed from.
@@ -5418,103 +3307,8 @@ func shot_origin(i: int) -> Vector2:
 
 # ------------------------------------------------------------------- input ---
 #
-# Raw key handling keeps the project free of an input-map file. Rebind by
-# editing the keycodes below.
-#
-#   Move  : held, drives the ghost in real time (stamina drains)
-#   Jump  : press, inserts a jump impulse at the ghost's current tick
-#   Aim   : mouse (P1) / right stick (P2)
-#   Power : hold to charge (the ghost FREEZES while charging), release to fire
-#           from wherever the ghost is standing
-#   Super : toggles whether a full meter upgrades the next placed shot
-#   Rollback   : un-fires the shot and drops the confirmation, keeps the path
-#   Reset path : throws the recorded movement away and refills stamina
-
-## The shipped layout. `key_bindings` starts here and is replaced, action by
-## action, by whatever the player sets on the controls screen.
-const DEFAULT_BINDINGS := {
-	"left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE, KEY_W, KEY_UP], "wait": [KEY_S],
-	"charge": [], "rollback": [KEY_R], "reset": [KEY_F],
-	"super": [KEY_T],
-	"aim_up": [KEY_Q], "aim_down": [KEY_E],
-}
-var key_bindings: Dictionary = DEFAULT_BINDINGS.duplicate(true)
-
-const K_GAMEPAD_ONLY := {
-	"left": [], "right": [], "jump": [], "wait": [],
-	"charge": [], "rollback": [], "reset": [], "super": [],
-	"aim_up": [], "aim_down": [],
-}
-
-
-func _is_locally_controlled(i: int) -> bool:
-	return i == online_player if online_mode else not is_ai(i)
-
-
-func _input_map_for(i: int) -> Dictionary:
-	# In an online room both people get the natural P1 bindings on their own
-	# machine, regardless of whether the server assigned them slot 0 or slot 1.
-	# In a local duel P2 is gamepad-only so the two players never fight over one
-	# keyboard or accidentally drive each other's plan.
-	return key_bindings if online_mode \
-		else (key_bindings if i == _keyboard_player() else K_GAMEPAD_ONLY)
-
-
-## Whoever claimed the keyboard seat on the roster screen drives it in play,
-## in every mode. Slot 0 is the fallback for entry points with no roster.
-func _keyboard_player() -> int:
-	if online_mode:
-		return online_player
-	for i in player_devices.size():
-		if player_devices[i] == KEYBOARD_DEVICE and player_roles[i] == "HUMAN":
-			return i
-	return 0
-
-
-func _slot_for_device(device_id: int) -> int:
-	for i in player_devices.size():
-		if player_devices[i] == device_id and player_roles[i] == "HUMAN":
-			return i
-	return -1
-
-
-func _touch_player() -> int:
-	# A phone controls its own lockstep slot online and Player 1 everywhere else.
-	return online_player if online_mode else 0
-
-
-func _on_touch_confirm() -> void:
-	_confirm(_touch_player())
-
-
-func _on_touch_rollback() -> void:
-	_rollback(_touch_player())
-
-
-func _on_touch_reset() -> void:
-	_reset_path(_touch_player())
-
-
-func _on_touch_super() -> void:
-	_toggle_super(_touch_player())
-
-
-func _on_touch_menu() -> void:
-	if online_mode:
-		_leave_online()
-	else:
-		_open_menu()
-
-
-func _on_touch_rematch() -> void:
-	_request_rematch()
-
-
-func _on_touch_replay() -> void:
-	if state == Phase.REPLAY:
-		_finish_match_replay()
-	else:
-		_start_match_replay()
+# Key, pointer, pad and touch handling lives in PlayerInput.gd. These are the
+# plan commands it issues; the AI and tests call them too.
 
 
 func _request_rematch() -> void:
@@ -5528,12 +3322,6 @@ func _request_rematch() -> void:
 		_transition.play("INTERCEPTION", "READ THE NEXT LANDING",
 			PLAYER_COLORS[0], reduced_flashes)
 		return
-	if close_camera_mode:
-		restart()
-		_begin_match_telemetry("ai_close_camera")
-		_transition.play("CLOSE CAMERA // KNIFE COURT",
-			"PLAN CLOSE · WATCH IT WHOLE", PLAYER_COLORS[0], reduced_flashes)
-		return
 	if fate_trial_mode:
 		restart()
 		_begin_match_telemetry("fate_trial_01")
@@ -5541,9 +3329,9 @@ func _request_rematch() -> void:
 			"READ IT AGAIN", PLAYER_COLORS[0], reduced_flashes)
 		return
 	if online_mode:
-		if _online_waiting_rematch:
+		if _online._online_waiting_rematch:
 			return
-		_online_waiting_rematch = _online_client.send_rematch(rematch_level_index)
+		_online._online_waiting_rematch = _online._online_client.send_rematch(rematch_level_index)
 		banner_text = "REMATCH REQUESTED · WAITING FOR PLAYERS"
 		banner_color = Color(0.86, 0.68, 1.0)
 		banner_time = 2.0
@@ -5568,9 +3356,9 @@ func _ai_telemetry_mode() -> String:
 ## an empty room until it expires, let them claim it. The room refuses unless
 ## the opponent really is gone, so this is never a way to end a live match.
 func _claim_abandoned_match() -> void:
-	if not online_mode or player_count != 2 or online_peer_lost == false or state == Phase.GAME_OVER:
+	if not online_mode or player_count != 2 or _online.online_peer_lost == false or state == Phase.GAME_OVER:
 		return
-	if not _online_client.send_forfeit():
+	if not _online._online_client.send_forfeit():
 		banner_text = "COULD NOT REACH THE ROOM · RECONNECTING"
 		banner_color = Color(1.0, 0.45, 0.35)
 		banner_time = 2.0
@@ -5585,14 +3373,14 @@ func _claim_abandoned_match() -> void:
 func _finish_abandoned_match(claimed_by: int) -> void:
 	if not online_mode:
 		return
-	online_peer_lost = false
+	_online.online_peer_lost = false
 	winner = clampi(claimed_by, 0, player_count - 1)
 	winning_team = -1
-	_online_match_reported = true
+	_online._online_match_reported = true
 	state = Phase.GAME_OVER
 	# The same arrival every other win uses, so the result screen's gamepad
 	# edges are primed and a held button cannot instantly skip past it.
-	_prime_game_over_pad_state()
+	_player_input._prime_game_over_pad_state()
 	_finish_match_telemetry()
 	banner_text = "OPPONENT LEFT · %s TAKES THE MATCH" % player_title(winner)
 	banner_color = PLAYER_COLORS[winner].lightened(0.3)
@@ -5617,341 +3405,24 @@ func _cycle_rematch_level(direction: int) -> void:
 		return
 	# Online arenas are voted on the selection screen that a rematch opens.
 	if state != Phase.GAME_OVER or direction == 0 or demo_match \
-			or fate_trial_mode or close_camera_mode or interception_mode or online_mode:
+			or fate_trial_mode or interception_mode or online_mode:
 		return
 	rematch_level_index = posmod(rematch_level_index + direction, Levels.count())
 	var selected := Levels.build(rematch_level_index)
 	rematch_level_name = str(selected["name"])
 
 
+## Engine input callbacks stay on this node so they keep its place in the tree
+## and its event order. The handling itself lives in PlayerInput.gd.
 func _unhandled_input(event: InputEvent) -> void:
-	if _feedback != null and _feedback.visible: return
-	if _offline_tuning_layer != null and _offline_tuning_layer.visible:
-		if event.is_action_pressed("ui_cancel"):
-			_offline_tuning_layer.handle_key(KEY_ESCAPE)
-			get_viewport().set_input_as_handled()
-		return
-	if state == Phase.ROSTER or state == Phase.MATCH_SETUP:
-		var joy := event as InputEventJoypadButton
-		if joy != null and joy.pressed:
-			if state == Phase.ROSTER:
-				_roster.handle_joy_button(joy.device, joy.button_index)
-			else:
-				_setup.handle_joy_button(joy.device, joy.button_index)
-		return
-	if state == Phase.ONLINE_SELECT:
-		var pad := event as InputEventJoypadButton
-		if pad != null and pad.pressed:
-			if _online_setup.visible:
-				_online_setup.handle_joy_button(pad.device, pad.button_index)
-			else:
-				_online_roster.handle_joy_button(pad.device, pad.button_index)
-		return
-	var mb := event as InputEventMouseButton
-	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
-		var mouse_player := _keyboard_player()
-		if state in [Phase.PLANNING, Phase.FREEPLAY] \
-				and (uses_shock(mouse_player) or uses_chakram(mouse_player)):
-			# Pulse and Eclipse own RMB as their alternate attacks; it must never
-			# fall through to the generic rollback binding.
-			return
-		_rollback(mouse_player)
-
-
-## Explicit opt-in for developer match cheats; ordinary source play is clean too.
-var developer_shortcuts_enabled: bool = "--dev-tools" in OS.get_cmdline_user_args()
+	_player_input._unhandled_input(event)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	var k := event as InputEventKey
-	if k == null or not k.pressed or k.echo:
-		return
-	if demo_match and state == Phase.PLANNING and _transition.visible: return
-	if _feedback != null and _feedback.visible:
-		if k.keycode == KEY_ESCAPE: _feedback.close()
-		return
-	if state == Phase.PLANNING and _ui._turn_review.visible:
-		match k.keycode:
-			KEY_V, KEY_ESCAPE:
-				_ui._turn_review.visible = false
-			KEY_COMMA:
-				_ui._turn_review.seek(-1)
-			KEY_PERIOD:
-				_ui._turn_review.seek(1)
-			KEY_SPACE:
-				if _ui._turn_review.cursor >= _ui._turn_review.frames.size() - 1:
-					_ui._turn_review.cursor = 0.0
-				_ui._turn_review.paused = not _ui._turn_review.paused
-		return
-	if state == Phase.PLANNING and k.keycode == KEY_V and not _practice.active:
-		_ui._turn_review.open_last_turn()
-		return
-	if _feedback != null and _feedback.visible:
-		if k.keycode == KEY_ESCAPE: _feedback.close()
-		return
-	if _practice != null and _practice.active and _practice.handle_key(k.keycode):
-		return
-	if class_lab and ClassLab.handle_key(self, k.keycode):
-		return
-	if state == Phase.ROSTER:
-		_roster.handle_key(k.keycode)
-		return
-	if state == Phase.MATCH_SETUP:
-		_setup.handle_key(k.keycode)
-		return
-	if state == Phase.TUTORIAL:
-		_tutorial.handle_key(k.keycode)
-		return
-
-	if state == Phase.MENU:
-		if _offline_tuning_layer != null and _offline_tuning_layer.visible:
-			_offline_tuning_layer.handle_key(k.keycode)
-		else:
-			_menu.handle_key(k.keycode)
-		return
-	if state == Phase.ONLINE_LOBBY:
-		_online_lobby.handle_key(k.keycode)
-		return
-	if state == Phase.ONLINE_SELECT:
-		if _online_setup.visible:
-			_online_setup.handle_key(k.keycode)
-		else:
-			_online_roster.handle_key(k.keycode)
-		return
-
-	if state == Phase.FREEPLAY and real_time_mode:
-		match k.keycode:
-			KEY_ESCAPE:
-				_open_menu()
-			KEY_R:
-				_reset_freeplay()
-			KEY_H:
-				real_time_aim_guide = not real_time_aim_guide
-			KEY_M:
-				_sfx.toggle_mute()
-		return
-	if state == Phase.FREEPLAY:
-		match k.keycode:
-			KEY_ESCAPE:
-				_open_menu()
-			KEY_R:
-				_reset_freeplay()
-			KEY_M:
-				_sfx.toggle_mute()
-			KEY_F10:
-				_load_level(level_index + 1)
-				_reset_freeplay()
-			KEY_F7:
-				_activate_secret_triple_match()
-			KEY_F8:
-				_fill_test_super(k.shift_pressed)
-			KEY_1, KEY_2, KEY_3:
-				if uses_shock(0) and k.keycode in [KEY_1, KEY_2]:
-					_set_shock_attack_mode(0, 0 if k.keycode == KEY_1 else 1)
-				else:
-					_tuning.handle_key(k.keycode, k.shift_pressed)
-			_:
-				_tuning.handle_key(k.keycode, k.shift_pressed)
-		return
-
-	if state == Phase.REPLAY:
-		match k.keycode:
-			KEY_ESCAPE:
-				_finish_match_replay()
-				if online_mode:
-					_leave_online()
-				else:
-					_open_menu()
-			KEY_ENTER, KEY_KP_ENTER, KEY_R:
-				_finish_match_replay()
-			KEY_M:
-				_sfx.toggle_mute()
-			KEY_H:
-				_ui.toggle_help()
-		return
-
-	if online_mode:
-		match k.keycode:
-			KEY_ESCAPE:
-				_leave_online()
-				return
-			KEY_M:
-				var online_muted: bool = _sfx.toggle_mute()
-				banner_text = "SOUND OFF" if online_muted else "SOUND ON"
-				banner_color = Color(0.62, 0.68, 0.78)
-				banner_time = 1.1
-				return
-			KEY_H:
-				_ui.toggle_help()
-				return
-
-		if state == Phase.GAME_OVER:
-			if k.keycode in [KEY_ENTER, KEY_KP_ENTER]:
-				_request_rematch()
-			elif k.keycode == KEY_N:
-				start_next_opponent()
-			elif k.keycode == KEY_R:
-				_start_match_replay()
-			elif k.keycode == KEY_LEFT:
-				_cycle_rematch_level(-1)
-			elif k.keycode == KEY_RIGHT:
-				_cycle_rematch_level(1)
-			elif k.keycode == KEY_C:
-				copy_match_report()
-			return
-
-		if k.keycode in [KEY_ENTER, KEY_KP_ENTER] and online_peer_lost:
-			_claim_abandoned_match()
-			return
-		if k.keycode == KEY_SHIFT:
-			_confirm(online_player)
-			return
-		if state != Phase.PLANNING:
-			return
-		if uses_shock(online_player):
-			match k.keycode:
-				KEY_1:
-					_set_shock_attack_mode(online_player, 0)
-					return
-				KEY_2:
-					_set_shock_attack_mode(online_player, 1)
-					return
-		var online_map := key_bindings
-		if k.keycode in online_map["super"]:
-			_toggle_super(online_player)
-		elif k.keycode in online_map["rollback"]:
-			_rollback(online_player)
-		elif k.keycode in online_map["reset"]:
-			_reset_path(online_player)
-		return
-
-	if state == Phase.GAME_OVER:
-		match k.keycode:
-			KEY_ESCAPE:
-				_open_menu()
-			KEY_ENTER, KEY_KP_ENTER:
-				_request_rematch()
-			KEY_R:
-				_start_match_replay()
-			KEY_LEFT:
-				_cycle_rematch_level(-1)
-			KEY_RIGHT:
-				_cycle_rematch_level(1)
-			KEY_M:
-				_sfx.toggle_mute()
-			KEY_C:
-				copy_match_report()
-		return
-
-	match k.keycode:
-		KEY_ESCAPE:
-			_open_menu()
-			return
-		KEY_F1:
-			if not developer_shortcuts_enabled: return
-			planning_duration = 5.0
-			_clamp_planning_timer()
-			return
-		KEY_F2:
-			if not developer_shortcuts_enabled: return
-			planning_duration = 8.0
-			_clamp_planning_timer()
-			return
-		KEY_F3:
-			if not developer_shortcuts_enabled: return
-			planning_duration = 10.0
-			_clamp_planning_timer()
-			return
-		KEY_F5:
-			if not developer_shortcuts_enabled: return
-			execution_duration = 0.40
-			return
-		KEY_F6:
-			if not developer_shortcuts_enabled: return
-			execution_duration = 0.75
-			return
-		KEY_F7:
-			if not developer_shortcuts_enabled: return
-			_activate_secret_triple_match()
-			return
-		KEY_F8:
-			if not developer_shortcuts_enabled: return
-			_fill_test_super(k.shift_pressed)
-			return
-		KEY_F9:
-			if not developer_shortcuts_enabled: return
-			restart()
-			return
-		KEY_F10:
-			if not developer_shortcuts_enabled: return
-			next_level()
-			return
-		KEY_M:
-			var m: bool = _sfx.toggle_mute()
-			banner_text = "SOUND OFF" if m else "SOUND ON"
-			banner_color = Color(0.62, 0.68, 0.78)
-			banner_time = 1.1
-			return
-		KEY_H:
-			_ui.toggle_help()
-			return
-
-	# Local P1 owns keyboard + mouse. Right Shift used to confirm P2, but local P2
-	# is now deliberately gamepad-only and confirms with Start.
-	var keyboard_player := _keyboard_player()
-	if k.keycode == KEY_SHIFT:
-		if k.location != KEY_LOCATION_RIGHT and not is_ai(keyboard_player):
-			_confirm(keyboard_player)
-		return
-
-	if state != Phase.PLANNING:
-		return
-
-	if k.keycode == KEY_BACKSPACE:
-		_rewind_plan(keyboard_player, players[keyboard_player].plan.recorded_ticks() - 6)
-		return
-	if k.keycode in [KEY_COMMA, KEY_PERIOD]:
-		_shift_shot(keyboard_player, -1 if k.keycode == KEY_COMMA else 1)
-		return
-
-	if uses_shock(keyboard_player):
-		match k.keycode:
-			KEY_1:
-				_set_shock_attack_mode(keyboard_player, 0)
-				return
-			KEY_2:
-				_set_shock_attack_mode(keyboard_player, 1)
-				return
-
-	for i in players.size():
-		if is_ai(i):
-			continue
-		var map: Dictionary = _input_map_for(i)
-		if k.keycode in map["super"]:
-			_toggle_super(i)
-		elif k.keycode in map["rollback"]:
-			_rollback(i)
-		elif k.keycode in map["reset"]:
-			_reset_path(i)
-
-
-func _set_shock_attack_mode(i: int, mode: int) -> void:
-	if state not in [Phase.PLANNING, Phase.FREEPLAY] or not uses_shock(i) or is_ai(i):
-		return
-	var p: Player = players[i]
-	if not p.alive or p.plan.confirmed:
-		return
-	p.plan.attack_mode = clampi(mode, 0, 1)
-	banner_text = "%s PULSE · %s" % [player_tag(i),
-		"PLASMA LANCE" if p.plan.attack_mode == 0 else "SHOCK ORB"]
-	banner_color = p.color
-	banner_time = 1.1
-	p.queue_redraw()
+	_player_input._unhandled_key_input(event)
 
 
 func _toggle_super(i: int) -> void:
-	if class_lab:
-		return
 	if state != Phase.PLANNING or i < 0 or i >= players.size() or is_ai(i):
 		return
 	var p: Player = players[i]
@@ -5977,7 +3448,7 @@ func _rollback(i: int) -> void:
 		return
 	# A submitted online plan is already with the server. Editing the local copy
 	# would only make the screen disagree with the turn that will actually run.
-	if online_mode and i == online_player and _online_plan_sent:
+	if online_mode and i == online_player and _online._online_plan_sent:
 		_undo_banner(i, "PLAN ALREADY SENT · UNDO BEFORE LOCKING")
 		return
 	var had_throw: bool = p.plan.has_shot() or charging[i]
@@ -5987,7 +3458,7 @@ func _rollback(i: int) -> void:
 	p.plan.super_shot = false
 	p.plan.super_volley = -1
 	charging[i] = false
-	_charge_t[i] = 0.0
+	_player_input._charge_t[i] = 0.0
 	p.queue_redraw()
 	if had_throw:
 		_undo_banner(i, "THROW UNDONE")
@@ -6014,12 +3485,12 @@ func _undo_banner(i: int, text: String) -> void:
 ## the retained input prefix, including jumps and drops, from the live body.
 func _can_edit_plan(i: int) -> bool:
 	return state == Phase.PLANNING and i >= 0 and i < players.size() \
-		and players[i].alive and _is_locally_controlled(i) \
-		and not players[i].plan.confirmed and not (online_mode and _online_plan_sent)
+		and players[i].alive and _player_input._is_locally_controlled(i) \
+		and not players[i].plan.confirmed and not (online_mode and _online._online_plan_sent)
 
 
 func _rewind_plan(i: int, keep_ticks: int) -> void:
-	if not _can_edit_plan(i) or (not class_lab and player_weapons[i] != Weapon.KNIVES):
+	if not _can_edit_plan(i) or player_weapons[i] != Weapon.KNIVES:
 		return
 	var plan: PlayerPlan = players[i].plan
 	var count := clampi(keep_ticks, 0, plan.recorded_ticks())
@@ -6061,7 +3532,7 @@ func _reset_path(i: int) -> void:
 func _confirm(i: int) -> void:
 	if state != Phase.PLANNING:
 		return
-	if online_mode and (i != online_player or _online_plan_sent):
+	if online_mode and (i != online_player or _online._online_plan_sent):
 		return
 	var p: Player = players[i]
 	if not p.alive:
@@ -6085,8 +3556,8 @@ func _confirm(i: int) -> void:
 			"live_knives": arrows.size(),
 		})
 	if online_mode:
-		_online_plan_sent = _online_client.send_plan(turn, p.plan.to_network_dict())
-		if _online_plan_sent:
+		_online._online_plan_sent = _online._online_client.send_plan(turn, p.plan.to_network_dict())
+		if _online._online_plan_sent:
 			banner_text = "PLAN LOCKED · WAITING FOR OPPONENT"
 			banner_color = PLAYER_COLORS[i].lightened(0.3)
 			banner_time = 1.2
@@ -6103,328 +3574,12 @@ func _check_both_confirmed() -> void:
 
 # ---------------------------------------------------------- polled planning --
 
-func _poll_game_over_pad() -> void:
-	for i in players.size():
-		var pad: int = _pads[i]
-		if pad < 0:
-			continue
-		var rematch_pressed := _pad_edge(i, pad, JOY_BUTTON_A)
-		var replay_pressed := _pad_edge(i, pad, JOY_BUTTON_Y)
-		var report_pressed := _pad_edge(i, pad, JOY_BUTTON_X)
-		var previous_pressed := _pad_edge(i, pad, JOY_BUTTON_DPAD_LEFT)
-		var next_pressed := _pad_edge(i, pad, JOY_BUTTON_DPAD_RIGHT)
-		if replay_pressed:
-			_start_match_replay()
-			return
-		if report_pressed:
-			copy_match_report()
-			return
-		if rematch_pressed:
-			_request_rematch()
-			return
-		if previous_pressed:
-			_cycle_rematch_level(-1)
-		elif next_pressed:
-			_cycle_rematch_level(1)
-
-
-func _poll_replay_pad() -> void:
-	for i in players.size():
-		var pad: int = _pads[i]
-		if pad < 0:
-			continue
-		var a := _pad_edge(i, pad, JOY_BUTTON_A)
-		var b := _pad_edge(i, pad, JOY_BUTTON_B)
-		var y := _pad_edge(i, pad, JOY_BUTTON_Y)
-		if a or b or y:
-			_finish_match_replay()
-			return
-
-
-func _prime_game_over_pad_state() -> void:
-	# A may still be held from the final jump. Seed result-screen edges so that
-	# carrying a gameplay button through the kill never starts an instant rematch.
-	for i in players.size():
-		var pad: int = _pads[i]
-		if pad < 0:
-			continue
-		for button in [JOY_BUTTON_A, JOY_BUTTON_X, JOY_BUTTON_Y,
-				JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]:
-			_pad_btn_prev[i][button] = Input.is_joy_button_pressed(pad, button)
-
-
-func _poll_planning_input(delta: float) -> void:
-	var mouse := get_viewport().get_mouse_position()
-	var mouse_moved: bool = mouse.distance_to(_prev_mouse) > 0.5
-	_prev_mouse = mouse
-
-	for i in players.size():
-		var p: Player = players[i]
-		if not p.alive or not _is_locally_controlled(i):
-			continue
-		_poll_pad_meta(i)
-		if p.plan.confirmed:
-			continue
-		# Explicit aim edit retains shot timing and charge; incidental mouse motion
-		# after placing a throw must not change it.
-		var edit_aim: bool = (i == _keyboard_player() and Input.is_physical_key_pressed(KEY_ALT)) or \
-			(_pads[i] >= 0 and Input.is_joy_button_pressed(_pads[i], JOY_BUTTON_RIGHT_SHOULDER))
-		if p.plan.has_shot() and edit_aim:
-			_poll_aim(i, delta, mouse_moved)
-		if not p.plan.has_shot():
-			_poll_aim(i, delta, mouse_moved)
-			_poll_charge(i, delta)
-		_poll_pilot(i, delta)
-
-
-## Confirm / rollback work even while confirmed, so they are polled separately.
-func _poll_pad_meta(i: int) -> void:
-	var pad: int = _pads[i]
-	if pad < 0:
-		return
-	# Every edge must be sampled each frame, so no short-circuiting here.
-	var start := _pad_edge(i, pad, JOY_BUTTON_START)
-	var back := _pad_edge(i, pad, JOY_BUTTON_BACK)
-	var b := _pad_edge(i, pad, JOY_BUTTON_B)
-	var x := _pad_edge(i, pad, JOY_BUTTON_X)
-	var y := _pad_edge(i, pad, JOY_BUTTON_Y)
-	var fuse_previous := _pad_edge(i, pad, JOY_BUTTON_LEFT_SHOULDER)
-	var fuse_next := _pad_edge(i, pad, JOY_BUTTON_RIGHT_SHOULDER)
-	if start:
-		_confirm(i)
-	if back or b:
-		_rollback(i)
-	if x:
-		_reset_path(i)
-	if y:
-		_toggle_super(i)
-	if fuse_previous:
-		if class_lab or player_weapons[i] == Weapon.KNIVES:
-			_rewind_plan(i, players[i].plan.recorded_ticks() - 6)
-		else:
-			_cycle_attack_mode(i, -1)
-	if fuse_next:
-		_cycle_attack_mode(i, 1)
-
-
-func _pad_edge(i: int, pad: int, btn: int) -> bool:
-	var now: bool = Input.is_joy_button_pressed(pad, btn)
-	var was: bool = _pad_btn_prev[i].get(btn, false)
-	_pad_btn_prev[i][btn] = now
-	return now and not was
-
-
-## The shoulder buttons cycle whichever secondary choice the kit owns. Only
-## The Pulse has one, so for every other fighter this is inert.
-func _cycle_attack_mode(i: int, direction: int) -> void:
-	if direction == 0 or not uses_shock(i):
-		return
-	_set_shock_attack_mode(i, posmod(players[i].plan.attack_mode + direction, 2))
-
-
-## Free platformer control of the ghost, metered by stamina. Time only advances
-## while the player is actually driving (or is airborne and committed to the
-## arc), and never while a shot is being charged.
-func _poll_pilot(i: int, delta: float) -> void:
-	var map: Dictionary = _input_map_for(i)
-	var pad: int = _pads[i]
-
-	var dir := 0
-	var touch_player := _touch_player()
-	if _held(map["left"]) or _pad_left(pad) or (i == touch_player and _touch_controls.left_held):
-		dir -= 1
-	if _held(map["right"]) or _pad_right(pad) or (i == touch_player and _touch_controls.right_held):
-		dir += 1
-	# On touch, walking establishes the natural default facing. A deliberate
-	# right-side aim gesture latches the bow, so walking the other way afterwards
-	# cannot flip the shot.
-	if i == touch_player and _touch_controls.enabled and dir != 0 \
-			and not _touch_controls.aim_latched:
-		players[i].plan.set_aim_side(dir)
-
-	var jump_now: bool = _jump_input_held(i)
-	var jump_edge: bool = jump_now and not _jump_prev[i]
-	_jump_prev[i] = jump_now
-
-	var wait_held: bool = _held(map["wait"]) or _pad_down(pad) \
-		or (i == touch_player and _touch_controls.wait_held)
-
-	if charging[i] or stamina[i] <= 0.0:
-		_pilot_accum[i] = 0.0
-		return
-
-	# Down + jump goes DOWN. Checked before the jump so the two verbs sharing one
-	# button never both fire, and only from the ground, because dropping through
-	# a ledge you are not standing on is not a move anyone means to make.
-	if jump_edge and wait_held and ghost_ground[i]:
-		_pilot_step(i, dir, false, false, true)
-		_pilot_accum[i] = 0.0
-		return
-
-	# A jump press must land on a tick even if nothing else is being held.
-	if jump_edge and (ghost_ground[i] or ghost_air_jumps[i] > 0):
-		_pilot_step(i, dir, true, true)
-		_pilot_accum[i] = 0.0
-		return
-
-	# ONE time rule, on the ground and in the air alike: the ghost advances only
-	# while you are holding a pilot input. Airborne used to advance on its own,
-	# which meant the controls silently changed the moment you left the ground,
-	# and since a full jump outlasts the window, that was every jump.
-	var advancing: bool = dir != 0 or jump_now or wait_held
-	if not advancing:
-		_pilot_accum[i] = 0.0
-		return
-
-	_pilot_accum[i] += delta * pilot_time_scale
-	while _pilot_accum[i] >= tick_dt():
-		_pilot_accum[i] -= tick_dt()
-		if not _pilot_step(i, dir, false, jump_now):
-			_pilot_accum[i] = 0.0
-			break
-
-
-func _jump_input_held(i: int) -> bool:
-	var map: Dictionary = _input_map_for(i)
-	var pad: int = _pads[i]
-	var touch_jump := _touch_controls != null and i == _touch_player() \
-		and _touch_controls.jump_held
-	return _held(map["jump"]) \
-		or (pad >= 0 and Input.is_joy_button_pressed(pad, JOY_BUTTON_A)) \
-		or touch_jump
-
-
-func _held(codes: Array) -> bool:
-	for c in codes:
-		if Input.is_key_pressed(c):
-			return true
-	return false
-
-
-func _pad_left(pad: int) -> bool:
-	if pad < 0:
-		return false
-	return Input.get_joy_axis(pad, JOY_AXIS_LEFT_X) < -0.4 \
-		or Input.is_joy_button_pressed(pad, JOY_BUTTON_DPAD_LEFT)
-
-
-func _pad_right(pad: int) -> bool:
-	if pad < 0:
-		return false
-	return Input.get_joy_axis(pad, JOY_AXIS_LEFT_X) > 0.4 \
-		or Input.is_joy_button_pressed(pad, JOY_BUTTON_DPAD_RIGHT)
-
-
-## "Let time run without steering": hold to walk the ghost forward through a
-## fall, or to line a shot up at a precise moment.
-func _pad_down(pad: int) -> bool:
-	if pad < 0:
-		return false
-	return Input.get_joy_axis(pad, JOY_AXIS_LEFT_Y) > 0.4 \
-		or Input.is_joy_button_pressed(pad, JOY_BUTTON_DPAD_DOWN)
-
-
-func _poll_aim(i: int, delta: float, mouse_moved: bool) -> void:
-	if i == _keyboard_player() and _ui.pointer_on_action(get_viewport().get_mouse_position()): return
-	var p: Player = players[i]
-	var map: Dictionary = _input_map_for(i)
-	var pad: int = _pads[i]
-	var touch_driven := i == _touch_player() and _touch_controls.enabled
-	# Browsers emulate a mouse cursor from the most recent finger. Without this
-	# arbitration, dragging the left joystick can replace a rightward touch aim
-	# with the joystick's screen position and silently flip the shot left.
-	if touch_driven and aim_source[i] == AimSrc.MOUSE:
-		aim_source[i] = AimSrc.TOUCH
-
-	# --- pick the active aim source from whatever the player touched last ---
-	var stick := Vector2.ZERO
-	if pad >= 0:
-		stick = Vector2(Input.get_joy_axis(pad, JOY_AXIS_RIGHT_X), Input.get_joy_axis(pad, JOY_AXIS_RIGHT_Y))
-		if stick.length() > stick_deadzone:
-			aim_source[i] = AimSrc.PAD
-	var key_dir := 0.0
-	if _held(map["aim_up"]):
-		key_dir += 1.0
-	if _held(map["aim_down"]):
-		key_dir -= 1.0
-	if key_dir != 0.0:
-		aim_source[i] = AimSrc.KEYS
-	elif i == _touch_player() and _touch_controls.aim_active:
-		aim_source[i] = AimSrc.TOUCH
-	elif i == _keyboard_player() \
-			and mouse_moved and not _touch_controls.enabled:
-		aim_source[i] = AimSrc.MOUSE
-
-	# --- apply it ---
-	match aim_source[i]:
-		AimSrc.PAD:
-			if stick.length() > stick_deadzone:
-				p.plan.set_aim_from_vector(stick, aim_min_angle, aim_max_angle)
-		AimSrc.MOUSE:
-			if not _touch_controls.enabled:
-				# Measured from the ghost, because that is where the shot leaves from.
-				p.plan.set_aim_from_vector(get_global_mouse_position() \
-					- Player.shoulder_at(shot_origin(i)),
-					aim_min_angle, aim_max_angle)
-		AimSrc.TOUCH:
-			if _touch_controls.aim_active:
-				p.plan.set_aim_from_vector(_touch_controls.aim_position \
-					- Player.shoulder_at(shot_origin(i)),
-					aim_min_angle, aim_max_angle)
-		AimSrc.KEYS:
-			if key_dir != 0.0:
-				p.plan.set_elevation(p.plan.elevation() + key_dir * aim_rate * delta,
-					aim_min_angle, aim_max_angle)
-
-
-func _poll_charge(i: int, delta: float) -> void:
-	if i == _keyboard_player() and _ui.pointer_on_action(get_viewport().get_mouse_position()): return
-	var p: Player = players[i]
-	var map: Dictionary = _input_map_for(i)
-	var pad: int = _pads[i]
-
-	var primary_held: bool = _held(map["charge"]) \
-		or (i == _touch_player() and _touch_controls.charge_held)
-	var secondary_held := false
-	if i == _keyboard_player() \
-			and not _touch_controls.has_active_touches() \
-			and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		primary_held = true
-	var can_absolve: bool = uses_chakram(i) and oldest_recallable_chakram(i) != null
-	if (uses_shock(i) or can_absolve) and i == _keyboard_player() \
-			and not _touch_controls.has_active_touches() \
-			and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		secondary_held = true
-	if pad >= 0 and Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_RIGHT) > trigger_threshold:
-		primary_held = true
-	if pad >= 0 and can_absolve \
-			and Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_LEFT) > trigger_threshold:
-		secondary_held = true
-	var held: bool = primary_held or secondary_held
-
-	if held:
-		if not charging[i]:
-			charging[i] = true
-			_charge_t[i] = 0.0
-			charge_attack_mode[i] = 1 if secondary_held and not primary_held else 0
-			if uses_shock(i) or uses_chakram(i):
-				p.plan.attack_mode = charge_attack_mode[i]
-		else:
-			_charge_t[i] = minf(_charge_t[i] + delta, charge_time)
-		p.plan.power = _charge_t[i] / charge_time
-	elif charging[i]:
-		_release_charge(i)
-
-
 ## The arrow is pinned to the tick the ghost had reached, so a shot taken
 ## mid-path leaves from that point and the player can keep piloting afterwards.
 func _release_charge(i: int) -> void:
 	charging[i] = false
 	var pl: PlayerPlan = players[i].plan
-	# RMB/L2 is an explicit ABSOLUTION call. It never turns into the triple-corona
-	# SUPER merely because the meter was left armed; DECREE remains the SUPER verb.
-	pl.super_shot = not class_lab and super_meter[i] >= 1.0 and super_armed[i] \
-		and not (uses_chakram(i) and pl.attack_mode == 1)
+	pl.super_shot = super_meter[i] >= 1.0 and super_armed[i]
 	pl.super_volley = -1
 	pl.shot_tick = pl.recorded_ticks()
 	if pl.super_shot:
@@ -6458,18 +3613,11 @@ func _fill_test_super(second_player: bool) -> void:
 	banner_time = 1.4
 
 
-func _report_online_match_over() -> void:
-	if not online_mode or _online_match_reported or winner < 0:
-		return
-	_online_match_reported = true
-	_online_client.send_match_over(turn, winner, _online_state_digest())
-
-
 func _begin_match_telemetry(mode: String) -> void:
 	if _telemetry == null:
 		return
 	var input_name := "touch" if _touch_controls.enabled else \
-		("gamepad" if not _pads.is_empty() and _pads[0] >= 0 else "keyboard_mouse")
+		("gamepad" if not _player_input._pads.is_empty() and _player_input._pads[0] >= 0 else "keyboard_mouse")
 	_telemetry.begin_match(mode, level_name, input_name)
 	_telemetry_finished = false
 
@@ -6492,7 +3640,7 @@ func _finish_match_telemetry() -> void:
 	if _telemetry == null or _telemetry_finished:
 		return
 	_telemetry_finished = true
-	_telemetry.finish_match(winner, score, turn, _online_state_digest())
+	_telemetry.finish_match(winner, score, turn, _online._online_state_digest())
 
 
 func copy_match_report() -> bool:
@@ -6505,72 +3653,6 @@ func copy_match_report() -> bool:
 	banner_color = Color(0.62, 0.95, 0.72)
 	banner_time = 1.4
 	return true
-
-
-## Both browsers hash the gameplay state after each execution. The room advances
-## only when the hashes match, catching platform/physics drift before it can
-## silently corrupt a later turn.
-func _online_state_digest() -> String:
-	var parts := PackedStringArray()
-	parts.append("turn:%d" % turn)
-	parts.append("players:%d" % player_count)
-	parts.append("ids:%d,%d,%d" % [
-		_next_volley, _next_arrow_id, _next_character_projectile_id,
-	])
-	parts.append("rng:%d" % rng.state)
-	for i in players.size():
-		var p: Player = players[i]
-		parts.append("scorekit%d:%d,%d" % [i, score[i], player_weapons[i]])
-		parts.append("p%d:%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % [
-			i,
-			int(round(p.position.x * 10000.0)), int(round(p.position.y * 10000.0)),
-			int(round(p.vel.x * 10000.0)), int(round(p.vel.y * 10000.0)),
-			1 if p.on_ground else 0, p.air_jumps_left,
-			p.drop_ticks, int(round(p.drop_from_y * 10000.0)),
-			1 if p.alive else 0, p.invuln_turns,
-			int(round(super_meter[i] * 1000000.0)), 1 if super_armed[i] else 0,
-			p.plan.attack_mode,
-		])
-		parts.append("fd%d:%d,%d" % [i, frame_debt_cells[i], frame_debt_units[i]])
-		parts.append("fdl%d:%d" % [i, 1 if frame_debt_locked[i] else 0])
-	var ordered_arrows: Array = arrows.duplicate()
-	ordered_arrows.sort_custom(func(a: Arrow, b: Arrow): return a.network_id < b.network_id)
-	for a: Arrow in ordered_arrows:
-		parts.append("a:" + a.lockstep_digest_fragment())
-	var ordered_dashes: Array = dashblades.duplicate()
-	ordered_dashes.sort_custom(func(a, b): return a.owner_index < b.owner_index)
-	for dash in ordered_dashes:
-		parts.append("d:" + dash.lockstep_digest_fragment())
-	var ordered_chakrams: Array = chakrams.duplicate()
-	ordered_chakrams.sort_custom(func(a, b): return a.network_id < b.network_id)
-	for chakram in ordered_chakrams:
-		parts.append("c:" + chakram.lockstep_digest_fragment())
-	var ordered_plasmas: Array = shock_plasmas.duplicate()
-	ordered_plasmas.sort_custom(func(a, b): return a.network_id < b.network_id)
-	for plasma in ordered_plasmas:
-		parts.append("sp:" + plasma.lockstep_digest_fragment())
-	var ordered_orbs: Array = shock_orbs.duplicate()
-	ordered_orbs.sort_custom(func(a, b): return a.network_id < b.network_id)
-	for orb in ordered_orbs:
-		parts.append("so:" + orb.lockstep_digest_fragment())
-	for i in platforms.size():
-		var pf: Dictionary = platforms[i]
-		var rect: Rect2 = pf["rect"]
-		parts.append("f%d:%d,%d,%d,%d,%d" % [
-			i, int(pf["hp"]),
-			int(round(rect.position.x * 10000.0)), int(round(rect.position.y * 10000.0)),
-			int(round(rect.size.x * 10000.0)), int(round(rect.size.y * 10000.0)),
-		])
-	parts.append("world:%d" % world_tick)
-	for i in hazards.size():
-		parts.append("h%d:%s" % [i, hazards[i].lockstep_digest_fragment()])
-	parts.append("core:%d,%d,%d,%d,%d,%d,%d" % [
-		1 if core_announced else 0, 1 if core_active else 0, core_turns_left,
-		hitless_execution_streak,
-		int(round(core_position.x * 10000.0)), int(round(core_position.y * 10000.0)),
-		1 if _core_collected_this_execution else 0,
-	])
-	return "|".join(parts).sha256_text()
 
 
 func _clamp_planning_timer() -> void:

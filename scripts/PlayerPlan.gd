@@ -21,9 +21,9 @@ var drops: PackedByteArray = PackedByteArray()
 var shot_tick: int = -1     # tick the arrow is loosed on; -1 = no shot this turn
 var aim_angle: float = 0.0  # WORLD degrees: 0 = right, +90 = straight up
 var power: float = 0.5      # 0..1, maps to arrow speed
-## Attack captured when the charge starts. Pulse maps LMB/0 to plasma and RMB/1
-## to her orb. Eclipse maps LMB/0 to DECREE and RMB/1 to ABSOLUTION, recalling
-## every active corona instead of generating another one.
+## Reserved wire field. The retired kits sent 1 for their alternate attack; the
+## Duelist always sends 0. It stays because protocol 4 requires it in every
+## plan and hashes it in the lockstep digest. Drop it at the next protocol bump.
 var attack_mode: int = 0
 ## A full meter plus the player's explicit SUPER toggle upgrades this shot. The
 ## flag is stored on the plan so rollback can change it without spending meter.

@@ -17,9 +17,6 @@ signal ui_accepted
 ## Fighter identity, portraits and kit copy all live in Roster so this screen
 ## and the online lobby can never describe the same fighter differently.
 const DUELIST := Roster.DUELIST
-const DASHBLADE := Roster.DASHBLADE
-const CHAKRAM := Roster.CHAKRAM
-const SHOCK := Roster.SHOCK
 const ROSTER := Roster.ORDER
 
 const MAX_SLOTS := 4

@@ -18,7 +18,7 @@ func _run() -> void:
 		game.set_physics_process(false)
 		var backdrop = game._backdrop
 		backdrop.set_process(false)
-		var digest: String = game._online_state_digest()
+		var digest: String = game._online._online_state_digest()
 		var p: Vector2 = backdrop.observatory_mote_position(5)
 		for phase in [Phase.PLANNING, Phase.COMMITTING, Phase.ONLINE_WAIT]:
 			game.state = phase
@@ -30,7 +30,7 @@ func _run() -> void:
 		_check(backdrop.observatory_mote_position(5) != p,
 			"arena %d air must resume" % level)
 		game.state = Phase.PLANNING
-		_check(game._online_state_digest() == digest,
+		_check(game._online._online_state_digest() == digest,
 			"arena %d atmosphere must leave gameplay state untouched" % level)
 		backdrop.show_level(level)
 		_check(backdrop.observatory_mote_position(5) == p,
@@ -43,7 +43,7 @@ func _run() -> void:
 		game.players[1].position = Vector2(300.0, 320.0)
 		_check(backdrop.fight_offset() != Vector2.ZERO,
 			"arena %d test fighters must stand off-centre" % level)
-		var moved_digest: String = game._online_state_digest()
+		var moved_digest: String = game._online._online_state_digest()
 		for phase in [Phase.PLANNING, Phase.COMMITTING, Phase.ONLINE_WAIT]:
 			game.state = phase
 			backdrop._process(0.25)
@@ -60,7 +60,7 @@ func _run() -> void:
 		_check(backdrop.parallax.length() * backdrop.FAR_PARALLAX < 16.0,
 			"arena %d far layer slide must stay within its bleed" % level)
 		game.state = Phase.PLANNING
-		_check(game._online_state_digest() == moved_digest,
+		_check(game._online._online_state_digest() == moved_digest,
 			"arena %d lighting and slide must leave gameplay state untouched" % level)
 		backdrop.show_level(level)
 		_check(backdrop.warm == 0.0 and backdrop.parallax == Vector2.ZERO,

@@ -22,10 +22,10 @@ func run() -> void:
 	game.set_physics_process(false)
 	game._sfx.muted = true
 	# Ladder progress is saved on a demo win; keep it off the player's settings.
-	game.settings_path = "user://test-interceptionmodetest-settings.cfg"
-	game._settings["ladder_progress"] = 0
-	game._settings["telemetry"] = false
-	game._apply_setting("telemetry")
+	game._settings_store.settings_path = "user://test-interceptionmodetest-settings.cfg"
+	game._settings_store._settings["ladder_progress"] = 0
+	game._settings_store._settings["telemetry"] = false
+	game._settings_store._apply_setting("telemetry")
 	game._transition.visible = false
 	# A saved local profile must survive a visit to the fixed experiment.
 	game.offline_tuning.set_value("player_move_speed", 310.0)

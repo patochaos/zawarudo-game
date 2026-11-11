@@ -14,28 +14,29 @@ func _run() -> void:
 	await process_frame
 	game._sfx.muted = true
 	_check(Roster.ORDER == [Roster.DUELIST], "Only Duelist is playable")
-	for weapon in [Roster.DASHBLADE, Roster.SHOCK, Roster.CHAKRAM]:
+	# Retired weapon ids (Rook, Pulse, Eclipse). They must stay rejected.
+	for weapon in [2, 4, 3]:
 		game._roster.weapons.fill(weapon)
 		game._roster._normalize()
 		_check(game._roster.weapons == [0, 0, 0, 0], "Stale local picks become Duelist")
-		game._online_lobby.open(0, weapon)
-		_check(game._online_lobby.weapon == Roster.DUELIST, "Online lobby excludes benched kits")
-		game._online_roster.configure_room(0, 2, [], [true, true], [weapon, weapon], [], true)
-		game._online_roster._cycle_fighter(0, 1)
-		_check(game._online_roster.local_weapon() == Roster.DUELIST,
+		game._online._online_lobby.open(0, weapon)
+		_check(game._online._online_lobby.weapon == Roster.DUELIST, "Online lobby excludes benched kits")
+		game._online._online_roster.configure_room(0, 2, [], [true, true], [weapon, weapon], [], true)
+		game._online._online_roster._cycle_fighter(0, 1)
+		_check(game._online._online_roster.local_weapon() == Roster.DUELIST,
 			"Online selection excludes benched kits")
 		game._start_local_match(0, 2, [weapon, weapon], {})
 		_check(game.player_weapons == [0, 0, 0, 0], "Local entry rejects benched kits")
 		game._start_freeplay(0, [weapon, weapon])
 		_check(game.player_weapons == [0, 0, 0, 0], "Free play entry rejects benched kits")
 		game._open_menu()
-		game._online_lobby.open(0)
+		game._online._online_lobby.open(0)
 		# Room assignment precedes match_start in the real online flow.
 		game.online_player = 0
-		game._start_online_match(0, 42, 1, [0, weapon])
-		_check(not game.online_mode and game._online_lobby.visible,
+		game._online._start_online_match(0, 42, 1, [0, weapon])
+		_check(not game.online_mode and game._online._online_lobby.visible,
 			"An older online lineup must not begin a mismatched simulation")
-	game._start_online_match(0, 42, 1, [0, 0])
+	game._online._start_online_match(0, 42, 1, [0, 0])
 	_check(game.online_mode and game.player_weapons == [0, 0, 0, 0],
 		"A Duelist-only online lineup can start")
 	root.remove_child(game)

@@ -87,7 +87,7 @@ func _test_tutorial_launch() -> void:
 	secret_key.keycode = KEY_F8
 	game._unhandled_key_input(secret_key)
 	_check(game.super_meter[0] == 0.0, "normal play must not grant free SUPER")
-	game.developer_shortcuts_enabled = true
+	game._player_input.developer_shortcuts_enabled = true
 	secret_key.keycode = KEY_F7
 	game._unhandled_key_input(secret_key)
 	_check(game._secret_triple_match,
@@ -119,20 +119,20 @@ func _test_tutorial_launch() -> void:
 		"a hit must trigger both presentation hit-stop and the impact crop")
 	game._open_menu()
 	game._menu._activate(game._menu.ROW_ONLINE)
-	_check(game.state == Phase.ONLINE_LOBBY and game._online_lobby.visible,
+	_check(game.state == Phase.ONLINE_LOBBY and game._online._online_lobby.visible,
 		"the restored Online row must open the existing private-room lobby")
 	_check(game._transition.visible and game._transition._title == "PRIVATE PLANS",
 		"opening Online must receive the same authored transition as local modes")
-	game._online_lobby._sanitize_code("abci12z9")
-	_check(game._online_lobby._code_input.text == "ABC2Z9",
+	game._online._online_lobby._sanitize_code("abci12z9")
+	_check(game._online._online_lobby._code_input.text == "ABC2Z9",
 		"the lobby must normalize room codes and remove ambiguous characters")
-	game._online_lobby._code_input.text = "ABC2Z"
-	game._online_lobby._request_join()
-	_check("6 CHARACTERS" in game._online_lobby._status.text,
+	game._online._online_lobby._code_input.text = "ABC2Z"
+	game._online._online_lobby._request_join()
+	_check("6 CHARACTERS" in game._online._online_lobby._status.text,
 		"an incomplete room code must fail locally with an actionable message")
 	game.online_player = 0
-	game.online_room = "TEST24"
-	game._start_online_match(4, 1234, 1, [game.Weapon.KNIVES, game.Weapon.KNIVES])
+	game._online.online_room = "TEST24"
+	game._online._start_online_match(4, 1234, 1, [game.Weapon.KNIVES, game.Weapon.KNIVES])
 	_check(game.online_mode and game.level_index == 4 \
 		and game.player_weapons[0] == game.Weapon.KNIVES \
 		and game.player_weapons[1] == game.Weapon.KNIVES,

@@ -82,8 +82,8 @@ func _test_stasis() -> void:
 	check(is_equal_approx(game.time_scale_at(inside), 0.35) and is_equal_approx(game.time_scale_at(Vector2(200.0, 400.0)), 1.0),
 		"time runs at the field's scale inside and normally outside")
 	var dt: float = game.tick_dt()
-	var slow: Array = Arrow.step_state(inside, Vector2(600.0, 0.0), dt, game)
-	var fast: Array = Arrow.step_state(Vector2(200.0, 400.0), Vector2(600.0, 0.0), dt, game)
+	var slow: Array = Knife.step_state(inside, Vector2(600.0, 0.0), dt, game)
+	var fast: Array = Knife.step_state(Vector2(200.0, 400.0), Vector2(600.0, 0.0), dt, game)
 	var ratio: float = (slow[2].x - inside.x) / (fast[2].x - 200.0)
 	check(ratio > 0.34 and ratio < 0.36, "a knife inside the field covers about 35 percent of the distance")
 	var airborne: Array = Player.step_state(inside, Vector2.ZERO, false, 0, false, dt, game, 0)
@@ -103,7 +103,7 @@ func _check_prediction_matches_runtime(game, start: Vector2, launch: Vector2, la
 		ticks: int = 60) -> void:
 	var dt: float = game.tick_dt()
 	var predicted: Dictionary = PredictionSystem.predict_arrow(start, launch, game, float(ticks) * dt, game.world_tick)
-	var knife := Arrow.new()
+	var knife := Knife.new()
 	knife.cfg = game
 	knife.position = start
 	knife.vel = launch

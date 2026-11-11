@@ -49,7 +49,7 @@ func _test_styles_change_the_plan() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
-	game.settings_path = SETTINGS_PATH
+	game._settings_store.settings_path = SETTINGS_PATH
 	# The wrap arena gives the rusher and the sniper different routes to prefer.
 	game.start_demo_duel(4)
 	game._transition.visible = false
@@ -99,8 +99,8 @@ func _test_progress_and_result_flow() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
-	game.settings_path = SETTINGS_PATH
-	game._settings["ladder_progress"] = 0
+	game._settings_store.settings_path = SETTINGS_PATH
+	game._settings_store._settings["ladder_progress"] = 0
 
 	game.start_demo_duel()
 	game._transition.visible = false
@@ -149,7 +149,7 @@ func _test_progress_and_result_flow() -> void:
 	check(game.demo_opponent == 1, "Start Duel resumes at the first unbeaten opponent")
 
 	# The last rung never offers a next opponent.
-	game._settings["ladder_progress"] = Opponents.count()
+	game._settings_store._settings["ladder_progress"] = Opponents.count()
 	game.start_demo_duel()
 	check(game.demo_opponent == Opponents.count() - 1, "a complete ladder replays its last opponent")
 	game.state = Phase.GAME_OVER

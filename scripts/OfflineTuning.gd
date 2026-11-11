@@ -124,7 +124,6 @@ func _build_catalog() -> void:
 	_add("Projectiles", "aim_preview_duration", "Path preview duration", "How much future flight the aiming guide shows, up to the first impact.", 0.1, 4.5, 0.05, "s")
 	_add("Projectiles", "knife_spread_max", "Tap throw spread", "Total angle of the knife fan at no charge.", 0, 90, 1, "°")
 	_add("Projectiles", "knife_spread_min", "Full-charge spread", "Total fan angle at full charge. Cannot exceed tap spread.", 0, 90, 1, "°")
-	_add("Projectiles", "real_time_throw_cooldown", "Real Time cooldown", "Minimum time between attacks in the Real Time experiment.", 0, 5, 0.05, "s")
 	_add("Knife physics", "arrow_gravity", "Knife gravity", "Downward pull on flying knives. Zero gives a flat flight.", 0, 1200, 10, "px/s²")
 	_add("Knife physics", "arrow_drag", "Horizontal drag", "Fraction of horizontal speed lost per second. Zero preserves speed.", 0, 3, 0.05, "/s")
 	_add("Knife physics", "arrow_clashed_gravity_scale", "Deflected knife gravity", "Gravity multiplier after knives collide.", 1, 6, 0.1, "x")
@@ -154,31 +153,6 @@ func _build_catalog() -> void:
 	_add("Supers and core", "core_active_turns", "Core lifetime", "How many turns an uncollected temporal core stays active.", 1, 10, 1, "turns", "int")
 	_add("Class movement", "dagger_move_speed_scale", "Duelist run speed", "Multiplier of base run speed for the Duelist.", 0.25, 2, 0.05, "x")
 	_add("Class movement", "dagger_air_jump_impulse_scale", "Duelist air jump", "Air-jump strength relative to the base jump.", 0, 1.5, 0.01, "x")
-	_add("Class movement", "velocity_move_speed_scale", "Rook run speed", "Run-speed multiplier for the Rook prototype.", 0.25, 2, 0.05, "x")
-	_add("Class movement", "velocity_jump_impulse_scale", "Rook jump strength", "Zero preserves her dash-only traversal. Raise to enable a ground jump.", 0, 2, 0.05, "x")
-	_add("Class movement", "shock_move_speed_scale", "Pulse run speed", "Run-speed multiplier for the Pulse prototype.", 0.25, 2, 0.05, "x")
-	_add("Class movement", "shock_jump_impulse_scale", "Pulse jump strength", "Ground-jump multiplier for the Pulse prototype.", 0, 2, 0.05, "x")
-	_add("Class movement", "chakram_move_speed_scale", "Eclipse run speed", "Run-speed multiplier for the Eclipse prototype.", 0.25, 2, 0.05, "x")
-	_add("Class movement", "chakram_jump_impulse_scale", "Eclipse jump strength", "Ground-jump multiplier for the Eclipse prototype.", 0, 2, 0.05, "x")
-	_add("Class movement", "chakram_air_jump_impulse_scale", "Eclipse air jump", "Air-jump strength relative to the base jump.", 0, 1.5, 0.01, "x")
-	_add("Prototype attacks", "dash_speed_min", "Rook tap dash speed", "Dash speed at no charge.", 200, 1600, 20, "px/s")
-	_add("Prototype attacks", "dash_speed_max", "Rook full dash speed", "Dash speed at full charge.", 200, 1600, 20, "px/s")
-	_add("Prototype attacks", "dash_guard_durability", "Rook guard strength", "Number of hits the dash guard can withstand.", 1, 5, 1, "hits", "int")
-	_add("Prototype attacks", "dash_exit_momentum_retention", "Rook exit momentum", "Fraction of dash speed retained when the dash ends.", 0, 1, 0.01, "x")
-	_add("Prototype attacks", "chakram_speed_min", "Eclipse tap speed", "Chakram speed at no charge.", 100, 1000, 20, "px/s")
-	_add("Prototype attacks", "chakram_speed_max", "Eclipse full speed", "Chakram speed at full charge.", 100, 1000, 20, "px/s")
-	_add("Pulse attacks", "shock_plasma_speed_min", "Tap lance speed", "Pulse lance speed at no charge.", 100, 1800, 20, "px/s")
-	_add("Pulse attacks", "shock_plasma_speed", "Full lance speed", "Pulse lance speed at full charge.", 100, 1800, 20, "px/s")
-	_add("Pulse attacks", "shock_plasma_gravity", "Lance gravity", "Downward acceleration of the Pulse lance.", 0, 1200, 20, "px/s²")
-	_add("Pulse attacks", "shock_orb_speed_min", "Tap orb speed", "Orb launch speed at no charge.", 100, 1000, 20, "px/s")
-	_add("Pulse attacks", "shock_orb_speed_max", "Full orb speed", "Orb launch speed at full charge.", 100, 1000, 20, "px/s")
-	_add("Pulse attacks", "shock_max_live_orbs", "Active orb limit", "Casting beyond this limit pops the oldest orb.", 1, 6, 1, "", "int")
-	_add("Pulse attacks", "shock_orb_arm_ticks", "Orb arming delay", "Moving time before an orb becomes armed.", 0.05, 2, 0.05, "s", "float", 60)
-	_add("Pulse attacks", "shock_orb_lifetime_ticks", "Orb lifetime", "Moving time before an uncollected orb expires.", 0.5, 10, 0.25, "s", "float", 60)
-	_add("Pulse attacks", "shock_small_radius", "Orb blast radius", "Radius of a single orb explosion.", 20, 200, 1, "px")
-	_add("Pulse attacks", "shock_combo_radius", "Full combo radius", "Blast radius when a full-power lance triggers an orb.", 190, 450, 5, "px")
-	_add("Pulse attacks", "shock_small_impulse", "Orb knockback", "Push applied by a single orb explosion.", 100, 1200, 20, "px/s")
-	_add("Pulse attacks", "shock_combo_impulse", "Combo knockback", "Push applied by a lance-and-orb combo.", 100, 1800, 20, "px/s")
 
 
 func _definition(key: String) -> Dictionary:
@@ -307,8 +281,6 @@ func _sanitize(item: Dictionary, stored_value: Variant) -> Variant:
 
 func _normalize(changed_key: String = "") -> void:
 	for pair in [["arrow_speed_min", "arrow_speed_max"], ["knife_spread_min", "knife_spread_max"],
-			["dash_speed_min", "dash_speed_max"], ["chakram_speed_min", "chakram_speed_max"],
-			["shock_plasma_speed_min", "shock_plasma_speed"], ["shock_orb_speed_min", "shock_orb_speed_max"],
 			["movement_budget", "execution_duration"], ["minimum_planning_duration", "planning_duration"]]:
 		if float(_values[pair[0]]) > float(_values[pair[1]]):
 			if changed_key == pair[0]:

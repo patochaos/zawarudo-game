@@ -1,11 +1,10 @@
 # ZAWARUDO: Documento de diseño de juego
 
-**Demo de prueba del bucle principal, 0.3.0:** [alcance actual](CORE_PLAYTEST.md).
+**Demo de prueba del bucle principal, 0.4.2:** [alcance actual](CORE_PLAYTEST.md).
 La entrada pública ofrece un duelo directo y tres lecciones jugables. Cada turno
-jugable conserva ocho segundos. Los experimentos y la configuración local libre
-requieren `--dev-tools`; sus notas posteriores describen rutas de desarrollo.
-
-**Experimento CLASS LAB:** permite probar Rook (lanza), Pulse (disparo con división retardada) y Eclipse (ida y vuelta por una línea fija), con planificación o en tiempo real. El plantel principal sigue limitado al Duelist. Reglas y controles en [CLASS_LAB.md](CLASS_LAB.md).
+de lección conserva ocho segundos; los turnos de duelo duran cuatro. Los
+experimentos requieren `--dev-tools`; sus notas posteriores describen rutas de
+desarrollo. La referencia de reglas y sistemas está en [REFERENCE.md](REFERENCE.md).
 
 > Documento vivo · Versión 0.1 · 10 de agosto de 2026
 
@@ -39,7 +38,8 @@ ya no puede corregir y comprueba si entendió bien la situación.
 
 - Duelo táctico 2D de vista lateral.
 - Planificación simultánea por turnos y resolución física en tiempo real.
-- Partidas cortas, al mejor de tres impactos.
+- Partidas cortas: en la escalera de rivales gana quien logra primero tres
+  impactos; la partida personalizada permite tres, cinco o siete.
 - Un jugador contra IA, dos jugadores en local, un todos-contra-todos de tres
   o cuatro participantes con P1 humano e IAs independientes, o una batalla
   local 2v2 con mezcla libre de humanos e IAs.
@@ -145,7 +145,7 @@ viables. La geometría debe generar decisiones, no ruido visual.
 
 ## Estado de pulido, 4 de septiembre de 2026
 
-La partida estándar ofrece 8 segundos fijos para planificar y conserva la
+La partida estándar ofrece 4 segundos fijos para planificar y conserva la
 resolución de 0,75 segundos. Confirmar antes sigue adelantando la ejecución.
 La interfaz distingue movimiento grabado, lanzamiento y continuación por inercia.
 Se puede rebobinar una parte de la ruta o ajustar un lanzamiento sin repetir
@@ -159,14 +159,6 @@ de los niveles y el kit de dos dagas siguen siendo la referencia de balance.
 
 El alcance implementado y las pruebas pendientes están en
 [DUELIST_POLISH.md](DUELIST_POLISH.md).
-
-### Experimento REAL TIME
-
-El menú incluye una sesión continua de Duelist contra IA en Crosshair Court.
-No hay planificación, confirmación ni pausas entre impactos: el personaje
-reaparece de inmediato. Se ocultan las trayectorias y puntos de caída; H activa
-o desactiva una guía corta de dirección y el indicador de carga. Es una prueba
-offline del movimiento y los lanzamientos, separada del bucle táctico principal.
 
 ## 4. Bucle principal
 
@@ -241,7 +233,9 @@ comienza como lectura de las consecuencias del anterior.
 
 ### Condición de victoria
 
-El primer combatiente que consigue tres impactos gana la partida. Cada impacto
+En la escalera de rivales, el primer combatiente que consigue tres impactos gana
+la partida. La partida personalizada y la partida online permiten tres, cinco o
+siete, con cinco por defecto. Cada impacto
 es un punto; no reinicia el escenario ni elimina los proyectiles existentes.
 
 ### Filosofía del daño
@@ -288,17 +282,18 @@ radio con línea de visión, consume dagas cercanas y encadena otras granadas. L
 cobertura HARD bloquea el estallido. Por ahora la SUPER conserva la descarga de
 dagas existente, para evaluar el ataque normal sin sumar otro sistema nuevo.
 
-El Granadero se conserva como ruta de prueba heredada contra IA, pero deja de
-formar parte de la selección de personajes.
+El Granadero fue retirado del código y de la selección de personajes. Esta
+sección queda como registro del experimento.
 
-### Prototipos de personaje en reserva
+### Prototipos de personaje retirados
 
 Desde el 4 de septiembre de 2026, **The Duelist es el único personaje jugable**.
 El objetivo actual es anticipar el movimiento rival y colocar proyectiles en
-su ruta. Rook, Pulse y Eclipse quedan fuera de la selección local, online,
-práctica y sandbox. Se conservan su código, recursos y especificaciones para
-una futura revisión. Las descripciones siguientes documentan los prototipos
-en reserva; no representan opciones disponibles.
+su ruta. El 10 de noviembre de 2026 se eliminaron del árbol de trabajo el
+código, los ajustes y los recursos de Rook, Pulse y Eclipse. Su último estado
+se conserva en la etiqueta de git `archive/pre-prune-2026-11-10` y sus
+especificaciones en [archive/characters](archive/characters/). Las descripciones
+siguientes documentan esos prototipos; no representan opciones disponibles.
 
 - **The Rook / Lost Frames:** se mueve al 90% porque pierde parte de los
   fotogramas de su propia locomoción. La distancia horizontal realmente
@@ -315,7 +310,7 @@ en reserva; no representan opciones disponibles.
   sobre plataformas. Un proyectil común o el fin de vida del orbe provoca una
   detonación pequeña; el plasma completa un combo letal cuyo radio crece con su
   carga. La onda cambia las trayectorias cercanas en vez de borrar los proyectiles.
-- **The Eclipse / Chakram:** prototipo en reserva. Lanza una corona
+- **The Eclipse / Chakram:** lanza una corona
   viviente a 300-520 px/s y sigue exactamente la dirección elegida. Su primer
   impacto contra terreno HARD permanente rebota con un 82% de velocidad; la
   cobertura rompible o el siguiente impacto la dejan clavada y girando. Un
@@ -469,12 +464,13 @@ premio fortuito.
 | Arena | Pregunta táctica principal |
 |---|---|
 | Crosshair Court | ¿Dónde chocarán los cuchillos en un espacio estático que no esconde ninguna regla adicional? |
-| Endless Descent | ¿Uso el bucle vertical del pozo o subo hasta los pasos laterales? Los muros inferiores cierran el atajo horizontal del suelo. |
-| Pendulum | ¿Espero el ascensor central o llego antes usando el bucle exclusivo entre techo y suelo? |
+| Clockwork Gallery | ¿Cruzo una compuerta antes de que se abra o espero a que vuelva a cerrarse? Quien está encima cuando se abre, cae. |
+| Stilled Hall | ¿Lanzo un cuchillo dentro de un campo de estasis para que siga siendo una amenaza varios turnos después? |
 | Pulse Chamber | ¿Disparo al orbe para empujar al rival y redirigir cuchillos, o avanzo por el suelo fuera de su alcance? Ambos lados tienen accesos equivalentes. |
-| Shattered Sanctum | ¿Qué tramo del puente destruyo para abrir uno de los dos circuitos verticales? |
-| Foundry | ¿Paso sobre, bajo o alrededor del muro móvil antes de que cambie de lado? |
-| Collision Course | ¿Qué ferry o pulso uso para atravesar un vacío conectado por sus cuatro bordes? |
+| Endless Descent | ¿Uso el bucle vertical del pozo o subo hasta los pasos laterales? Los muros inferiores cierran el atajo horizontal del suelo. |
+
+Son las cinco arenas de la rotación actual. Pendulum, Shattered Sanctum, Foundry,
+Collision Course y Lodestone Reach se retiraron en octubre de 2026.
 
 ### Portales y continuidad espacial
 

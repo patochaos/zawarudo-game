@@ -8,7 +8,8 @@ clash fun enough to play again?
 1. Launch `Play.bat` with Godot installed, or open the supplied playable build.
 2. Choose **LEARN TO PLAY**. Read the short instruction before each attempt.
    Move into a target zone, intercept a moving opponent, then escape an earlier
-   knife across two turns. Every playable turn has an eight-second limit.
+   knife across two turns. Every lesson turn has an eight-second limit; duel
+   turns have four seconds.
    Mistakes offer a fresh attempt; completion starts your first duel.
 3. **START DUEL** skips lessons and immediately starts two Duelists in Crosshair
    Court: you against the first opponent of the ladder, first to three hits.
@@ -50,4 +51,5 @@ may leave an `in_progress` checkpoint instead of a confirmed abandonment.
 **CUSTOM MATCH** on the main menu picks the arena, the number of fighters, each
 CPU's skill and the match length. `Play.bat -- --dev-tools` additionally exposes
 **EXPERIMENTS**. Normal source play and exports use the focused public menu. Tests remain in the source
-project and are excluded from exports. No archive is required for local play.
+project and are excluded from exports. Rules and controls are described in
+[REFERENCE.md](REFERENCE.md). No archive is required for local play.

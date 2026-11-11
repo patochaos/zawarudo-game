@@ -28,9 +28,6 @@ const DIAL_UPRIGHT := 12
 const SUPER_ACCENTS := preload("res://assets/art/combat/super-accents.png")
 const ACCENT_CELL := 64.0
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
-const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
-const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
-const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 
 
 class CutInArt:
@@ -56,11 +53,7 @@ class CutInArt:
 		owner_index = who
 		owner_color = tint
 		duration = maxf(0.1, length)
-		match int(fighter):
-			2: portrait = ROOK_PORTRAIT
-			3: portrait = ECLIPSE_PORTRAIT
-			4: portrait = PULSE_PORTRAIT
-			_: portrait = DUELIST_PORTRAIT
+		portrait = Roster.portrait(int(fighter))
 		elapsed = 0.0
 		playing = true
 		visible = true

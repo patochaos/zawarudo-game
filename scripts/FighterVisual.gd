@@ -162,7 +162,7 @@ func _presentation_exec_tick() -> int:
 	if _fighter == null or _fighter.cfg == null:
 		return 0
 	if int(_fighter.cfg.state) == Phase.REPLAY:
-		return int(_fighter.cfg._replay_frame_index)
+		return int(_fighter.cfg._replay._replay_frame_index)
 	return int(_fighter.cfg.exec_tick)
 
 

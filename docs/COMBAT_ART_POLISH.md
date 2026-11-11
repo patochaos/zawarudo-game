@@ -53,10 +53,10 @@ review covered both player orientations, smaller resolution and reduced flashes.
 The thrown knife is now a Blender-rendered sprite of the Duelist's hourglass
 dagger (`docs/characters/duelist.md`): a symmetrical end-to-end diamond with a
 waist, antique-gold edge, near-black body and a small centre diamond. The
-procedural polygon knife in `Arrow._draw()` is gone; the planning halo and
+procedural polygon knife in `Knife._draw()` is gone; the planning halo and
 velocity chevron, the boost streak, the clash rings and the trail are unchanged.
 
-Nothing in the simulation moved. `Arrow` keeps its position, rotation, speed,
+Nothing in the simulation moved. `Knife` keeps its position, rotation, speed,
 collision segment, release tick and digest exactly as before; the sprite is
 drawn at the node's position, 30 px tip to tip like the former polygon, pointed
 along the real velocity (or tumbling, once clashed). `KnifeMechanicsTest` and
@@ -83,7 +83,7 @@ state never enters the lockstep digest.
 - Each cell spans 4 scene units and the dagger 3.5 of them, so the cell is
   drawn 34.3 px wide. The atlas is minified about 3.7x at match scale, so the
   knife imports generate mipmaps (unlike `impact-*.png`, which are drawn near
-  native size) and `Arrow` uses linear-with-mipmaps filtering; lossless
+  native size) and `Knife` uses linear-with-mipmaps filtering; lossless
   compression and alpha border fixing match the impact sprites.
 
 ## Sources

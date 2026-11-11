@@ -10,9 +10,6 @@ var _arrow_prediction_tick: int = -1
 var _arrow_prediction_cache: Dictionary = {}
 
 const RETICLE_DUELIST := preload("res://assets/kenney/reticles/duelist.png")
-const RETICLE_ROOK := preload("res://assets/kenney/reticles/rook.png")
-const RETICLE_ECLIPSE := preload("res://assets/kenney/reticles/eclipse.png")
-const RETICLE_PULSE := preload("res://assets/kenney/reticles/pulse.png")
 
 
 func _draw() -> void:
@@ -22,18 +19,6 @@ func _draw() -> void:
 	# the knife fan, so you can still see where you are pointing and how hard.
 	if gm.state == Phase.FREEPLAY:
 		var me: Player = gm.players[0]
-		if gm.real_time_mode:
-			if me.alive and gm.real_time_aim_guide:
-				var origin := me.shoulder()
-				var direction := me.aim_dir()
-				draw_line(origin + direction * 23.0, origin + direction * 45.0,
-					Color(me.color, 0.38), 1.5, true)
-				if gm.charging[0]:
-					_draw_power_bar(me.position, me, true)
-			for p in gm.players:
-				if p.alive and gm.throw_cooldown_left[p.index] > 0.0:
-					_draw_throw_cooldown(p)
-			return
 		if me.alive:
 			_draw_shot_preview(me, me.position)
 		return
@@ -54,13 +39,12 @@ func _draw() -> void:
 			_draw_player_preview(p)
 	# Readiness is public even when the plan behind it is not. Knowing the
 	# opponent is done is what lets a short turn feel like a race rather than a
-	# wait. Drawn in world space, over the fighter, so it survives a camera that
-	# has pushed in past the HUD.
+	# wait. Drawn in world space, over the fighter.
 	for p in gm.players:
 		if p.alive and p.plan.confirmed and gm.player_roles[p.index] != "DUMMY":
 			# The keyboard player's readiness already has a compact HUD status.
-			if gm.state == Phase.PLANNING and not gm.close_camera_mode \
-					and not gm._touch_controls.enabled and p.index == gm._keyboard_player():
+			if gm.state == Phase.PLANNING and not gm._touch_controls.enabled \
+					and p.index == gm._player_input._keyboard_player():
 				continue
 			_draw_ready_badge(p)
 
@@ -275,9 +259,6 @@ const AIM_PREDICTION_FRACTION := 0.10
 
 
 func _draw_shot_preview(p: Player, origin: Vector2) -> void:
-	if gm.class_lab and gm.player_weapons[p.index] != Roster.DUELIST:
-		_draw_lab_preview(p, origin)
-		return
 	var col: Color = _player_preview_color(p)
 	var armed: bool = p.plan.has_shot()
 	var charging: bool = gm.charging[p.index]
@@ -285,23 +266,7 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var shoulder: Vector2 = Player.shoulder_at(origin)
 	var power: float = clampf(p.plan.power, 0.0, 1.0)
 	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
-	if gm.uses_dashblade(p.index):
-		_draw_dash_preview(p, origin, col, armed, charging)
-		return
-	if gm.uses_shock(p.index):
-		_draw_shock_preview(p, origin, col, armed, charging)
-		return
-	var chakram_preview: bool = gm.uses_chakram(p.index)
-	if chakram_preview and p.plan.attack_mode == 1 and not p.plan.super_shot:
-		_draw_absolution_preview(p, origin, col, armed, charging, shot_tick)
-		return
-	var chakram_super: bool = chakram_preview and (p.plan.super_shot or (not armed \
-		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index]))
-	var launches: Array[Vector2] = []
-	if chakram_preview:
-		launches = gm.chakram_launch_velocities(p.aim_dir(), power, chakram_super)
-	else:
-		launches = gm.knife_launch_velocities(p.aim_dir(), power)
+	var launches: Array[Vector2] = gm.knife_launch_velocities(p.aim_dir(), power)
 	# The chosen aim remains the reticle spine even when a weapon branches around
 	# it. For the Duelist this sits naturally between the two real dagger arcs.
 	var dir: Vector2 = p.aim_dir().normalized()
@@ -309,19 +274,12 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var length: float = lerpf(AIM_LEN_MIN, AIM_LEN_MAX, power)
 	var tip: Vector2 = shoulder + dir * length
 	var body: Color = col.lightened(0.35) if live else Color(col.r, col.g, col.b, 0.5)
-	if not chakram_preview:
-		var dagger_reticle := _draw_dagger_trajectory_reticle(
-			shoulder, launches, gm.knife_launch_velocity(p.aim_dir(), power),
-			length, power, body, col, live, gm.world_tick + maxi(shot_tick, 0))
-		tip = dagger_reticle["tip"]
-		dir = dagger_reticle["tangent"]
-	else:
-		var chakram_reticle := _draw_chakram_trajectory_reticle(
-			shoulder, launches, gm.chakram_launch_velocities(p.aim_dir(), power)[0],
-			power, body, col, live)
-		tip = chakram_reticle["tip"]
-		dir = chakram_reticle["tangent"]
-	_draw_class_reticle(RETICLE_ECLIPSE if chakram_preview else RETICLE_DUELIST,
+	var dagger_reticle := _draw_dagger_trajectory_reticle(
+		shoulder, launches, gm.knife_launch_velocity(p.aim_dir(), power),
+		length, power, body, col, live, gm.world_tick + maxi(shot_tick, 0))
+	tip = dagger_reticle["tip"]
+	dir = dagger_reticle["tangent"]
+	_draw_class_reticle(RETICLE_DUELIST,
 		tip, col, 42.0, 0.48 if live else 0.28, dir.angle())
 
 	var shot_time: float = float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
@@ -332,9 +290,6 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	var aimed: Vector2 = p.aim_dir().normalized()
 	var actual_elevation: float = rad_to_deg(atan2(-aimed.y, absf(aimed.x)))
 	var tag := "%d° · %d%%" % [int(round(actual_elevation)), int(round(power * 100.0))]
-	if chakram_preview:
-		tag = ("TRIPLE CHAKRAM · " if chakram_super else \
-			"CHAKRAM · DIRECT · ") + tag
 	if armed:
 		tag = ("SUPER · " if p.plan.super_shot else "ARMED · ") + tag
 	elif charging:
@@ -347,40 +302,6 @@ func _draw_shot_preview(p: Player, origin: Vector2) -> void:
 	_shot_tag(p, tip, dir, tag, col.lightened(0.4) if live else Color(col.r, col.g, col.b, 0.65),
 		14 if live else 12)
 	_draw_power_bar(origin, p, charging)
-
-
-func _draw_absolution_preview(p: Player, origin: Vector2, col: Color,
-		armed: bool, charging: bool, shot_tick: int) -> void:
-	var coronas: Array = gm.recallable_chakrams(p.index)
-	var aureole := Player.shoulder_at(origin)
-	var live := armed or charging
-	_launch_marker(aureole, col, 1.0 if live else 0.55,
-		"RECALL %.2fs" % (float(maxi(shot_tick, 0)) \
-			/ float(Engine.physics_ticks_per_second)) if live else "")
-	if coronas.is_empty():
-		_shot_tag(p, aureole + Vector2(0.0, -36.0), Vector2.RIGHT,
-			"ABSOLUTION · NO CONSECRATION", Color(col.r, col.g, col.b, 0.58), 12)
-		return
-	var recall_color := col.lightened(0.42) if live else Color(col.r, col.g, col.b, 0.52)
-	for corona in coronas:
-		var start: Vector2 = corona.position
-		var delta: Vector2 = gm.wrap_delta(start, aureole)
-		var finish: Vector2 = start + delta
-		draw_line(start, finish, Color(col.r, col.g, col.b, 0.18), 7.0, true)
-		draw_line(start, finish, recall_color, 2.6 if live else 1.8, true)
-		var direction := delta.normalized() if not delta.is_zero_approx() else Vector2.RIGHT
-		for fraction in [0.28, 0.52, 0.76]:
-			var at: Vector2 = start.lerp(finish, fraction)
-			var side := direction.orthogonal()
-			draw_line(at - direction * 7.0 - side * 4.0, at,
-				recall_color, 2.0, true)
-			draw_line(at - direction * 7.0 + side * 4.0, at,
-				recall_color, 2.0, true)
-		_draw_chakram_head(start, direction, recall_color)
-	_shot_tag(p, aureole + Vector2(0.0, -44.0), Vector2.RIGHT,
-		("ARMED · " if armed else ("CALLING · " if charging else "")) \
-			+ "ABSOLUTION · ALL %d CORONAS" % coronas.size(),
-		recall_color, 14 if live else 12)
 
 
 ## Draws only the opening of the Duelist's real predicted flight. The sample is
@@ -460,7 +381,7 @@ func _draw_dagger_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2]
 
 
 ## Opening known-world flight for a newly aimed dagger. PredictionSystem shares
-## the live Arrow integrator and applies the same moving terrain and ricochet
+## the live Knife integrator and applies the same moving terrain and ricochet
 ## rules. The local preview duration can be tuned independently of knife life.
 ## The guide stops when that knife would expire.
 func _dagger_trajectory_path(start: Vector2, launch: Vector2,
@@ -469,70 +390,6 @@ func _dagger_trajectory_path(start: Vector2, launch: Vector2,
 	var flight: Dictionary = PredictionSystem.predict_arrow(
 		start, launch, gm, preview_time, start_tick)
 	return flight["path"]
-
-
-## Eclipse's outbound corona is ballistic too. Simulating the live primitive
-## keeps its opening drag, gravity, wrapping and terrain response honest while
-## the shared time cap prevents disclosure of its hold and return phases.
-func _draw_chakram_trajectory_reticle(shoulder: Vector2, launches: Array[Vector2],
-		spine_launch: Vector2, power: float, body: Color, col: Color,
-		live: bool) -> Dictionary:
-	var paths: Array[PackedVector2Array] = []
-	for launch in launches:
-		var start := shoulder + launch.normalized() * 24.0
-		draw_line(shoulder, start, Color(body.r, body.g, body.b, body.a * 0.72), 2.0)
-		paths.append(_chakram_trajectory_path(start, launch))
-
-	for i in paths.size():
-		var path: PackedVector2Array = paths[i]
-		if path.size() < 2:
-			continue
-		_solid_runs(path, Color(col.r, col.g, col.b, 0.72 if live else 0.38),
-			3.0 if live else 2.0)
-		var heading := _path_end_tangent(path, launches[i].normalized())
-		_draw_chakram_head(path[path.size() - 1], heading, body)
-
-	var spine_start := shoulder + spine_launch.normalized() * 24.0
-	var spine_path := _chakram_trajectory_path(spine_start, spine_launch)
-	for q in range(1, 5):
-		var distance := AIM_LEN_MAX * float(q) * 0.25
-		if distance > _polyline_length(spine_path):
-			break
-		var sample := _polyline_point_and_tangent(spine_path, distance)
-		var at: Vector2 = sample[0]
-		var perp: Vector2 = Vector2(sample[1]).orthogonal()
-		var lit: bool = power >= float(q) * 0.25 - 0.001
-		draw_line(at - perp * 5.0, at + perp * 5.0,
-			Color(col.r, col.g, col.b, 0.85 if lit else 0.18), 2.0)
-
-	var tip := spine_start
-	var tangent := spine_launch.normalized()
-	if not spine_path.is_empty():
-		tip = spine_path[spine_path.size() - 1]
-	if spine_path.size() >= 2:
-		tangent = _path_end_tangent(spine_path, tangent)
-	return {"tip": tip, "tangent": tangent}
-
-
-func _chakram_trajectory_path(start: Vector2, launch: Vector2) -> PackedVector2Array:
-	var preview := Chakram.new()
-	preview.cfg = gm
-	preview.position = start
-	preview.prev_pos = start
-	preview.vel = launch
-	preview.freeplay_window_ticks = maxi(gm.exec_ticks(), _aim_preview_steps() + 1)
-	var path := PackedVector2Array([start])
-	for _tick in _aim_preview_steps():
-		var result: Dictionary = preview.sim_step(gm.tick_dt(), [])
-		path.append(preview.position)
-		if not bool(result["alive"]) or bool(result["stuck"]):
-			break
-	preview.free()
-	return path
-
-
-func _aim_preview_steps() -> int:
-	return maxi(1, int(round(gm.aim_preview_duration / gm.tick_dt())))
 
 
 ## Finds a useful final heading without mistaking an arena wrap for motion.
@@ -559,7 +416,7 @@ func _dagger_reticle_path(start: Vector2, launch: Vector2,
 	var travelled := 0.0
 	var dt := 1.0 / float(Engine.physics_ticks_per_second)
 	for tick in 180:
-		var st := Arrow.step_state(pos, vel, dt, gm)
+		var st := Knife.step_state(pos, vel, dt, gm)
 		var raw: Vector2 = st[2]
 		var segment := raw - pos
 		var segment_length := segment.length()
@@ -597,22 +454,6 @@ func _polyline_prefix(path: PackedVector2Array, target_length: float) -> PackedV
 	return out
 
 
-func _path_tick_limit(path: PackedVector2Array, max_steps: int) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	var last := mini(path.size() - 1, maxi(0, max_steps))
-	for i in range(last + 1):
-		out.append(path[i])
-	return out
-
-
-func _polyline_length(path: PackedVector2Array) -> float:
-	var total := 0.0
-	for i in range(1, path.size()):
-		var segment := path[i] - path[i - 1]
-		if segment.length_squared() <= SEAM_JUMP_SQ:
-			total += segment.length()
-	return total
-
 
 func _polyline_point_and_tangent(path: PackedVector2Array, target_length: float) -> Array:
 	if path.size() < 2:
@@ -631,156 +472,6 @@ func _polyline_point_and_tangent(path: PackedVector2Array, target_length: float)
 	return [path[path.size() - 1], tangent]
 
 
-func _draw_shock_preview(p: Player, origin: Vector2, base: Color,
-		armed: bool, charging: bool) -> void:
-	var shoulder := Player.shoulder_at(origin)
-	var dir := p.aim_dir().normalized()
-	var power := clampf(p.plan.power, 0.0, 1.0)
-	var live := armed or charging
-	var mode := p.plan.attack_mode
-	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
-	var weapon_col := Color(1.0, 0.28, 0.88) if mode == 1 else Color(0.28, 0.96, 1.0)
-	var body := weapon_col if live else Color(weapon_col.r, weapon_col.g, weapon_col.b, 0.55)
-	var tip := shoulder
-	if mode == 0:
-		# The lance falls, but only its opening tenth is public, enough to read the
-		# ballistic bend without revealing its complete range or impact.
-		var launch: Vector2 = dir * gm.shock_plasma_speed_for_power(power)
-		var flight: Dictionary = PredictionSystem.predict_plasma(
-			shoulder + dir * 24.0, launch, gm,
-			gm.shock_plasma_range_for_power(power),
-			gm.world_tick + maxi(shot_tick, 0))
-		var full_arc: PackedVector2Array = flight["path"]
-		var arc := _path_tick_limit(full_arc, _aim_preview_steps())
-		if arc.size() >= 2:
-			_solid_runs(arc, Color(body.r, body.g, body.b, 0.16), 5.0)
-			_solid_runs(arc, body, 3.0 if live else 2.0)
-			tip = arc[arc.size() - 1]
-		var heading := _path_end_tangent(arc, dir)
-		var side := heading.orthogonal()
-		draw_colored_polygon(PackedVector2Array([
-			tip + heading * 12.0, tip + side * 7.0, tip - heading * 7.0,
-			tip - side * 7.0,
-		]), Color(body.r, body.g, body.b, 0.92))
-		draw_line(tip - heading * 5.0 + side * 8.0, tip + heading * 7.0 - side * 8.0,
-			Color(0.96, 1.0, 1.0, body.a), 2.0)
-		# An impact inside this short public sample is immediate enough to expose.
-		if bool(flight["blocked"]) and arc.size() == full_arc.size():
-			draw_arc(tip, 13.0, 0.0, TAU, 20, Color(1.0, 0.42, 0.36, body.a * 0.9), 2.0)
-	else:
-		# The orb used to draw an invented decorative curve. This is its real
-		# opening lob, including drag, gravity, terrain bounce and wrapping.
-		var orb_start := shoulder + dir * 24.0
-		var orb_speed := lerpf(gm.shock_orb_speed_min, gm.shock_orb_speed_max, power)
-		var curve := _shock_orb_trajectory_path(orb_start, dir * orb_speed)
-		_solid_runs(curve, Color(body.r, body.g, body.b, body.a * 0.75),
-			3.0 if live else 2.0)
-		tip = curve[curve.size() - 1]
-		draw_circle(tip, 11.0, Color(body.r, body.g, body.b, 0.18))
-		draw_arc(tip, 9.0, 0.0, TAU, 24, body, 3.0)
-		draw_circle(tip, 3.5, Color(1.0, 0.78, 0.96, body.a))
-		for spoke in 4:
-			var a := TAU * float(spoke) / 4.0
-			draw_line(tip + Vector2.from_angle(a) * 11.0,
-				tip + Vector2.from_angle(a) * 16.0, body, 1.5)
-	_draw_class_reticle(RETICLE_PULSE, tip, weapon_col, 46.0,
-		0.44 if live else 0.25, dir.angle())
-
-	var shot_time := float(maxi(shot_tick, 0)) / float(Engine.physics_ticks_per_second)
-	_launch_marker(shoulder, base, 1.0 if live else 0.55,
-		("FIRE HERE" if gm.player_facing_labels() else "FIRE %.2fs" % shot_time) if live else "")
-	var tag := ("ORB FIELD · %d LIVE · RMB" % gm.shock_orb_count(p.index) \
-		if mode == 1 else "PLASMA · LMB") \
-		+ " · %d%%" % int(round(power * 100.0))
-	if armed:
-		tag = ("SUPER COMBO · " if p.plan.super_shot else "ARMED · ") + tag
-	elif charging:
-		tag = "CHARGING · " + tag
-	_shot_tag(p, tip, dir, tag, body.lightened(0.25), 14 if live else 12)
-	_draw_power_bar(origin, p, charging)
-
-
-func _shock_orb_trajectory_path(start: Vector2, launch: Vector2) -> PackedVector2Array:
-	var preview := ShockOrb.new()
-	preview.cfg = gm
-	preview.position = start
-	preview.prev_pos = start
-	preview.configure_lob(launch.normalized(), launch.length())
-	var path := PackedVector2Array([start])
-	for _tick in _aim_preview_steps():
-		var result: Dictionary = preview.sim_step(gm.tick_dt())
-		path.append(preview.position)
-		if not bool(result["alive"]) or bool(result["resting"]):
-			break
-	preview.free()
-	return path
-
-
-func _draw_dash_preview(p: Player, origin: Vector2, base: Color,
-		armed: bool, charging: bool) -> void:
-	var dir := p.aim_dir().normalized()
-	var power := clampf(p.plan.power, 0.0, 1.0)
-	var empowered: bool = p.plan.super_shot or (not armed \
-		and gm.super_meter[p.index] >= 1.0 and gm.super_armed[p.index])
-	var shot_tick: int = p.plan.shot_tick if armed else p.plan.recorded_ticks()
-	var lost_frames: int = gm.frame_debt_max_cells if empowered \
-		else gm.projected_frame_debt(p.index, shot_tick)
-	var params: Dictionary = gm.dash_parameters(power, empowered, lost_frames)
-	var path: PackedVector2Array = gm.dash_preview_path(
-		origin, dir, power, empowered, lost_frames)
-	var end: Vector2 = path[path.size() - 1]
-	var live := armed or charging
-	var aura := Color(0.22, 0.93, 1.0, 0.16 if live else 0.08)
-	if path.size() > 1:
-		draw_polyline(path, aura, 24.0, true)
-		draw_polyline(path, Color(base.r, base.g, base.b, 0.9 if live else 0.48), 3.0, true)
-		# Storyboard cells replace ordinary speed dots: the route reads as a
-		# sequence of authored cuts which will collapse during execution.
-		for i in range(2, path.size(), 3):
-			var tangent := (path[i] - path[maxi(0, i - 1)]).normalized()
-			if tangent.is_zero_approx():
-				tangent = dir
-			var side := tangent.orthogonal()
-			var panel := PackedVector2Array([
-				path[i] - tangent * 7.0 - side * 12.0,
-				path[i] + tangent * 7.0 - side * 12.0,
-				path[i] + tangent * 7.0 + side * 12.0,
-				path[i] - tangent * 7.0 + side * 12.0,
-			])
-			draw_polyline(panel + PackedVector2Array([panel[0]]),
-				Color(0.76, 1.0, 1.0, 0.62 if live else 0.34), 1.5, true)
-
-	# The extra body is the promised post-dash position, not a projectile head.
-	_draw_destination(end, p)
-	_draw_ghost_figure(end, p, 1.0 if live else 0.66)
-	draw_circle(end, 35.0, Color(0.18, 0.92, 1.0, 0.10 if live else 0.05))
-	var shield_center := end + dir * 24.0
-	draw_arc(shield_center, 29.0, dir.angle() - 1.05, dir.angle() + 1.05, 22,
-		Color(0.84, 1.0, 1.0, 0.96 if live else 0.62), 5.0)
-	draw_arc(shield_center, 23.0, dir.angle() - 0.95, dir.angle() + 0.95, 18,
-		Color(base.r, base.g, base.b, 0.42), 2.0)
-	for offset in [-16.0, 0.0, 16.0]:
-		draw_line(end - dir * 12.0 + dir.orthogonal() * offset,
-			end - dir * 34.0 + dir.orthogonal() * offset,
-			Color(0.30, 0.92, 1.0, 0.35), 2.0)
-	_draw_class_reticle(RETICLE_ROOK, end, Color(0.76, 1.0, 1.0), 48.0,
-		0.42 if live else 0.24, dir.angle())
-
-	var shoulder := Player.shoulder_at(origin)
-	_launch_marker(shoulder, base, 1.0 if live else 0.55, "DASH RELEASE" if live else "")
-	var tag := "CUT TO END · %d/%d LOST FRAMES · GUARD %d · %d%%" % [
-		lost_frames, gm.frame_debt_max_cells, int(params["durability"]),
-		int(round(power * 100.0))]
-	if armed:
-		tag = ("SUPER · " if p.plan.super_shot else "ARMED · ") + tag
-	elif charging and power >= 0.995:
-		tag = "FULL · RELEASE TO COMMIT · " + tag
-	elif charging:
-		tag = "CHARGING · " + tag
-	_shot_tag(p, end, dir, tag, Color(0.76, 1.0, 1.0, 0.96), 14 if live else 12)
-	_draw_power_bar(origin, p, charging)
-
-
 func _draw_knife_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 	var side := dir.orthogonal()
 	draw_colored_polygon(PackedVector2Array([
@@ -788,14 +479,6 @@ func _draw_knife_head(tip: Vector2, dir: Vector2, col: Color) -> void:
 		tip - dir * 6.0, tip - dir * 3.0 - side * 3.6,
 	]), col)
 	draw_line(tip - dir * 7.0 - side * 5.0, tip - dir * 7.0 + side * 5.0, col, 1.5)
-
-
-func _draw_chakram_head(tip: Vector2, dir: Vector2, col: Color) -> void:
-	var side := dir.orthogonal()
-	draw_circle(tip, 8.0, Color(0.02, 0.015, 0.035, col.a * 0.9))
-	draw_arc(tip, 7.0, 0.0, TAU, 20, col, 2.4, true)
-	draw_arc(tip, 3.5, 0.0, TAU, 16, Color(col.r, col.g, col.b, col.a * 0.65), 1.4, true)
-	draw_line(tip - side * 8.0, tip + side * 8.0, Color(col.r, col.g, col.b, col.a * 0.32), 1.0)
 
 
 func _draw_class_reticle(texture: Texture2D, at: Vector2, col: Color,
@@ -838,19 +521,6 @@ func _draw_power_bar(origin: Vector2, p: Player, charging: bool) -> void:
 	var fill: Color = Color(1.0, 0.85, 0.3) if charging else Color(base.r, base.g, base.b, 0.7)
 	draw_rect(Rect2(at, Vector2(w * clampf(p.plan.power, 0.0, 1.0), h)), fill)
 	draw_rect(Rect2(at, Vector2(w, h)), Color(1, 1, 1, 0.35 if charging else 0.18), false, 1.0)
-
-
-## Real Time reload, drained over the fighter's head so an opponent's opening
-## is as readable as your own.
-func _draw_throw_cooldown(p: Player) -> void:
-	var w := 54.0
-	var h := 4.0
-	var frac: float = clampf(gm.throw_cooldown_left[p.index]
-		/ maxf(gm.real_time_throw_cooldown, 0.001), 0.0, 1.0)
-	var at: Vector2 = p.position + Vector2(-w * 0.5, -Player.HALF.y - 22.0)
-	draw_rect(Rect2(at, Vector2(w, h)), Color(0.10, 0.11, 0.14, 0.6))
-	draw_rect(Rect2(at, Vector2(w * (1.0 - frac), h)), Color(p.color, 0.75))
-	draw_rect(Rect2(at, Vector2(w, h)), Color(1, 1, 1, 0.18), false, 1.0)
 
 
 ## Movement budget left, drawn on the ghost head so the player watches it drain
@@ -935,10 +605,6 @@ func _arrow_between(from: Vector2, to: Vector2, col: Color) -> void:
 func _draw_existing_arrows() -> void:
 	_validate_arrow_prediction_cache()
 	for a in gm.arrows:
-		if a is InterceptProjectile:
-			for forecast in ClassLab.forecast(a, gm.exec_ticks() * 2):
-				_draw_trajectory(forecast.path, a.color, forecast.lethal, true, maxi(1, gm.exec_ticks() - forecast.offset))
-			continue
 		var pred: Dictionary = _prediction_for_arrow(a)
 		var immediate: bool = _is_immediate_threat(pred["path"])
 		if immediate:
@@ -973,9 +639,7 @@ func _validate_arrow_prediction_cache() -> void:
 		_arrow_prediction_tick = gm.world_tick
 
 
-func _prediction_for_arrow(a: Arrow) -> Dictionary:
-	if a is InterceptProjectile:
-		return {"path": a.prediction(gm.exec_ticks() * 2), "blocked": false}
+func _prediction_for_arrow(a: Knife) -> Dictionary:
 	var id := a.get_instance_id()
 	if not _arrow_prediction_cache.has(id):
 		_arrow_prediction_cache[id] = PredictionSystem.predict_arrow(a.position, a.vel, gm,
@@ -1129,21 +793,3 @@ func _player_preview_color(p: Player) -> Color:
 	if not high_contrast:
 		return p.color
 	return Color(1.0, 0.86, 0.28) if (p.index & 1) == 0 else Color(0.30, 0.90, 1.0)
-
-
-func _draw_lab_preview(p: Player, origin: Vector2) -> void:
-	var col: Color = _player_preview_color(p)
-	var projectile = ClassLab.make_projectile(gm, gm.player_weapons[p.index], Player.shoulder_at(origin) + p.aim_dir() * 22, p.aim_dir(), p.plan.power)
-	var paths: Array = ClassLab.forecast(projectile, 110)
-	for path in paths:
-		_draw_trajectory(path["path"], col, path.lethal, false, maxi(1, gm.exec_ticks() - path.offset))
-	var tag: String = ClassLab.COPY[ClassLab.ORDER.find(gm.player_weapons[p.index])]
-	if gm.player_weapons[p.index] == Roster.SHOCK:
-		tag = "SPLIT AFTER %.2fs" % (projectile.delay_ticks * gm.tick_dt())
-	elif gm.player_weapons[p.index] == Roster.CHAKRAM:
-		for old in gm.arrows:
-			if old is InterceptProjectile and old.shooter == p.index:
-				tag = "CORONA BUSY / WAIT FOR RETURN"
-	_shot_tag(p, Player.shoulder_at(origin) + p.aim_dir() * 65, p.aim_dir(), tag, col, 12)
-	_draw_power_bar(origin, p, gm.charging[p.index])
-	projectile.free()

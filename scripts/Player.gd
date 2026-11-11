@@ -19,20 +19,6 @@ const AFTERIMAGE_LIFETIME := 0.32
 const AFTERIMAGE_MIN_SPEED := 105.0
 const AFTERIMAGE_MIN_DISTANCE := 10.0
 
-## Character-specific inks are deliberately few and bold. They change only the
-## procedural silhouette; the player color still owns the articulated body.
-const VELOCITY_ORANGE := Color(0.94, 0.37, 0.10, 0.98)
-const VELOCITY_CYAN := Color(0.24, 0.96, 1.0, 0.98)
-const VELOCITY_GOLD := Color(1.0, 0.76, 0.22, 0.98)
-const ECLIPSE_WINE := Color(0.33, 0.11, 0.21, 0.98)
-const ECLIPSE_PEARL := Color(0.91, 0.88, 0.82, 0.98)
-const ECLIPSE_ROSE := Color(0.72, 0.48, 0.38, 0.98)
-const PULSE_CHERRY := Color(0.23, 0.06, 0.16, 0.98)
-const PULSE_VIOLET := Color(0.43, 0.24, 0.60, 0.92)
-const PULSE_ACID := Color(0.78, 0.95, 0.36, 0.98)
-const PULSE_BONE := Color(0.92, 0.89, 0.84, 0.98)
-const PULSE_CHROME := Color(0.75, 0.78, 0.81, 0.98)
-
 ## Down + jump drops the body through the ledge it is standing on, so descending
 ## a level is a deliberate move rather than a walk to the nearest edge.
 ##
@@ -49,8 +35,9 @@ const DROP_THROUGH_NUDGE := 220.0
 
 var cfg                      # GameManager, holds tuning values + solid_rects
 var index: int = 0           # 0 = P1, 1 = P2
-## Cosmetic roster id mirrored from GameManager. Physics never reads it here;
-## it only gives every prototype a distinct procedural stick silhouette.
+## Cosmetic roster id mirrored from GameManager. Physics never reads it. The
+## procedural figure has one silhouette while the Duelist is the only fighter;
+## a new kit selects its own costume from this id.
 var fighter_style: int = 0
 var color: Color = Color.WHITE
 var vel: Vector2 = Vector2.ZERO
@@ -456,162 +443,6 @@ func _draw_knife_fan(grip: Vector2, d: Vector2) -> void:
 		draw_line(base - side * 3.2, base + side * 3.2, color.lightened(0.5), 1.4, true)
 
 
-func _is_dashblading() -> bool:
-	return fighter_style == 2 and cfg != null and cfg.has_method("_player_is_dashing") \
-		and cfg._player_is_dashing(index)
-
-
-## The special pose follows the attack vector, but it is cosmetic: the Player
-## position, 32x48 body and Dashblade guard rectangle remain authoritative.
-func _dashblade_pose(base_pose: Dictionary) -> Dictionary:
-	var pose := base_pose.duplicate(true)
-	var d := aim_dir().normalized()
-	if d.is_zero_approx():
-		d = Vector2(float(facing), 0.0)
-	var side := d.orthogonal()
-	pose["hip"] = -d * 1.0
-	pose["chest"] = -d * 7.0
-	pose["neck"] = -d * 12.0
-	pose["head"] = -d * 17.0 - side * 1.5
-	pose["shoulder"] = -d * 5.0 + side * 4.0
-	pose["aim_elbow"] = d * 1.0 + side * 2.5
-	pose["grip"] = d * 8.0
-	pose["free_shoulder"] = -d * 7.0 - side * 4.0
-	pose["free_elbow"] = d * 3.0 - side * 7.0
-	pose["free_hand"] = d * 15.0 - side * 4.0
-	pose["knee_a"] = -d * 6.0 + side * 7.0
-	pose["foot_a"] = -d * 17.0 + side * 10.0
-	pose["knee_b"] = -d * 8.0 - side * 6.0
-	pose["foot_b"] = -d * 20.0 - side * 8.0
-	return pose
-
-
-func _velocity_stored_frames() -> int:
-	if cfg == null or index < 0 or index >= cfg.frame_debt_cells.size():
-		return 0
-	return clampi(int(cfg.frame_debt_cells[index]), 0, 3)
-
-
-func _draw_velocity_lance(rear: Vector2, point: Vector2, d: Vector2,
-		side: Vector2, ring_origin: Vector2, stored: int) -> void:
-	var ink := Color(0.025, 0.02, 0.045, 0.99)
-	draw_line(rear, point - d * 7.0, ink, 7.0, true)
-	draw_line(rear, point - d * 7.0, VELOCITY_GOLD.darkened(0.48), 3.4, true)
-	draw_line(rear + side * 0.8, point - d * 9.0 + side * 0.8,
-		Color(0.22, 0.32, 0.48, 0.96), 1.3, true)
-	# The three sliding rings are the character-readable version of LOST FRAME.
-	for i in 3:
-		var at := ring_origin - d * (float(i) * 7.0)
-		var ring_color := VELOCITY_CYAN if i < stored else VELOCITY_GOLD
-		draw_line(at - side * 5.0, at + side * 5.0, ink, 4.2, true)
-		draw_line(at - side * 4.2, at + side * 4.2, ring_color, 2.0, true)
-	var neck := point - d * 9.0
-	var tip := PackedVector2Array([
-		point, neck + side * 5.2, neck - d * 7.0, neck - side * 5.2,
-	])
-	draw_colored_polygon(tip, ink)
-	draw_polyline(tip + PackedVector2Array([tip[0]]), VELOCITY_GOLD, 1.5, true)
-	draw_line(neck - d * 4.0, point - d * 2.0, VELOCITY_CYAN, 1.3, true)
-
-
-## Two shield halves leave a narrow central channel. The lance is drawn first,
-## so the shield visibly leads while the point passes through that channel.
-func _draw_velocity_shield(center: Vector2, d: Vector2, side: Vector2,
-		half_span: float, half_depth: float) -> void:
-	var ink := Color(0.025, 0.02, 0.045, 0.99)
-	for raw_sign in [-1.0, 1.0]:
-		var sign_value: float = float(raw_sign)
-		var shield_half := PackedVector2Array([
-			center + side * sign_value * 2.2 - d * half_depth,
-			center + side * sign_value * half_span - d * (half_depth * 0.72),
-			center + side * sign_value * (half_span + 3.0),
-			center + side * sign_value * (half_span - 2.0) + d * half_depth,
-			center + side * sign_value * 2.2 + d * (half_depth * 0.75),
-		])
-		draw_colored_polygon(shield_half, ink)
-		draw_polyline(shield_half + PackedVector2Array([shield_half[0]]),
-			VELOCITY_GOLD, 1.6, true)
-		var slit_start: Vector2 = center + side * sign_value * 6.0 \
-			- d * (half_depth * 0.38)
-		var slit_end: Vector2 = center + side * sign_value * (half_span - 3.5) \
-			+ d * (half_depth * 0.2)
-		draw_line(slit_start, slit_end, VELOCITY_CYAN, 2.0, true)
-
-
-func _draw_dashblade_kit(pose: Dictionary) -> void:
-	var d := aim_dir().normalized()
-	if d.is_zero_approx():
-		d = Vector2(float(facing), 0.0)
-	var side := d.orthogonal()
-	if _is_dashblading():
-		var committed: int = cfg.dash_frame_debt_spent(index) \
-			if cfg.has_method("dash_frame_debt_spent") else 0
-		# Weapon first, shield second: the charge is visually shield-led while the
-		# lance emerges through its split centre and remains the striking point.
-		_draw_velocity_lance(-d * 34.0, d * 62.0, d, side, -d * 7.0,
-			clampi(committed, 0, 3))
-		_draw_velocity_shield(d * 24.0, d, side, 26.0, 10.0)
-		return
-
-	var grip: Vector2 = pose["grip"]
-	_draw_velocity_lance(grip - d * 15.0, grip + d * 45.0, d, side,
-		grip - d * 1.0, _velocity_stored_frames())
-	# At rest the shield hangs from the free arm like an extravagant piece of
-	# runway hardware; it becomes the full leading slab only during the breach.
-	var shield_center: Vector2 = pose["free_hand"] + d * 4.0
-	_draw_velocity_shield(shield_center, d, side, 12.0, 6.0)
-
-
-func _draw_chakram_kit(pose: Dictionary) -> void:
-	# The Eclipse manufactures a separate twelve-bladed corona at the open hand;
-	# the smooth permanent aureole is drawn by his costume and never leaves him.
-	var d := aim_dir().normalized()
-	if d.is_zero_approx():
-		d = Vector2(float(facing), 0.0)
-	var center: Vector2 = pose["grip"] + d * 8.0
-	draw_circle(pose["grip"], 3.7, ECLIPSE_PEARL)
-	draw_arc(center, 8.0, 0.0, TAU, 24, Color(0.04, 0.03, 0.05), 4.0, true)
-	draw_arc(center, 7.2, 0.0, TAU, 24, ECLIPSE_WINE.lightened(0.12), 1.2, true)
-	for i in 12:
-		var a := TAU * float(i) / 12.0
-		var outward := Vector2(cos(a), sin(a))
-		var side := outward.orthogonal()
-		var root := center + outward * 8.0
-		draw_colored_polygon(PackedVector2Array([
-			root - side * 1.5, root + outward * 4.5, root + side * 1.5,
-		]), ECLIPSE_ROSE)
-
-
-func _draw_shock_kit(pose: Dictionary) -> void:
-	# The Pulse conducts through one open tuning-fork baton. It must never read as
-	# the old firearm: a straight shaft, two clean prongs and one floating crystal.
-	var d := aim_dir().normalized()
-	if d.is_zero_approx():
-		d = Vector2(float(facing), 0.0)
-	var side := d.orthogonal()
-	var grip: Vector2 = pose["grip"]
-	var fork_base := grip + d * 18.0
-	var fork_tip := grip + d * 29.0
-	draw_line(grip - d * 9.0, fork_base, Color(0.055, 0.04, 0.07), 5.0, true)
-	draw_line(grip - d * 8.0, fork_base, PULSE_CHROME, 1.6, true)
-	draw_line(fork_base, fork_tip + side * 4.0, PULSE_CHROME, 2.4, true)
-	draw_line(fork_base, fork_tip - side * 4.0, PULSE_CHROME, 2.4, true)
-	if plan.attack_mode == 1:
-		var orb_center := fork_tip + d * 7.0
-		draw_circle(orb_center, 6.2, Color(0.08, 0.04, 0.11, 0.98))
-		draw_arc(orb_center, 5.0, 0.0, TAU, 16, PULSE_CHROME, 1.2, true)
-		draw_circle(orb_center, 2.4, PULSE_ACID)
-		for tab_dir in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
-			draw_circle(orb_center + tab_dir * 7.0, 1.2, PULSE_CHROME)
-	else:
-		var crystal_center := fork_tip + d * 1.5
-		var crystal := PackedVector2Array([
-			crystal_center + d * 3.0, crystal_center + side * 2.2,
-			crystal_center - d * 3.0, crystal_center - side * 2.2,
-		])
-		draw_colored_polygon(crystal, PULSE_ACID)
-
-
 func _draw_default_costume(pose: Dictionary, head: Vector2, f: float) -> void:
 	var ink := Color(0.035, 0.035, 0.055, 0.98)
 	var collar := PackedVector2Array([
@@ -631,158 +462,6 @@ func _draw_default_costume(pose: Dictionary, head: Vector2, f: float) -> void:
 	])
 	draw_colored_polygon(hair, ink)
 	draw_polyline(hair, color.darkened(0.10), 2.0, true)
-
-
-func _draw_velocity_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
-	var ink := Color(0.025, 0.02, 0.045, 0.99)
-	# One trouser leg blooms into the portrait's runway flare. This stays outside
-	# collision and is intentionally only a few pixels wider than the stick leg.
-	var knee: Vector2 = pose["knee_b"]
-	var foot: Vector2 = pose["foot_b"]
-	var leg_axis := (foot - knee).normalized()
-	var leg_side := leg_axis.orthogonal()
-	var flare := PackedVector2Array([
-		knee - leg_side * 3.2, knee + leg_side * 3.2,
-		foot + leg_side * 6.5, foot + leg_axis * 2.0,
-		foot - leg_side * 6.5,
-	])
-	draw_colored_polygon(flare, Color(0.035, 0.08, 0.22, 0.98))
-	draw_polyline(flare + PackedVector2Array([flare[0]]), color.lightened(0.12), 1.2, true)
-	# Cropped cavalry jacket and the single huge orange lapel carry most of the
-	# fashion read; the body underneath remains the shared puppet. Both are cut
-	# in the torso's own basis, the same way the flare follows the shin above.
-	# The dash pose swings hip/chest/neck around the aim vector, so world-space
-	# x/y offsets fold these quads onto themselves at most angles, and Godot's
-	# triangulator drops a non-simple polygon instead of drawing it.
-	var hip: Vector2 = pose["hip"]
-	var chest: Vector2 = pose["chest"]
-	var neck: Vector2 = pose["neck"]
-	var torso_axis := (neck - hip).normalized()
-	var torso_side := torso_axis.orthogonal() * f
-	var jacket := PackedVector2Array([
-		chest + torso_axis * 6.2 + torso_side * 3.7,
-		chest - torso_axis * 0.5 - torso_side * 8.1,
-		hip - torso_axis * 1.2 - torso_side * 4.9,
-		hip + torso_axis * 0.8 + torso_side * 4.0,
-	])
-	draw_colored_polygon(jacket, Color(0.03, 0.07, 0.18, 0.98))
-	draw_polyline(jacket + PackedVector2Array([jacket[0]]), VELOCITY_GOLD, 1.2, true)
-	var lapel := PackedVector2Array([
-		neck - torso_axis * 0.5 + torso_side * 1.3,
-		neck + torso_axis * 1.9 + torso_side * 6.3,
-		chest - torso_axis * 1.5 + torso_side * 6.2,
-		hip - torso_side * 2.2,
-	])
-	draw_colored_polygon(lapel, VELOCITY_ORANGE)
-	draw_polyline(lapel + PackedVector2Array([lapel[0]]), ink, 1.2, true)
-	# The upward hair horn replaces a literal dragoon helmet.
-	var hair_horn := PackedVector2Array([
-		head + Vector2(-4.0 * f, 2.0),
-		head + Vector2(-7.0 * f, -3.0),
-		head + Vector2(-4.0 * f, -15.0),
-		head + Vector2(1.0 * f, -8.0),
-		head + Vector2(3.0 * f, -4.0),
-	])
-	draw_colored_polygon(hair_horn, Color(0.18, 0.055, 0.035, 0.99))
-	draw_polyline(hair_horn + PackedVector2Array([hair_horn[0]]),
-		VELOCITY_ORANGE.darkened(0.16), 1.4, true)
-	draw_circle(pose["shoulder"], 4.2, ink)
-	draw_arc(pose["shoulder"], 3.5, 0.0, TAU, 10, VELOCITY_GOLD, 1.3, true)
-
-
-func _draw_eclipse_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
-	var ink := Color(0.035, 0.025, 0.04, 0.99)
-	# One smooth permanent aureole anchors the identity. It is intentionally
-	# unbladed and stays attached even while a weapon corona is in flight.
-	draw_arc(head, 15.5, 0.0, TAU, 30, ink, 3.2, true)
-	draw_arc(head, 14.3, 0.0, TAU, 30, ECLIPSE_WINE.lightened(0.16), 1.0, true)
-	for cardinal in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
-		draw_circle(head + cardinal * 15.0, 1.5, ECLIPSE_ROSE)
-	# The pearl crescent mantle frames the head without becoming horns or armor.
-	# Every point is anchored on neck and chest and mirrored by facing. The two
-	# shoulder joints look like the natural anchors for the outer tips and are
-	# not: `free_shoulder` mirrors with facing while `shoulder` never moves off
-	# x = 0, so on a left-facing fighter the pair swaps order, and the running
-	# pose slides the torso by travel direction rather than by facing, which can
-	# put them almost on top of each other. Either way the crescent folds across
-	# itself, Godot's triangulator rejects a non-simple polygon, and the Eclipse
-	# loses her mantle while logging an error every frame. This is the same fault
-	# that took the Velocity's coat and the Pulse's hem; neck and chest are the
-	# only torso joints that keep their relationship through all three poses.
-	var neck: Vector2 = pose["neck"]
-	var chest: Vector2 = pose["chest"]
-	var mantle := PackedVector2Array([
-		chest + Vector2(-8.0 * f, -3.0),
-		neck + Vector2(-7.0 * f, -1.0),
-		neck + Vector2(0.0, 5.0),
-		neck + Vector2(7.0 * f, -1.0),
-		chest + Vector2(7.5 * f, -4.0),
-		chest + Vector2(6.0 * f, 5.0),
-		chest + Vector2(-6.0 * f, 5.0),
-	])
-	draw_colored_polygon(mantle, ECLIPSE_PEARL)
-	draw_polyline(mantle + PackedVector2Array([mantle[0]]), ECLIPSE_ROSE, 1.2, true)
-	var vest := PackedVector2Array([
-		pose["chest"] + Vector2(-4.0, 0.0), pose["chest"] + Vector2(4.0, 0.0),
-		pose["hip"] + Vector2(5.0, 5.0), pose["hip"] + Vector2(-5.0, 5.0),
-	])
-	draw_colored_polygon(vest, ECLIPSE_WINE)
-	for shoulder in [pose["free_shoulder"], pose["shoulder"]]:
-		draw_line(shoulder, pose["hip"] + Vector2(signf(shoulder.x - pose["hip"].x) * 8.0, 13.0),
-			ECLIPSE_PEARL, 2.2, true)
-
-
-func _draw_pulse_fashion(pose: Dictionary, head: Vector2, f: float) -> void:
-	var ink := Color(0.035, 0.015, 0.055, 0.99)
-	# Exactly four hard stained-glass moth panels form the serrated X behind her.
-	var wing_root: Vector2 = pose["chest"] + Vector2(-2.0 * f, 2.0)
-	for tip_offset: Vector2 in [Vector2(-18.0, -24.0), Vector2(18.0, -24.0),
-			Vector2(-16.0, 20.0), Vector2(16.0, 20.0)]:
-		var tip: Vector2 = wing_root + tip_offset
-		var axis: Vector2 = (tip - wing_root).normalized()
-		var side: Vector2 = axis.orthogonal()
-		var wing := PackedVector2Array([
-			wing_root - side * 2.2, tip, wing_root + side * 4.0,
-		])
-		draw_colored_polygon(wing, Color(PULSE_VIOLET.r, PULSE_VIOLET.g, PULSE_VIOLET.b, 0.46))
-		draw_polyline(wing + PackedVector2Array([wing[0]]), PULSE_ACID, 1.2, true)
-	var bodice := PackedVector2Array([
-		pose["neck"] + Vector2(-3.0, 1.0), pose["neck"] + Vector2(3.0, 1.0),
-		pose["hip"] + Vector2(4.0, 2.0), pose["hip"] + Vector2(-4.0, 2.0),
-	])
-	draw_colored_polygon(bodice, PULSE_BONE)
-	draw_polyline(bodice + PackedVector2Array([bodice[0]]), PULSE_CHROME, 1.0, true)
-	# Two simple panels keep the hem sharply pointed without creating the
-	# self-intersecting six-point polygon that failed triangulation in mirrored
-	# and movement poses.
-	var jacket_left := PackedVector2Array([
-		pose["chest"] + Vector2(-7.0, -3.0),
-		pose["chest"] + Vector2(0.0, -2.0),
-		pose["hip"] + Vector2(0.0, 3.0),
-		pose["hip"] + Vector2(-6.0, 7.0),
-	])
-	var jacket_right := PackedVector2Array([
-		pose["chest"] + Vector2(0.0, -2.0),
-		pose["chest"] + Vector2(7.0, -3.0),
-		pose["hip"] + Vector2(6.0, 7.0),
-		pose["hip"] + Vector2(0.0, 3.0),
-	])
-	for panel: PackedVector2Array in [jacket_left, jacket_right]:
-		draw_colored_polygon(panel, PULSE_CHERRY)
-		draw_polyline(panel + PackedVector2Array([panel[0]]), PULSE_ACID, 1.2, true)
-	draw_circle(pose["chest"], 2.2, PULSE_ACID)
-	# Compact black-violet bob plus one acid lightning forelock; no twin tails.
-	draw_circle(head + Vector2(-1.5 * f, -1.0), 8.2, ink)
-	var bob := PackedVector2Array([
-		head + Vector2(-7.0 * f, -5.0), head + Vector2(-2.0 * f, -9.0),
-		head + Vector2(5.0 * f, -6.0), head + Vector2(7.0 * f, 2.0),
-		head + Vector2(-4.0 * f, 6.0),
-	])
-	draw_colored_polygon(bob, Color(0.14, 0.09, 0.18, 0.99))
-	draw_polyline(PackedVector2Array([
-		head + Vector2(1.0 * f, -7.0), head + Vector2(4.0 * f, -3.0),
-		head + Vector2(2.0 * f, -1.0), head + Vector2(5.0 * f, 2.0),
-	]), PULSE_ACID, 2.0, true)
 
 
 func _draw_pose_shadow(pose: Dictionary) -> void:
@@ -828,19 +507,6 @@ func _draw_afterimage(pose: Dictionary, offset: Vector2, strength: float) -> voi
 	draw_circle(pose["head"] + offset, 7.0, echo)
 
 
-func _draw_missing_frame(offset: Vector2, strength: float) -> void:
-	var skew := 3.0 * signf(offset.x) if not is_zero_approx(offset.x) else 2.0
-	var panel := PackedVector2Array([
-		offset + Vector2(-18.0 + skew, -29.0),
-		offset + Vector2(18.0 + skew, -27.0),
-		offset + Vector2(17.0 - skew, 28.0),
-		offset + Vector2(-19.0 - skew, 26.0),
-	])
-	draw_colored_polygon(panel, Color(0.08, 0.88, 1.0, 0.025 * strength))
-	draw_polyline(panel + PackedVector2Array([panel[0]]),
-		Color(0.50, 0.96, 1.0, 0.72 * strength), 1.2, true)
-
-
 func _draw() -> void:
 	_draw_team_marker()
 	if not draw_legacy_visual:
@@ -862,15 +528,10 @@ func _draw() -> void:
 			if cfg != null and cfg.has_method("wrap_delta") \
 			else snapshot["position"] - position
 		var life: float = 1.0 - float(snapshot["age"]) / AFTERIMAGE_LIFETIME
-		if fighter_style == 2:
-			_draw_missing_frame(offset, life)
 		_draw_afterimage(snapshot["pose"], offset, 0.14 * life * life)
 
 	var f := float(facing)
 	var pose := _pose_points()
-	if _is_dashblading():
-		pose = _dashblade_pose(pose)
-		_draw_dash_aura()
 	# A completed late-match meter should be legible on the fighter even when the
 	# HUD is not where the player is looking. Arming it brightens and thickens the
 	# ring, so the toggle has world-space feedback as well as a panel label.
@@ -922,16 +583,8 @@ func _draw() -> void:
 
 	var head: Vector2 = pose["head"]
 	var ink := Color(0.035, 0.035, 0.055, 0.98)
-	match fighter_style:
-		2:
-			_draw_velocity_fashion(pose, head, f)
-		3:
-			_draw_eclipse_fashion(pose, head, f)
-		4:
-			_draw_pulse_fashion(pose, head, f)
-		_:
-			# The dagger fallback keeps the aristocratic swept collar.
-			_draw_default_costume(pose, head, f)
+	# The Duelist keeps the aristocratic swept collar.
+	_draw_default_costume(pose, head, f)
 	draw_circle(head, 7.2, Color(0.035, 0.035, 0.055, 0.98))
 	draw_circle(head, 5.1, color.lightened(0.18))
 	draw_arc(head, 5.2, -0.9, 1.9, 10, color.lightened(0.55), 1.1, true)
@@ -940,15 +593,7 @@ func _draw() -> void:
 	draw_line(head + Vector2(0.7 * f, -2.5), head + Vector2(4.0 * f, -1.7),
 		Color(0.03, 0.03, 0.05), 1.2, true)
 
-	match fighter_style:
-		2:
-			_draw_dashblade_kit(pose)
-		3:
-			_draw_chakram_kit(pose)
-		4:
-			_draw_shock_kit(pose)
-		_:
-			_draw_knife_fan(pose["grip"], aim_dir())
+	_draw_knife_fan(pose["grip"], aim_dir())
 
 	if cfg == null or not bool(cfg.team_mode):
 		draw_string(ThemeDB.fallback_font, Vector2(-10.0, -HALF.y - 12.0), seat_tag(),
@@ -981,28 +626,3 @@ func _draw_team_marker() -> void:
 		Color(team_color.r, team_color.g, team_color.b, 0.96), 1.6, true)
 	draw_string(ThemeDB.fallback_font, Vector2(-9.0, marker_y + 6.0), "P%d" % (index + 1),
 		HORIZONTAL_ALIGNMENT_CENTER, 18.0, 11, team_color.lightened(0.28))
-
-
-func _draw_dash_aura() -> void:
-	var d := aim_dir().normalized()
-	var side := d.orthogonal()
-	draw_circle(Vector2.ZERO, 37.0, Color(0.18, 0.92, 1.0, 0.15))
-	draw_arc(Vector2.ZERO, 36.0, 0.0, TAU, 30, Color(0.35, 0.96, 1.0, 0.72), 2.2)
-	var committed: int = cfg.dash_frame_debt_spent(index) \
-		if cfg != null and cfg.has_method("dash_frame_debt_spent") else 0
-	for i in maxi(1, committed + 1):
-		var centre := -d * (18.0 + float(i) * 11.0) \
-			+ side * (float(i % 2) * 8.0 - 4.0)
-		var half_forward := 6.0 + float(i) * 0.7
-		var half_side := 17.0
-		var panel := PackedVector2Array([
-			centre - d * half_forward - side * half_side,
-			centre + d * half_forward - side * half_side,
-			centre + d * half_forward + side * half_side,
-			centre - d * half_forward + side * half_side,
-		])
-		draw_polyline(panel + PackedVector2Array([panel[0]]),
-			Color(0.42, 0.96, 1.0, 0.38 + 0.10 * float(i)), 1.8, true)
-	var shield_center := d * 24.0
-	draw_arc(shield_center, 29.0, d.angle() - 1.05, d.angle() + 1.05, 22,
-		Color(VELOCITY_CYAN.r, VELOCITY_CYAN.g, VELOCITY_CYAN.b, 0.42), 2.0, true)

@@ -48,11 +48,8 @@ if (-not (Invoke-GodotCheck @('--headless', '--editor', '--path', "`"$projectRoo
     throw "Godot could not import the project cleanly."
 }
 
+# tests/ holds only suites: captures live in tools/captures, simulations in tools/sims.
 $tests = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot "tests") -Filter "*.gd" |
-    Where-Object {
-        $_.BaseName -notin @("CharacterBalanceSimulation", "VisualCaptureHelper") -and
-        -not (Select-String -LiteralPath $_.FullName -SimpleMatch "VisualCaptureHelper" -Quiet)
-    } |
     Sort-Object Name |
     Select-Object -ExpandProperty BaseName)
 

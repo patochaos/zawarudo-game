@@ -12,9 +12,6 @@ const MAIN_SCENE := preload("res://scenes/Main.tscn")
 ## Weapon ids are append-only, so these are spelled out rather than ranged over.
 const KITS := {
 	0: "The Duelist",
-	2: "The Rook",
-	3: "The Eclipse",
-	4: "The Pulse",
 }
 
 ## Elevation steps across the full aim range. The pose reads the aim vector for

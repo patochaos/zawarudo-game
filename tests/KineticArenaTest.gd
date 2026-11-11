@@ -265,8 +265,8 @@ func _find_mover(gm) -> Dictionary:
 	return {}
 
 
-func _launch_knife(gm, at: Vector2, vel: Vector2) -> Arrow:
-	var a := Arrow.new()
+func _launch_knife(gm, at: Vector2, vel: Vector2) -> Knife:
+	var a := Knife.new()
 	a.cfg = gm
 	a.shooter = 0
 	a.volley = gm._next_volley

@@ -64,7 +64,7 @@ func _run() -> void:
 		# Every online seat gets its own instructions and sees every rival; all
 		# four score rows remain available regardless of who owns this client.
 		game.online_mode = true
-		game.online_room = "AUDIT"
+		game._online.online_room = "AUDIT"
 		for slot in 4:
 			game.online_player = slot
 			game._ui.refresh()
@@ -75,11 +75,11 @@ func _run() -> void:
 					_check("P%d" % (rival + 1) in game._ui._hint_p2.text,
 						label + ": every remote rival is listed")
 				_check(game._ui._pips[rival][0].visible, label + ": every score is visible")
-		game.online_peer_lost = true
+		game._online.online_peer_lost = true
 		game._ui.refresh()
 		_check("RECONNECT" in game._ui._hint_p2.text and not "CLAIM" in game._ui._hint_p2.text,
 			label + ": one missing player cannot award a four-player match")
-		game.online_peer_lost = false
+		game._online.online_peer_lost = false
 		game.online_mode = false
 		# Every seat can score and finish the match, including P3/P4.
 		for shooter in 4:

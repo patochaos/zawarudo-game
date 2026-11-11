@@ -78,7 +78,7 @@ class Markers:
 				var opponent: Vector2 = practice.gm.players[1].position
 				draw_string(font, opponent + Vector2(34, -42), "JUMP READY", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, gold)
 		if practice.lesson == 2 and practice.gm.state == Phase.PLANNING:
-			for knife: Arrow in practice.gm.arrows:
+			for knife: Knife in practice.gm.arrows:
 				var threat: int = practice.survival_knife_ids.find(knife.network_id)
 				if threat < 0: continue
 				var caption := "1  LOW KNIFE" if threat == 0 else "2  LANDING KNIFE"
@@ -161,7 +161,7 @@ func _label(at: Vector2, dimensions: Vector2, font_size: int) -> Label:
 
 func start() -> void:
 	gm._abandon_match("learn_to_play")
-	gm._set_close_camera_mode(false)
+	gm._reset_experiment_modes()
 	gm.fate_trial_mode = false
 	gm.tutorial_mode = false
 	gm.online_mode = false
@@ -359,7 +359,7 @@ func landing_aim_point() -> Vector2:
 
 func _seed_survival_knife(at: Vector2, velocity: Vector2) -> void:
 	gm._seed_fate_trial_threat()
-	var knife: Arrow = gm.arrows[-1]
+	var knife: Knife = gm.arrows[-1]
 	knife.position = at
 	knife.prev_pos = at
 	knife.vel = velocity

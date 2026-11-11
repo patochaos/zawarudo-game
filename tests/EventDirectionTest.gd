@@ -22,14 +22,14 @@ func _run() -> void:
 	game.start_quick_match(false, 0, 2)
 	game._transition.visible = false
 	var ed = game._event_direction
-	var digest: String = game._online_state_digest()
+	var digest: String = game._online._online_state_digest()
 
 	# Lock-in is quiet: readiness is the badge and the HUD status, not a beat.
 	game._confirm(0)
 	ed._process(0.05)
 	check(ed.active_kinds().is_empty() and ed.current_mul().is_equal_approx(Color.WHITE),
 		"confirming a plan starts no palette event")
-	check(game._online_state_digest() == digest, "confirming leaves the digest alone")
+	check(game._online._online_state_digest() == digest, "confirming leaves the digest alone")
 
 	# Impact returns in hard steps.
 	ed.impact(Vector2(640.0, 360.0), Color.GOLD)
@@ -42,7 +42,7 @@ func _run() -> void:
 		if not ed._events.is_empty():
 			seen[snappedf(ed.strength(ed._events[0]), 0.01)] = true
 	check(seen.size() <= 4 and seen.has(1.0), "the impact grade returns in a few hard steps (%s)" % [seen.keys()])
-	check(game._online_state_digest() == digest, "impact theatre leaves the digest alone")
+	check(game._online._online_state_digest() == digest, "impact theatre leaves the digest alone")
 
 	# Reduced flashes: tint only, shorter.
 	ed.clear()

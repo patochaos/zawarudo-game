@@ -228,8 +228,7 @@ func refresh() -> void:
 		var pl = gm.players[0]
 		_live.text = "speed %4.0f,%4.0f   %s   projectiles %d" % [
 			pl.vel.x, pl.vel.y, "grounded" if pl.on_ground else "airborne",
-			gm.arrows.size() + gm.dashblades.size() + gm.chakrams.size() \
-				+ gm.shock_plasmas.size() + gm.shock_orbs.size(),
+			gm.arrows.size(),
 		]
 
 

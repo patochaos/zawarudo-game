@@ -66,9 +66,9 @@ func _test_planned_double_jump() -> void:
 	p.cfg = gm
 	p.on_ground = true
 	gm.players = [p]
-	gm._jump_prev[0] = true
+	gm._player_input._jump_prev[0] = true
 	gm._reset_pilot(0)
-	_check(not gm._jump_prev[0],
+	_check(not gm._player_input._jump_prev[0],
 		"a new planning phase must discard a stale jump edge when no button is held")
 
 	_check(gm._pilot_step(0, 0, true, true), "the ground jump tick must record")

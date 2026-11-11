@@ -13,9 +13,6 @@ signal feedback_requested
 signal quit_requested
 signal roster_requested
 signal fate_trial_requested
-signal close_camera_requested
-signal class_lab_requested
-signal real_time_requested
 signal sandbox_requested
 signal binding_changed(action: String, codes: Array)
 signal bindings_reset
@@ -38,12 +35,9 @@ const ROW_EXPERIMENTS := 8
 const ROW_QUIT := 9
 var developer_mode: bool = "--dev-tools" in OS.get_cmdline_user_args()
 ## Rows on the separate experiments page.
-const ROW_REAL_TIME := 0
-const ROW_FATE_TRIAL := 1
-const ROW_CLOSE_CAMERA := 2
-const ROW_SANDBOX := 3
-const ROW_CLASS_LAB := 4
-const ROW_EXPERIMENTS_BACK := 5
+const ROW_FATE_TRIAL := 0
+const ROW_SANDBOX := 1
+const ROW_EXPERIMENTS_BACK := 2
 
 ## Enough physical rows for the longest page, which is the binding list.
 const ROWS := 11
@@ -692,11 +686,8 @@ func _activate(row: int) -> void:
 		return
 	if _page == MenuPage.EXPERIMENTS:
 		match row:
-			ROW_REAL_TIME: real_time_requested.emit()
 			ROW_FATE_TRIAL: fate_trial_requested.emit()
-			ROW_CLOSE_CAMERA: close_camera_requested.emit()
 			ROW_SANDBOX: sandbox_requested.emit()
-			ROW_CLASS_LAB: class_lab_requested.emit()
 			ROW_EXPERIMENTS_BACK:
 				_show_main_menu()
 				_select(ROW_EXPERIMENTS)
@@ -757,7 +748,7 @@ func _page_names() -> Array[String]:
 	if _page == MenuPage.CONTROLS:
 		return ["‹  BACK"]
 	if _page == MenuPage.EXPERIMENTS:
-		return ["REAL TIME", "FATE TRIAL", "CLOSE CAMERA", "SANDBOX", "CLASS LAB", "‹  BACK"]
+		return ["FATE TRIAL", "SANDBOX", "‹  BACK"]
 	var main_rows: Array[String] = [
 		"START DUEL",
 		"CUSTOM MATCH",
@@ -784,7 +775,7 @@ func _page_description() -> String:
 				"Climb the opponent ladder: five named CPUs, each in its own arena, first to 3 hits. %s Uses your offline tuning." % ladder_line,
 				"Pick any of the five arenas, the number of fighters, each CPU's skill and the match length.",
 				"Predict the next landing. One jump, committed air movement and quick ground stops. Contest the central core against a Standard CPU. First to 3 hits. Fixed test rules.",
-				"Learn by playing three short lessons. Every attempt has the same eight-second timer as a real duel.",
+				"Learn by playing three short lessons. Every lesson turn has an eight-second timer.",
 				"Create a 2 or 4 player private room. Everyone needs the same build; plans stay hidden until all players lock.",
 				"Keyboard, mouse and gamepad controls. Rebind Player 1 keys here.",
 				"Adjust display, sound, flashes and preview contrast. Match reports are stored locally for feedback.",
@@ -794,11 +785,8 @@ func _page_description() -> String:
 			][_cursor]
 		MenuPage.EXPERIMENTS:
 			return [
-				"Continuous Duelist vs CPU. No time stops or landing lines; immediate respawns. H toggles the aim guide.",
 				"Trial 01: read a revealed enemy plan and survive three execution windows as the Duelist.",
-				"The compact Knife Court prototype: closer planning, brisk turns, and full-arena execution.",
 				"Enter Arena 1 as the Duelist, then change fighters, arenas and a live CPU in place.",
-				"Try redesigned Rook, Pulse and Eclipse against CPU. Switch fighters and compare planning with real time.",
 				"Return to the main menu.",
 			][_cursor]
 		MenuPage.BINDINGS:

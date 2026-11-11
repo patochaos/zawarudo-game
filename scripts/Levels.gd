@@ -45,7 +45,7 @@ class_name Levels
 ##
 ## Design constraints for a new level:
 ##   * playable band is roughly y 120..620 on non-wrapping levels
-##   * a jump clears 211px (Pulse about 176px), so keep climbs near 140px and
+##   * a jump clears 211px, so keep climbs near 140px and
 ##     stack surfaces at least 140px apart so a climb does not bonk
 ##   * leave an arc that clears mid-field cover, or there is no direct shot
 
@@ -96,43 +96,6 @@ static func build_interception() -> Dictionary:
 			{"rect": Rect2(970, 490, 102, 130), "hp": -1},
 			# 100px below, 120px up: a tight low route and a single-jump landing.
 			{"rect": Rect2(500, 500, 280, 20), "hp": -1},
-		],
-	}, 2)
-
-## The compact arena authored for Close Camera. It is deliberately outside the
-## normal seven-arena rotation: only the dedicated mode can load it.
-static func build_close_camera() -> Dictionary:
-	return _finish({
-		"name": "KNIFE COURT",
-		"feature": "CLOSE CAMERA // intimate planning, full-arena execution.",
-		"wrap_x": true,
-		"spawns": [
-			Vector2(400.0, 596.0), Vector2(880.0, 596.0),
-			Vector2(380.0, 371.0), Vector2(900.0, 371.0),
-		],
-		"respawn_points": [
-			Vector2(160.0, 596.0), Vector2(400.0, 596.0), Vector2(640.0, 596.0),
-			Vector2(880.0, 596.0), Vector2(1120.0, 596.0),
-			Vector2(180.0, 481.0), Vector2(1100.0, 481.0),
-		],
-		"core_spawns": [
-			Vector2(220.0, 460.0), Vector2(640.0, 445.0), Vector2(1060.0, 460.0),
-		],
-		"hazards": [],
-		"platforms": [
-			{"rect": Rect2(0, 540, 56, 80), "hp": -1},
-			{"rect": Rect2(1224, 540, 56, 80), "hp": -1},
-			{"rect": Rect2(100, 505, 260, 18), "hp": -1},
-			{"rect": Rect2(920, 505, 260, 18), "hp": -1},
-			{"rect": Rect2(260, 395, 240, 18), "hp": 3},
-			{"rect": Rect2(780, 395, 240, 18), "hp": 3},
-			{
-				"rect": Rect2(460, 285, 160, 16), "hp": -1,
-				"motion": {
-					"axis": Vector2.RIGHT, "travel": 200.0, "period": 240, "phase": 0.0,
-				},
-			},
-			{"rect": Rect2(604, 500, 72, 120), "hp": -1},
 		],
 	}, 2)
 

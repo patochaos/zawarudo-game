@@ -74,11 +74,11 @@ func _test_presets() -> void:
 	for preset: Dictionary in tuning.PRESETS:
 		# A preset must reset even the knobs that its own overrides do not name.
 		tuning.set_value("gravity", 4000.0)
-		tuning.set_value("real_time_throw_cooldown", 4.0)
+		tuning.set_value("knife_ricochet_min_speed", 900.0)
 		var before: int = changes[0]
 		_check(tuning.apply_preset(preset.id), "preset must apply: " + preset.id)
 		_check(changes[0] == before + 1, "a whole preset must publish one change")
-		_check(game.gravity == 1400.0 and game.real_time_throw_cooldown == 1.2,
+		_check(game.gravity == 1400.0 and game.knife_ricochet_min_speed == 560.0,
 			"presets must discard unrelated custom values")
 		_check(tuning.matching_preset_id() == preset.id, "active preset must match all values")
 		for key: String in preset["values"]:
@@ -174,7 +174,7 @@ func _test_simulation() -> void:
 	_check(launches.size() == 3 and is_equal_approx(launches[0].length(), 1000.0),
 		"the throw must use the selected count and speed")
 	tuning.set_value("arrow_max_ticks", 0.25)
-	var arrow := Arrow.new()
+	var arrow := Knife.new()
 	arrow.cfg = game
 	arrow.position = Vector2.ZERO
 	arrow.vel = Vector2.RIGHT * 100.0
@@ -272,7 +272,7 @@ func _test_menu_and_online_boundary() -> void:
 	_check(game.planning_duration == 8.0 and game.knives_per_shot == 2 and game.double_jump_enabled,
 		"authored lessons must remain playable with standard rules")
 	game._open_menu()
-	game._on_menu_online()
+	game._online._on_menu_online()
 	_check(game.planning_duration == 4.0 and game.knives_per_shot == 2,
 		"entering the online lobby must restore standard rules")
 	_check(not game.offline_tuning.set_value("knives_per_shot", 3),
@@ -280,14 +280,14 @@ func _test_menu_and_online_boundary() -> void:
 	# Direct match start also enforces the boundary, including rematches.
 	game.arrow_speed_max = 1234.0
 	game.online_player = 0
-	game._start_online_match(0, 42, 1)
+	game._online._start_online_match(0, 42, 1)
 	for definition: Dictionary in game.offline_tuning.definitions:
 		var key: String = definition.key
 		_check(game.get(key) == game.offline_tuning._defaults[key],
 			"online must restore authored value for " + key)
 	_check(not game.offline_tuning.set_value("double_jump_enabled", false),
 		"active online matches must reject tuning mutations")
-	game._leave_online()
+	game._online._leave_online()
 	game.start_demo_duel()
 	_check(game.planning_duration == 12.0 and game.knives_per_shot == 3 \
 		and not game.double_jump_enabled and game.aim_preview_duration == 1.5,

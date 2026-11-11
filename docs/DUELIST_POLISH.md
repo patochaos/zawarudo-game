@@ -8,8 +8,8 @@ route. Improve authoring, readability and understanding before expanding the kit
 ## Implemented
 
 - Fixed four-second standard planning window; early confirmation remains fast.
-  Optional shrinking-clock tuning defaults to zero. Authored special-mode clocks
-  retain their existing behavior.
+  Optional shrinking-clock tuning defaults to zero. Lessons use eight seconds
+  and Fate Trial keeps its authored clock.
 - Compact local-player timelines: recorded movement, throw tick, movement budget
   boundary and the coast to the next freeze. No hidden opponent plan is exposed.
 - Partial rewind with Backspace / L1, explicit re-aim with Alt / R1, and keyboard
@@ -27,8 +27,9 @@ route. Improve authoring, readability and understanding before expanding the kit
   them to the simulation. Opening it pauses planning and AI; online and touch
   review are unavailable. Full-match replay remains available after the result.
 - Quieter permanent-platform rails and rivets, preserving material/mover cues.
-- Arena selection now gives actionable interception exercises for Crosshair
-  Court, Shattered Sanctum and Pendulum. Geometry and arena IDs are preserved.
+- Arena selection gave actionable interception exercises for Crosshair
+  Court, Shattered Sanctum and Pendulum. Shattered Sanctum and Pendulum were
+  retired from the rotation in October 2026.
 - Tutorial copy explains the timeline, two-dagger charge tradeoff and editing.
 - Local telemetry records planning timeouts, retained rewind ticks, and knife-hit
   age/clash/ricochet counts. These supplement existing lock/charge/core events.
@@ -45,8 +46,11 @@ not claims of measured improvements.
 | Shattered Sanctum | Spend a throw opening cover, then exploit the lane | Whether destruction creates usable follow-up routes; safe camping |
 | Pendulum | Intercept after a lift ride or vertical wrap | Whether landing timing and portal return are readable |
 
-The latter two are existing advanced arenas, not newly simplified maps. Use the
-static court as the control when judging projectile and movement changes.
+Shattered Sanctum and Pendulum were retired from the rotation in October 2026,
+so those two rows cannot be run on the current build. The rotation is now
+Crosshair Court, Clockwork Gallery, Stilled Hall, Pulse Chamber and Endless
+Descent. Use the static court as the control when judging projectile and
+movement changes.
 
 For each match, record unfinished plans/timeouts, low-versus-high charge use,
 hits from earlier windows, and whether players can explain each hit or miss.
@@ -73,5 +77,5 @@ throw preservation/removal, timing clamps, submission protection, private
 timeline visibility, ricochet timing/budget and aftermath prioritization. It also
 checks that last-turn review pauses time without changing the live digest.
 
-Use source Godot tests and visual captures. `Play.bat` remains the local launcher.
+Use source Godot tests and the visual captures in `tools/captures/`. `Play.bat` remains the local launcher.
 No release archive or deployment is part of this pass.

@@ -1,10 +1,11 @@
-# Core-loop demo 0.3.0-core-playtest.1
+# Core-loop demo 0.4.2-pacing.1
 
 ## Product scope
 
 The public demo tests whether a player can read danger, author a plan, understand
 the simultaneous result, and choose to play again. It uses a four-second
-planning limit and 0.75-second execution. It adds no fighter, attack or arena.
+planning limit and 0.75-second execution; lesson turns use eight seconds. It
+adds no fighter, attack or arena.
 
 - Start Duel: two Duelists, first to three hits, against the opponent ladder.
   Five named CPUs play in order (The Apprentice, The Hound, The Warden, The
@@ -34,6 +35,8 @@ planning limit and 0.75-second execution. It adds no fighter, attack or arena.
   already reached.
 - Custom Match is public: any of the five arenas, 2 to 4 fighters, each CPU's
   skill preset and the match length. Experiments stay behind `--dev-tools`.
+- Interception is a public fixed-rule match against a Standard CPU, first to
+  three hits.
 - Online remains a separate existing private-room route. Do not pool CPU and
   online findings when assessing fun or opponent readability.
 
@@ -75,7 +78,7 @@ feedback encoding, abandoned reports, and the next-opponent flow. `OpponentLadde
 covers rung order, style weights reaching the planner, saved progress and the
 result-screen controls. Existing menu,
 readiness, controls, replay, prediction and online suites cover shared behavior.
-`CoreDemoVisualTest` captures the public screens at 1280x720 and the live planner
+`tools/captures/CoreDemoVisualTest.gd` captures the public screens at 1280x720 and the live planner
 at 1024x576. Web export is smoke-tested locally with browser input.
 
 The local browser check confirmed timed execution into turn two, lesson retry,

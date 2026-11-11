@@ -27,8 +27,7 @@ func _run() -> void:
 		"every arena must own a Kenney pattern motif")
 	for texture: Texture2D in BACKDROP_SCRIPT.PATTERN_TEXTURES:
 		_check(texture != null, "every arena pattern must resolve to an imported texture")
-	var reticles := [PREVIEW_SCRIPT.RETICLE_DUELIST, PREVIEW_SCRIPT.RETICLE_ROOK,
-		PREVIEW_SCRIPT.RETICLE_ECLIPSE, PREVIEW_SCRIPT.RETICLE_PULSE]
+	var reticles := [PREVIEW_SCRIPT.RETICLE_DUELIST]
 	var reticle_paths := {}
 	for texture: Texture2D in reticles:
 		_check(texture != null, "every fighter reticle must resolve")
@@ -51,12 +50,6 @@ func _run() -> void:
 	var class_events := {
 		"DUELIST": ["knife_throw", "knife_super", "knife_impact", "knife_ricochet",
 			"knife_clash", "knife_hit"],
-		"ROOK": ["dash", "dash_super", "dash_guard", "dash_wall", "dash_hit"],
-		"ECLIPSE": ["chakram_throw", "chakram_recall", "chakram_bounce",
-			"chakram_stick", "chakram_clash", "chakram_break", "chakram_super",
-			"chakram_hit"],
-		"PULSE": ["plasma", "plasma_impact", "plasma_hit", "orb_cast",
-			"orb_deflect", "orb_pop", "orb_combo", "shock_super"],
 	}
 	var owned_paths := {}
 	for fighter: String in class_events:

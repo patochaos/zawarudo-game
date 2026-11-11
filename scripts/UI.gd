@@ -6,9 +6,6 @@ const HUD_FONT := preload("res://assets/kenney/fonts/kenney-future-narrow.ttf")
 ## the arena, ghosts and world-space previews remain the focus.
 
 const DUELIST_PORTRAIT := preload("res://assets/art/portraits/duelist-portrait-v1.png")
-const ROOK_PORTRAIT := preload("res://assets/art/portraits/rook-portrait-v1.png")
-const ECLIPSE_PORTRAIT := preload("res://assets/art/portraits/eclipse-portrait-v1.png")
-const PULSE_PORTRAIT := preload("res://assets/art/portraits/pulse-portrait-v1.png")
 
 
 class FighterSeal:
@@ -24,11 +21,8 @@ class FighterSeal:
 	var opponent_name: String = ""
 	var points: int = 0
 	var points_to_win: int = 3
-	var show_super := true
 	var super_meter: float = 0.0
 	var super_armed: bool = false
-	var lost_frames: int = -1
-	var max_lost_frames: int = 3
 
 	func configure(index: int, color: Color, flip: bool, name: String, texture: Texture2D) -> void:
 		player_index = index
@@ -49,14 +43,11 @@ class FighterSeal:
 		opponent_name = opponent
 		queue_redraw()
 
-	func set_state(score_value: int, win_score: int, meter: float, armed: bool,
-			debt_cells: int = -1, debt_max: int = 3) -> void:
+	func set_state(score_value: int, win_score: int, meter: float, armed: bool) -> void:
 		points = score_value
 		points_to_win = win_score
 		super_meter = clampf(meter, 0.0, 1.0)
 		super_armed = armed
-		lost_frames = debt_cells
-		max_lost_frames = maxi(1, debt_max)
 		queue_redraw()
 
 	func _mirror_points(source: PackedVector2Array) -> PackedVector2Array:
@@ -94,19 +85,9 @@ class FighterSeal:
 		var name_align := HORIZONTAL_ALIGNMENT_LEFT if not mirrored else HORIZONTAL_ALIGNMENT_RIGHT
 		draw_string(font, Vector2(name_x, 23.0), "P%d · %s" % [player_index + 1, fighter_name],
 			name_align, name_width, 11, accent.lightened(0.22))
-		if opponent_name != "" and lost_frames < 0:
+		if opponent_name != "":
 			draw_string(font, Vector2(name_x, 37.0), opponent_name,
 				name_align, name_width, 9, accent.lightened(0.42))
-		if lost_frames >= 0:
-			var debt_label_x := 52.0 if not mirrored else 270.0
-			var debt_pip_x := 91.0 if not mirrored else 315.0
-			draw_string(font, Vector2(debt_label_x, 42.0), "FRAME",
-				HORIZONTAL_ALIGNMENT_LEFT, 36.0, 7, Color(0.52, 0.92, 1.0, 0.82))
-			for i in max_lost_frames:
-				var cell := Rect2(debt_pip_x + float(i) * 13.0, 34.0, 9.0, 7.0)
-				draw_rect(cell, Color(0.34, 0.96, 1.0, 0.88) if i < lost_frames \
-					else Color(0.10, 0.15, 0.20, 0.92))
-				draw_rect(cell, Color(0.72, 1.0, 1.0, 0.72), false, 1.0)
 
 		var first_pip_x := 169.0
 		var pip_step := minf(16.0, 96.0 / float(maxi(1, points_to_win - 1)))
@@ -122,8 +103,6 @@ class FighterSeal:
 				draw_colored_polygon(diamond, EMPTY_PIP)
 			draw_polyline(diamond + PackedVector2Array([diamond[0]]), accent, 1.0, true)
 
-		if not show_super:
-			return
 		var bar_x := 306.0 if not mirrored else 14.0
 		var bar_width := 110.0
 		var bar_rect := Rect2(bar_x, 39.0, bar_width, 4.0)
@@ -424,7 +403,7 @@ func build(manager) -> void:
 		chevron.size = entry[0].size
 		entry[0].add_child(chevron)
 	_replay_button = _result_button(Vector2(342.0, 428.0), Vector2(184.0, 52.0), "R  WATCH REPLAY")
-	_replay_button.pressed.connect(func(): gm._start_match_replay())
+	_replay_button.pressed.connect(func(): gm._replay._start_match_replay())
 	_rematch_button = _result_button(Vector2(544.0, 428.0), Vector2(208.0, 52.0), "ENTER  REMATCH", true)
 	_rematch_button.pressed.connect(func(): gm._request_rematch())
 	_menu_button = _result_button(Vector2(770.0, 428.0), Vector2(168.0, 52.0), "ESC  MENU")
@@ -434,7 +413,7 @@ func build(manager) -> void:
 	_next_opponent_button = _result_button(Vector2(670, 494), Vector2(240, 42), "N  NEXT OPPONENT")
 	_next_opponent_button.pressed.connect(func(): gm.start_next_opponent())
 	_lock_plan = _result_button(Vector2(836, 74), Vector2(156, 32), "SHIFT  LOCK PLAN", true)
-	_lock_plan.pressed.connect(func(): gm._confirm(gm._keyboard_player()))
+	_lock_plan.pressed.connect(func(): gm._confirm(gm._player_input._keyboard_player()))
 	_review_turn = _result_button(Vector2(1136, 74), Vector2(128, 32), "V  REVIEW")
 	_review_turn.flat = true
 	_review_turn.tooltip_text = "Review the last turn. Pauses the match."
@@ -491,7 +470,7 @@ func _result_button(pos: Vector2, dimensions: Vector2, text: String,
 
 func _leave_result() -> void:
 	if gm.online_mode:
-		gm._leave_online()
+		gm._online._leave_online()
 	else:
 		gm._open_menu()
 
@@ -549,23 +528,22 @@ func _mk_label(pos: Vector2, width: float, size: int, align: int) -> Label:
 
 func refresh() -> void:
 	_turn_label.text = "T%d" % gm.turn
-	var match_rule := "CLOSE CAMERA · FIRST TO %d HITS · AUTO-LOCK AFTER THROW" % gm.hits_to_win \
-		if gm.close_camera_mode else (("FATE TRIAL · SURVIVE %d / %d WINDOWS · HOSTILE PLAN REVEALED" % [
+	var match_rule := ("FATE TRIAL · SURVIVE %d / %d WINDOWS · HOSTILE PLAN REVEALED" % [
 		gm.fate_trial_windows_survived, gm.FATE_TRIAL_WINDOWS]) if gm.fate_trial_mode else \
 		("TRAINING · HORIZONTAL TUNNEL ↔" if gm.tutorial_mode else \
 		("CRIMSON  %d : %d  AZURE     ·     FIRST TO %d" % [
 			gm.team_score[0], gm.team_score[1], gm.hits_to_win] if gm.team_mode else \
-		"FIRST TO %d HITS" % gm.hits_to_win)))
-	if not gm.close_camera_mode and not gm.fate_trial_mode and not gm.tutorial_mode and gm.core_active:
+		"FIRST TO %d HITS" % gm.hits_to_win))
+	if not gm.fate_trial_mode and not gm.tutorial_mode and gm.core_active:
 		match_rule += "   ·   CORE: FULL SUPER (%d TURN%s LEFT)" % [
 			gm.core_turns_left, "" if gm.core_turns_left == 1 else "S"]
-	elif not gm.close_camera_mode and not gm.fate_trial_mode and not gm.tutorial_mode and gm.core_announced:
+	elif not gm.fate_trial_mode and not gm.tutorial_mode and gm.core_announced:
 		match_rule += "   ·   CORE MATERIALIZES NEXT TURN"
-	elif not gm.close_camera_mode and not gm.fate_trial_mode and not gm.tutorial_mode:
+	elif not gm.fate_trial_mode and not gm.tutorial_mode:
 		var remaining: int = maxi(0, gm.core_hitless_turns_to_announce - gm.hitless_execution_streak)
 		match_rule += "   ·   CORE IN %d HITLESS TURN%s" % [remaining, "" if remaining == 1 else "S"]
 	_score_label.text = match_rule
-	_score_label.visible = gm.team_mode or gm.fate_trial_mode or gm.close_camera_mode
+	_score_label.visible = gm.team_mode or gm.fate_trial_mode
 	_level_label.text = "LEVEL %d/%d  //  %s   ·   %s" % [
 		gm.level_index + 1, Levels.count(), gm.level_name, gm.level_wrap,
 	]
@@ -573,32 +551,25 @@ func refresh() -> void:
 		_level_label.text = "TUTORIAL  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.fate_trial_mode:
 		_level_label.text = "FATE TRIAL 01  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
-	elif gm.close_camera_mode:
-		_level_label.text = "CLOSE CAMERA  //  %s   ·   %s" % [gm.level_name, gm.level_wrap]
 	elif gm.interception_mode:
 		_level_label.text = "INTERCEPTION · ONE JUMP · AIR MOMENTUM"
 	_hint_p1.add_theme_color_override("font_color", gm.PLAYER_COLORS[0])
 	if gm.online_mode:
-		_level_label.text += "   ·   ROOM %s" % gm.online_room
+		_level_label.text += "   ·   ROOM %s" % gm._online.online_room
 		var local_slot: int = clampi(gm.online_player, 0, gm.players.size() - 1)
 		var local_number := local_slot + 1
 		_hint_p1.add_theme_color_override("font_color", gm.PLAYER_COLORS[local_slot])
-		_hint_p1.text = (_HINT_PAD if gm._pads[local_slot] >= 0 else _HINT_ONLINE_YOU) % local_number
+		_hint_p1.text = (_HINT_PAD if gm._player_input._pads[local_slot] >= 0 else _HINT_ONLINE_YOU) % local_number
 		var rivals := PackedStringArray()
 		for slot in gm.players.size():
 			if slot != local_slot:
 				rivals.append("P%d" % (slot + 1))
 		_hint_p2.text = "%s  ONLINE · PLANS HIDDEN · FIRST TO %d HITS" % [
 			" + ".join(rivals), gm.hits_to_win]
-		if gm.uses_chakram(local_slot):
-			var local_hint := "PAD P%d ECLIPSE · R2 DECREE · L2 RECALL ALL · START LOCK" \
-				if gm._pads[local_slot] >= 0 else \
-				"YOU P%d ECLIPSE · LMB DECREE · RMB RECALL ALL · SHIFT LOCK · R UNDO"
-			_hint_p1.text = local_hint % local_number
 		# Being stranded outlasts any banner, so the way out stays on screen.
-		if gm.online_match_broken:
+		if gm._online.online_match_broken:
 			_hint_p2.text = _HINT_ONLINE_BROKEN
-		elif gm.online_peer_lost:
+		elif gm._online.online_peer_lost:
 			_hint_p2.text = _HINT_ONLINE_ABANDONED if gm.players.size() == 2 else \
 				"PLAYER DISCONNECTED · WAIT FOR RECONNECT · ESC LEAVES"
 	elif gm.tutorial_mode:
@@ -607,9 +578,6 @@ func refresh() -> void:
 	elif gm.fate_trial_mode:
 		_hint_p1.text = "DUELIST  ·  READ BOTH TRAJECTORIES  ·  MOVE / JUMP / WAIT  ·  SHIFT LOCK"
 		_hint_p2.text = "HOSTILE ECHO  ·  COMPLETE PLAN REVEALED  ·  SURVIVE THREE WINDOWS"
-	elif gm.close_camera_mode:
-		_hint_p1.text = "P1 DUELIST  ·  THROW, THEN RELEASE INPUT TO AUTO-LOCK"
-		_hint_p2.text = "CPU DUELIST  ·  PLANNING PUSHES IN · EXECUTION PULLS OUT"
 	elif gm.interception_mode:
 		_hint_p1.text = "ONE JUMP · COAST IN AIR · STOP ON GROUND · SHIFT LOCK"
 		_hint_p2.text = "INTERCEPTION · STANDARD CPU · CONTEST THE CORE"
@@ -619,21 +587,8 @@ func refresh() -> void:
 			_hint_p1.text = "CRIMSON  P1 + P3  ·  COORDINATE PLANS  ·  FRIENDLY FIRE SCORES NO POINT"
 			_hint_p2.text = "AZURE  P2 + P4  ·  FIRST TEAM TO %d HITS" % gm.hits_to_win
 		else:
-			if gm.uses_dashblade(0):
-				_hint_p1.text = "P1 ROOK  NO JUMP · MOVE TO BANK FRAMES · AIM CUT TO CLIMB · LMB CUT TO END · T SUPER"
-			elif gm.uses_chakram(0):
-				_hint_p1.text = "P1 ECLIPSE  LMB DECREE · RMB RECALL ALL · RETURNS SKID HOME · T SUPER"
-				_level_label.text += "   ·   P1 %s · %d READY" % [
-					"ABSOLUTION" if gm.players[0].plan.attack_mode == 1 else "DECREE",
-					gm.recallable_chakram_count(0)]
-			elif gm.uses_shock(0):
-				_hint_p1.text = "P1 PULSE  FLOATY JUMP · LMB PLASMA · RMB ADD ORB · T SUPER"
-				_level_label.text += "   ·   P1 %s · %d ORB%s LIVE" % ["PLASMA" \
-					if gm.players[0].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(0),
-					"" if gm.shock_orb_count(0) == 1 else "S"]
-			else:
-				_hint_p1.text = \
-					"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
+			_hint_p1.text = \
+				"P1  A/D MOVE · SPACE JUMP · S WAIT · MOUSE AIM · LMB THROW · T SUPER · SHIFT LOCK · R UNDO · F RESET"
 			if gm.vs_ai:
 				if gm.players.size() == 4:
 					_hint_p2.text = _HINT_AI_4P
@@ -642,38 +597,18 @@ func refresh() -> void:
 				else:
 					_hint_p2.text = _HINT_AI
 			else:
-				if gm._pads[1] >= 0:
-					if gm.uses_dashblade(1):
-						_hint_p2.text = "PAD P2 ROOK · MOVE BANKS FRAMES · R2 CUT TO END · Y SUPER · START LOCK"
-					elif gm.uses_chakram(1):
-						_hint_p2.text = "PAD P2 ECLIPSE · R2 DECREE · L2 RECALL ALL · RETURNS SKID HOME"
-					elif gm.uses_shock(1):
-						_hint_p2.text = "PAD P2 PULSE · R2 FIRE · L1/R1 PLASMA/ORB · Y SUPER"
-					else:
-						_hint_p2.text = _HINT_PAD % 2
+				if gm._player_input._pads[1] >= 0:
+					_hint_p2.text = _HINT_PAD % 2
 				else:
 					_hint_p2.text = _HINT_P2_MISSING
-				if gm.uses_shock(1):
-					_level_label.text += "   ·   P2 %s · %d ORB%s LIVE" % ["PLASMA" \
-						if gm.players[1].plan.attack_mode == 0 else "ORB", gm.shock_orb_count(1),
-						"" if gm.shock_orb_count(1) == 1 else "S"]
-				elif gm.uses_chakram(1):
-					_level_label.text += "   ·   P2 %s · %d READY" % [
-						"ABSOLUTION" if gm.players[1].plan.attack_mode == 1 else "DECREE",
-						gm.recallable_chakram_count(1)]
 
 	var active_players: int = gm.players.size()
 	var duel_hud: bool = not gm.tutorial_mode and not gm.team_mode and active_players == 2
 	for i in _fighter_seals.size():
 		var seal: FighterSeal = _fighter_seals[i]
-		seal.show_super = not gm.class_lab
 		seal.visible = duel_hud
 		if duel_hud:
 			var portrait: Texture2D = DUELIST_PORTRAIT
-			match gm.player_weapons[i]:
-				2: portrait = ROOK_PORTRAIT
-				3: portrait = ECLIPSE_PORTRAIT
-				4: portrait = PULSE_PORTRAIT
 			seal.set_identity(gm.weapon_short_name(i), portrait,
 				Opponents.display_name(gm.player_opponent(i)) \
 				if gm.player_opponent(i) >= 0 and gm.is_ai(i) else "")
@@ -681,9 +616,7 @@ func refresh() -> void:
 				if gm.fate_trial_mode and i == 0 else gm.score[i]
 			seal.set_state(seal_points,
 				gm.FATE_TRIAL_WINDOWS if gm.fate_trial_mode else gm.hits_to_win,
-				gm.super_meter[i], gm.super_armed[i],
-				gm.frame_debt_cells[i] if gm.uses_dashblade(i) else -1,
-				gm.frame_debt_max_cells)
+				gm.super_meter[i], gm.super_armed[i])
 	for i in gm.MAX_PLAYERS:
 		for h in _pips[i].size():
 			var pip: ColorRect = _pips[i][h]
@@ -780,22 +713,22 @@ func refresh() -> void:
 
 	var pads := ""
 	for i in gm.players.size():
-		if gm._pads[i] >= 0:
-			pads += "  P%d=pad%d" % [i + 1, gm._pads[i]]
+		if gm._player_input._pads[i] >= 0:
+			pads += "  P%d=pad%d" % [i + 1, gm._player_input._pads[i]]
 	_tuning.text = "PLANNING %.0fs  [F1 5 | F2 8 | F3 10]   EXECUTION %.2fs  [F5 .40 | F6 .75]   F9 restart   F10 next level   M sound %s   H hide debug/help   ESC menu%s" \
 		% [gm.planning_duration, gm.execution_duration, "OFF" if gm._sfx.muted else "on", pads]
 
 	if gm._practice != null and gm._practice.active:
 		_hint_p2.text = "GAMEPAD  STICK MOVE · A JUMP · R2 THROW · START LOCK · B UNDO  ·  EIGHT SECONDS PER TURN" \
-			if gm._pads[0] >= 0 else "EIGHT SECONDS PER TURN · REPEAT ANY LESSON"
-	var planning: bool = gm.state == Phase.PLANNING and not gm.close_camera_mode
+			if gm._player_input._pads[0] >= 0 else "EIGHT SECONDS PER TURN · REPEAT ANY LESSON"
+	var planning: bool = gm.state == Phase.PLANNING
 	var practice_active: bool = gm._practice != null and gm._practice.active
-	var plan_locked: bool = gm.players[gm._keyboard_player()].plan.confirmed
+	var plan_locked: bool = gm.players[gm._player_input._keyboard_player()].plan.confirmed
 	_lock_plan.visible = planning and not touch_mode and not plan_locked
 	_lock_plan.disabled = not planning or plan_locked
 	_locked_status.visible = planning and not touch_mode and plan_locked
 	_review_turn.visible = planning and not touch_mode and not gm.online_mode and not practice_active
-	_review_turn.disabled = gm._replay_frames.is_empty()
+	_review_turn.disabled = gm._replay._replay_frames.is_empty()
 	_you_marker.visible = gm.demo_match and gm.state in [Phase.PLANNING, Phase.COMMITTING, Phase.EXECUTING]
 	if _you_marker.visible:
 		_you_marker.position = gm.players[0].position + Vector2(-32, -116)
@@ -804,10 +737,10 @@ func refresh() -> void:
 		_hint_p2.text = ""
 		if planning and not plan_locked:
 			_hint_p1.text = "A/D MOVE · SPACE JUMP · R UNDO · ESC MENU"
-			if gm._pads[0] >= 0:
+			if gm._player_input._pads[0] >= 0:
 				_hint_p1.text = "STICK MOVE · A JUMP · B UNDO · START LOCK"
 			if not gm.players[0].plan.has_shot():
-				_hint_p2.text = "HOLD %s TO CHARGE · RELEASE TO THROW" % ("R2" if gm._pads[0] >= 0 else "LMB")
+				_hint_p2.text = "HOLD %s TO CHARGE · RELEASE TO THROW" % ("R2" if gm._player_input._pads[0] >= 0 else "LMB")
 	var over: bool = gm.state == Phase.GAME_OVER
 	var ui_result: bool = over and not touch_mode
 	_over_bg.visible = over
@@ -828,7 +761,7 @@ func refresh() -> void:
 		_next_opponent_button.text = "N  NEXT: %s" % Opponents.display_name(gm.demo_opponent + 1)
 	# A Start Duel result cycles opponents already reached instead of arenas.
 	var cycles: bool = desktop_result and not gm.fate_trial_mode \
-		and not gm.close_camera_mode and not gm.interception_mode \
+		and not gm.interception_mode \
 		and (not gm.demo_match or gm.ladder_progress() > 0) and not gm.online_mode
 	_arena_previous_button.visible = cycles
 	_arena_next_button.visible = cycles
@@ -836,16 +769,15 @@ func refresh() -> void:
 	_rematch_button.visible = desktop_result
 	_menu_button.visible = desktop_result
 	_report_button.visible = desktop_result and not gm.fate_trial_mode
-	_rematch_button.text = "ENTER  RETRY" if gm.fate_trial_mode or gm.close_camera_mode \
-		else "ENTER  REMATCH"
+	_rematch_button.text = "ENTER  RETRY" if gm.fate_trial_mode else "ENTER  REMATCH"
 	var level_locked: bool = bool(gm.online_mode) \
-		and (gm.online_player != 0 or bool(gm._online_waiting_rematch))
+		and (gm.online_player != 0 or bool(gm._online._online_waiting_rematch))
 	_arena_previous_button.disabled = level_locked
 	_arena_next_button.disabled = level_locked
 	for button in [_arena_previous_button, _arena_next_button]:
 		for chevron in button.get_children():
 			chevron.queue_redraw()
-	_rematch_button.disabled = gm.online_mode and gm._online_waiting_rematch
+	_rematch_button.disabled = gm.online_mode and gm._online._online_waiting_rematch
 	if over:
 		# The buttons already name their keys, so this line only says what they
 		# cannot: the gamepad mapping, or who controls the next arena online.
@@ -853,11 +785,10 @@ func refresh() -> void:
 		var controls := _result_pad_hint(cycles, cycle_label)
 		if gm.online_mode:
 			controls = "REMATCH OPENS THE FIGHTER PICK AND THE ARENA VOTE"
-		var kicker := "" if gm.fate_trial_mode or gm.close_camera_mode else "FIRST TO %d HITS" % gm.hits_to_win
-		var arena_line := "CLOSE CAMERA // KNIFE COURT" if gm.close_camera_mode else \
-			("TRIAL 01 // THE CROSSFIRE" if gm.fate_trial_mode else \
+		var kicker := "" if gm.fate_trial_mode else "FIRST TO %d HITS" % gm.hits_to_win
+		var arena_line := "TRIAL 01 // THE CROSSFIRE" if gm.fate_trial_mode else \
 			"NEXT ARENA   %02d / %02d   //   %s" % [
-			gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name])
+			gm.rematch_level_index + 1, Levels.count(), gm.rematch_level_name]
 		if gm.online_mode:
 			arena_line = "NEXT ARENA   //   PICKED BY VOTE"
 		var score_line: String = gm._score_text()
@@ -905,10 +836,6 @@ func refresh() -> void:
 	else:
 		_over_controls.visible = false
 
-	if gm.class_lab:
-		_hint_p1.text = "A/D MOVE · SPACE JUMP · LMB CHARGE / RELEASE · SHIFT LOCK · R UNDO"
-		_hint_p2.text = ""
-
 
 ## Shrinks the font until `text` fits `width`, so a long fighter or arena name
 ## never runs past the result card's frame.
@@ -926,7 +853,7 @@ func _fit_text(label: Label, text: String, max_size: int, min_size: int, width: 
 func _result_pad_hint(cycles: bool, cycle_label: String) -> String:
 	var pad_connected := false
 	for i in gm.players.size():
-		if gm._pads[i] >= 0:
+		if gm._player_input._pads[i] >= 0:
 			pad_connected = true
 	if not pad_connected:
 		return ""
@@ -934,7 +861,7 @@ func _result_pad_hint(cycles: bool, cycle_label: String) -> String:
 	if cycles:
 		parts.append("D-PAD %s" % cycle_label)
 	parts.append("Y REPLAY")
-	parts.append("A RETRY" if gm.fate_trial_mode or gm.close_camera_mode else "A REMATCH")
+	parts.append("A RETRY" if gm.fate_trial_mode else "A REMATCH")
 	return "GAMEPAD   " + " · ".join(parts)
 
 

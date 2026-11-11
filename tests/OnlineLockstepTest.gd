@@ -52,7 +52,7 @@ func _test_remote_slot_uses_local_controls() -> void:
 	var gm = GAME_MANAGER.new()
 	gm.online_mode = true
 	gm.online_player = 1
-	var controls: Dictionary = gm._input_map_for(1)
+	var controls: Dictionary = gm._player_input._input_map_for(1)
 	_check(KEY_A in controls["left"] and KEY_D in controls["right"],
 		"online Player 2 must use A/D on their own keyboard")
 	_check(KEY_SPACE in controls["jump"] and KEY_W in controls["jump"] \
@@ -61,7 +61,7 @@ func _test_remote_slot_uses_local_controls() -> void:
 	_check(KEY_SPACE not in controls["charge"],
 		"SPACE must be reserved for jumping and never charge or fire")
 	gm.online_mode = false
-	var p2_controls: Dictionary = gm._input_map_for(1)
+	var p2_controls: Dictionary = gm._player_input._input_map_for(1)
 	_check(p2_controls.values().all(func(bindings): return bindings.is_empty()),
 		"local Player 2 must be gamepad-only with no keyboard bindings")
 	gm.free()
@@ -70,13 +70,13 @@ func _test_remote_slot_uses_local_controls() -> void:
 func _test_plan_legality() -> void:
 	var gm = GAME_MANAGER.new()
 	var legal := PlayerPlan.new().to_network_dict()
-	_check(gm._online_plan_is_legal(0, legal), "an empty legal plan must be accepted")
+	_check(gm._online._online_plan_is_legal(0, legal), "an empty legal plan must be accepted")
 	var without_drops := legal.duplicate(true)
 	without_drops.erase("drops")
 	without_drops["dirs"] = [1]
 	without_drops["jumps"] = [0]
 	without_drops["holds"] = [0]
-	_check(not gm._online_plan_is_legal(0, without_drops),
+	_check(not gm._online._online_plan_is_legal(0, without_drops),
 		"drops is a required channel and a plan without it must be rejected")
 	var budget: int = gm.movement_tick_budget()
 	_check(budget == 30, "the default 0.5 second movement budget must be exactly 30 ticks")
@@ -86,14 +86,14 @@ func _test_plan_legality() -> void:
 		full_budget["jumps"].append(0)
 		full_budget["holds"].append(0)
 		full_budget["drops"].append(0)
-	_check(gm._online_plan_is_legal(0, full_budget),
+	_check(gm._online._online_plan_is_legal(0, full_budget),
 		"a plan that consumes the full movement budget must be accepted")
 	var one_over: Dictionary = full_budget.duplicate(true)
 	one_over["dirs"].append(1)
 	one_over["jumps"].append(0)
 	one_over["holds"].append(0)
 	one_over["drops"].append(0)
-	_check(not gm._online_plan_is_legal(0, one_over),
+	_check(not gm._online._online_plan_is_legal(0, one_over),
 		"a single tick over the movement budget must be rejected, as the server does")
 	var impossible: Dictionary = legal.duplicate(true)
 	for i in budget + 2:
@@ -101,15 +101,15 @@ func _test_plan_legality() -> void:
 		impossible["jumps"].append(0)
 		impossible["holds"].append(0)
 		impossible["drops"].append(0)
-	_check(not gm._online_plan_is_legal(0, impossible),
+	_check(not gm._online._online_plan_is_legal(0, impossible),
 		"a remote plan cannot exceed the movement budget")
 	var bad_kit := legal.duplicate(true)
 	bad_kit["attack_mode"] = 2
-	_check(not gm._online_plan_is_legal(0, bad_kit),
+	_check(not gm._online._online_plan_is_legal(0, bad_kit),
 		"a remote plan cannot inject an unknown character attack mode")
 	var greedy_lock := legal.duplicate(true)
 	greedy_lock["lock_permille"] = 1001
-	_check(not gm._online_plan_is_legal(0, greedy_lock),
+	_check(not gm._online._online_plan_is_legal(0, greedy_lock),
 		"a remote plan cannot claim more than the whole planning window")
 	gm.free()
 
@@ -121,31 +121,31 @@ func _test_abandoned_match_claim() -> void:
 	var gm = GAME_MANAGER.new()
 	gm.online_mode = true
 	gm.online_player = 0
-	_check(not gm.online_peer_lost,
+	_check(not gm._online.online_peer_lost,
 		"a fresh online match must not start out looking abandoned")
-	gm._on_online_message({"type": "peer_status", "player": 1, "connected": false})
-	_check(gm.online_peer_lost,
+	gm._online._on_online_message({"type": "peer_status", "player": 1, "connected": false})
+	_check(gm._online.online_peer_lost,
 		"a peer dropping out of a live match must latch, not just flash a banner")
-	gm._on_online_message({"type": "peer_status", "player": 1, "connected": true})
-	_check(not gm.online_peer_lost,
+	gm._online._on_online_message({"type": "peer_status", "player": 1, "connected": true})
+	_check(not gm._online.online_peer_lost,
 		"a reconnecting opponent must clear the claim offer")
-	gm._on_online_message({"type": "peer_status", "player": 0, "connected": false})
-	_check(not gm.online_peer_lost,
+	gm._online._on_online_message({"type": "peer_status", "player": 0, "connected": false})
+	_check(not gm._online.online_peer_lost,
 		"our own socket status must never be mistaken for the opponent leaving")
 
-	gm._on_online_message({"type": "peer_status", "player": 1, "connected": false})
-	gm._on_online_message({"type": "opponent_left", "winner": 0, "turn": 4})
+	gm._online._on_online_message({"type": "peer_status", "player": 1, "connected": false})
+	gm._online._on_online_message({"type": "opponent_left", "winner": 0, "turn": 4})
 	_check(gm.state == Phase.GAME_OVER and gm.winner == 0,
 		"a granted claim must land on the ordinary result screen")
-	_check(not gm.online_peer_lost,
+	_check(not gm._online.online_peer_lost,
 		"the claim offer must go away once the room has ruled")
 
 	# Desync is not claimable: neither side can be trusted as the winner.
 	var broken = GAME_MANAGER.new()
 	broken.online_mode = true
 	broken.online_player = 1
-	broken._on_online_message({"type": "desync", "turn": 2})
-	_check(broken.online_match_broken and not broken.online_peer_lost,
+	broken._online._on_online_message({"type": "desync", "turn": 2})
+	_check(broken._online.online_match_broken and not broken._online.online_peer_lost,
 		"a desync must offer the menu, never a claimed win")
 	broken.free()
 	gm.free()

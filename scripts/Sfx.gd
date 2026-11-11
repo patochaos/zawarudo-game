@@ -32,27 +32,6 @@ const K_FORCE_FIELD := preload("res://assets/kenney/audio/force-field.ogg")
 const K_TEMPORAL_BLAST := preload("res://assets/kenney/audio/temporal-blast.ogg")
 const K_TIME_FREEZE := preload("res://assets/kenney/audio/time-freeze.ogg")
 const K_TIME_RESUME := preload("res://assets/kenney/audio/time-resume.ogg")
-const K_DASH := preload("res://assets/kenney/audio/dash.ogg")
-const K_DASH_SUPER := preload("res://assets/kenney/audio/dash-super.ogg")
-const K_DASH_GUARD := preload("res://assets/kenney/audio/dash-guard.ogg")
-const K_DASH_WALL := preload("res://assets/kenney/audio/dash-wall.ogg")
-const K_DASH_HIT := preload("res://assets/kenney/audio/dash-hit.ogg")
-const K_CHAKRAM_THROW := preload("res://assets/kenney/audio/chakram-throw.ogg")
-const K_CHAKRAM_RECALL := preload("res://assets/kenney/audio/chakram-recall.ogg")
-const K_CHAKRAM_BOUNCE := preload("res://assets/kenney/audio/chakram-bounce.ogg")
-const K_CHAKRAM_STICK := preload("res://assets/kenney/audio/chakram-stick.ogg")
-const K_CHAKRAM_CLASH := preload("res://assets/kenney/audio/chakram-clash.ogg")
-const K_CHAKRAM_BREAK := preload("res://assets/kenney/audio/chakram-break.ogg")
-const K_CHAKRAM_SUPER := preload("res://assets/kenney/audio/chakram-super.ogg")
-const K_CHAKRAM_HIT := preload("res://assets/kenney/audio/chakram-hit.ogg")
-const K_PLASMA_SHOT := preload("res://assets/kenney/audio/plasma-shot.ogg")
-const K_PLASMA_IMPACT := preload("res://assets/kenney/audio/plasma-impact.ogg")
-const K_PLASMA_HIT := preload("res://assets/kenney/audio/plasma-hit.ogg")
-const K_ORB_CAST := preload("res://assets/kenney/audio/orb-cast.ogg")
-const K_ORB_DEFLECT := preload("res://assets/kenney/audio/orb-deflect.ogg")
-const K_ORB_POP := preload("res://assets/kenney/audio/orb-pop.ogg")
-const K_ORB_COMBO := preload("res://assets/kenney/audio/orb-combo.ogg")
-const K_SHOCK_SUPER := preload("res://assets/kenney/audio/shock-super.ogg")
 const K_SUPER_READY := preload("res://assets/kenney/audio/super-ready.ogg")
 const K_MATCH_START := preload("res://assets/kenney/audio/match-start.ogg")
 const K_VICTORY := preload("res://assets/kenney/audio/victory.ogg")
@@ -77,21 +56,9 @@ var _base_db: Array[float] = []
 var _variant_cursor: Dictionary = {}
 var _pitch := {"match_start": 1.0, "victory": 1.0}
 var _cutoff := {"super_chant": 1.38, "knife_super": 0.44,
-	"chakram_bounce": 0.52, "plasma_hit": 0.56,
-	"orb_cast": 0.72, "orb_deflect": 0.62, "orb_pop": 0.85,
-	"orb_combo": 1.05, "shock_super": 0.62,
 	"hazard_blast": 0.80, "core_collect": 0.75}
 var _gain_db := {"match_start": -4.0, "victory": -5.0, "super_chant": -1.5,
 	"knife_super": -8.0, "knife_ricochet": -8.0, "knife_hit": -8.0,
-	"dash": 5.0, "dash_super": 9.0, "dash_guard": -9.0,
-	"dash_wall": -7.0, "dash_hit": -8.0,
-	"chakram_throw": -7.0, "chakram_recall": 4.0,
-	"chakram_bounce": -9.0, "chakram_stick": -2.0,
-	"chakram_clash": -8.0, "chakram_break": -8.0,
-	"chakram_super": 6.0, "chakram_hit": -8.0,
-	"plasma": -6.0, "plasma_impact": -9.0, "plasma_hit": -9.0,
-	"orb_cast": -13.0, "orb_deflect": -13.0, "orb_pop": -10.0,
-	"orb_combo": -11.0, "shock_super": -10.0,
 	"hazard_blast": -11.0, "core_collect": -12.0, "super_ready": 7.0,
 	"time_freeze": -18.0, "time_resume": -20.0,
 	"ui_move": -15.0, "ui_accept": -12.0}
@@ -115,27 +82,6 @@ func _ready() -> void:
 	_streams["ui_move"] = _ui_move()
 	_streams["ui_accept"] = _ui_accept()
 	_streams["super_chant"] = _super_chant()
-	_streams["dash"] = K_DASH
-	_streams["dash_super"] = K_DASH_SUPER
-	_streams["dash_guard"] = K_DASH_GUARD
-	_streams["dash_wall"] = K_DASH_WALL
-	_streams["dash_hit"] = K_DASH_HIT
-	_streams["chakram_throw"] = K_CHAKRAM_THROW
-	_streams["chakram_recall"] = K_CHAKRAM_RECALL
-	_streams["chakram_bounce"] = K_CHAKRAM_BOUNCE
-	_streams["chakram_stick"] = K_CHAKRAM_STICK
-	_streams["chakram_clash"] = K_CHAKRAM_CLASH
-	_streams["chakram_break"] = K_CHAKRAM_BREAK
-	_streams["chakram_super"] = K_CHAKRAM_SUPER
-	_streams["chakram_hit"] = K_CHAKRAM_HIT
-	_streams["plasma"] = K_PLASMA_SHOT
-	_streams["plasma_impact"] = K_PLASMA_IMPACT
-	_streams["plasma_hit"] = K_PLASMA_HIT
-	_streams["orb_cast"] = K_ORB_CAST
-	_streams["orb_deflect"] = K_ORB_DEFLECT
-	_streams["orb_pop"] = K_ORB_POP
-	_streams["orb_combo"] = K_ORB_COMBO
-	_streams["shock_super"] = K_SHOCK_SUPER
 	_streams["super_ready"] = K_SUPER_READY
 	_streams["match_start"] = K_MATCH_START
 	_streams["victory"] = K_VICTORY

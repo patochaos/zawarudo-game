@@ -29,14 +29,14 @@ and lands on the permanent first step on either side.
 
 ## Reproduce the playtest
 
-`tests/EndlessDescentPlaytest.gd` runs four seeded Duelist mirrors, with the
+`tools/captures/EndlessDescentPlaytest.gd` runs four seeded Duelist mirrors, with the
 production planner for both players. Each match has a 24-turn observation cap
 and uses the current custom-match hit target (five in this run). SUPER cut-ins
 are cleared without consuming a simulation tick. Seeds: 90210, 90347, 90484,
 90621. Use the same settings for comparisons; bot preferences limit conclusions.
 
 ```powershell
-& 'D:/Godot/Godot_v4.7.1-stable_win64_console.exe' --path . --rendering-method gl_compatibility --audio-driver Dummy --script tests/EndlessDescentPlaytest.gd -- --label=polished --visual
+& 'D:/Godot/Godot_v4.7.1-stable_win64_console.exe' --path . --rendering-method gl_compatibility --audio-driver Dummy --script tools/captures/EndlessDescentPlaytest.gd -- --label=polished --visual
 ```
 
 Reports: `previews/descent-{baseline,candidate,polished}.json`. Early execution

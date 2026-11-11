@@ -12,17 +12,26 @@ HTTP/WebSocket integration test against that live service. Legacy protocol 2
 two-player rooms remain supported separately; the hosted game client was not
 changed.
 
+Since that deployment the client and the Worker source have moved to protocol 4
+(`PROTOCOL_VERSION` in `scripts/OnlineClient.gd` and `backend/src/protocol.ts`)
+and the room now votes on arena and match length. This document does not record
+a deployment or a four-PC verification of protocol 4.
+
 ## Joining with Play.bat
 
 1. Put the same updated project source on all four PCs and launch `Play.bat`.
 2. The host chooses Online, optionally types a name, leaves 4 PLAYERS selected,
-   chooses an arena, and creates a private room.
+   and creates a private room.
 3. Share its six-character code. The other three PCs choose Online, optionally
    type a name, and join.
-4. The match starts when all four seats are connected. Each PC controls its
-   assigned fighter using its own keyboard/mouse or first connected gamepad.
+4. When all four seats are connected the room opens the lineup and rules
+   screens. Each player votes for an arena and a match length (3, 5 or 7 hits)
+   and readies up; the room counts the votes and breaks a tie at random. Each
+   PC controls its assigned fighter using its own keyboard/mouse or first
+   connected gamepad.
 
-The host chooses the rematch arena; all four players must request a rematch.
+A rematch reopens the selection screens and the arena is voted again; all four
+players must request a rematch.
 Planning remains private until all four plans arrive. A planning timeout submits
 that PC's current plan instead of bypassing the other players.
 

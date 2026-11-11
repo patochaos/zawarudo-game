@@ -101,12 +101,12 @@ func _test_undo(game) -> void:
 	game._release_charge(0)
 	game.online_mode = true
 	game.online_player = 0
-	game._online_plan_sent = true
+	game._online._online_plan_sent = true
 	game._rollback(0)
 	_check(game.players[0].plan.has_shot() and game.banner_text.contains("ALREADY SENT"),
 		"UNDO must not edit a plan the server already has")
 	game.online_mode = false
-	game._online_plan_sent = false
+	game._online._online_plan_sent = false
 
 
 func _check(ok: bool, message: String) -> void:

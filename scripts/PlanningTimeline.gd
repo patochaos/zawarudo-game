@@ -15,7 +15,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	visible = gm != null and gm.state == Phase.PLANNING and not gm.close_camera_mode
+	visible = gm != null and gm.state == Phase.PLANNING
 	if visible:
 		queue_redraw()
 
@@ -23,7 +23,7 @@ func _process(_delta: float) -> void:
 func visible_players() -> Array[int]:
 	var result: Array[int] = []
 	for p in gm.players:
-		if p.alive and gm._is_locally_controlled(p.index) and gm.player_roles[p.index] != "DUMMY":
+		if p.alive and gm._player_input._is_locally_controlled(p.index) and gm.player_roles[p.index] != "DUMMY":
 			result.append(p.index)
 	return result
 

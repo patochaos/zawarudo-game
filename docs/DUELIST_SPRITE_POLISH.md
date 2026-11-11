@@ -40,12 +40,12 @@ Passed Godot 4.7.1 source suites: `FighterVisualTest`,
 matching ghost alpha, launch-frame synchronization, non-cycling airborne poses,
 collision dimensions, player identity, replay and cosmetic digest isolation.
 
-`tests/DuelistSpritePolishVisualTest.gd` captures actual Godot rendering at
+`tools/captures/DuelistSpritePolishVisualTest.gd` captures actual Godot rendering at
 1280x720 and 1024x576. Outputs are under `previews/duelist-sprite-polish-*.png`
 (ignored local artifacts). Run windowed with a real render target:
 
 ```powershell
-godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/DuelistSpritePolishVisualTest.gd --quit-after 300
+godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tools/captures/DuelistSpritePolishVisualTest.gd --quit-after 300
 ```
 
 The visual pass was checked through these captures and deterministic frame

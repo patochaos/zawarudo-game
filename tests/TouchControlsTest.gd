@@ -142,21 +142,21 @@ func _test_mouse_touch_arbitration() -> void:
 	game.set_process(false)
 	game.set_physics_process(false)
 	game._sfx.muted = true
-	game._pads[0] = -1
+	game._player_input._pads[0] = -1
 	game._touch_controls.configure(game, true)
 	game._touch_controls.aim_active = false
 	game.players[0].plan.aim_angle = 32.0
-	game.aim_source[0] = game.AimSrc.TOUCH
-	game._poll_aim(0, 0.016, true)
-	_check(game.aim_source[0] == game.AimSrc.TOUCH
+	game._player_input.aim_source[0] = game._player_input.AimSrc.TOUCH
+	game._player_input._poll_aim(0, 0.016, true)
+	_check(game._player_input.aim_source[0] == game._player_input.AimSrc.TOUCH
 		and is_equal_approx(game.players[0].plan.aim_angle, 32.0),
 		"emulated mouse movement must preserve the released touch aim")
 	game._touch_controls.configure(game, false)
-	game._poll_aim(0, 0.016, false)
-	_check(game.aim_source[0] == game.AimSrc.TOUCH,
+	game._player_input._poll_aim(0, 0.016, false)
+	_check(game._player_input.aim_source[0] == game._player_input.AimSrc.TOUCH,
 		"an idle desktop mouse must not take over aim")
-	game._poll_aim(0, 0.016, true)
-	_check(game.aim_source[0] == game.AimSrc.MOUSE,
+	game._player_input._poll_aim(0, 0.016, true)
+	_check(game._player_input.aim_source[0] == game._player_input.AimSrc.MOUSE,
 		"desktop mouse movement must take over when touch controls are off")
 	game.free()
 	await process_frame

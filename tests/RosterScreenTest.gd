@@ -191,7 +191,7 @@ func _test_human_duel(game) -> void:
 		"Player 2 must be identified as Duelist")
 	game.players[1].plan.power = 0.5
 	game._spawn_player_attack(game.players[1])
-	_check(game.arrows.size() == 2 and game.shock_orbs.is_empty(),
+	_check(game.arrows.size() == 2,
 		"Player 2 must launch daggers instead of a benched attack")
 	roster._debug_pads.clear()
 
@@ -219,7 +219,7 @@ func _test_four_fighters(game) -> void:
 		"all four slots must use Duelist while preserving CPU ownership")
 	game.players[3].plan.power = 0.5
 	game._spawn_player_attack(game.players[3])
-	_check(game.arrows.size() == 2 and game.chakrams.is_empty(),
+	_check(game.arrows.size() == 2,
 		"the fourth slot must throw Duelist daggers")
 
 

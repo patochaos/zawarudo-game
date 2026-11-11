@@ -22,38 +22,35 @@ func run() -> void:
 		game.state = Phase.ONLINE_LOBBY
 		games.append(game)
 	var host = games[0]
-	host._online_lobby.open(2)
-	host._online_lobby.show_room("ABC234", 0)
-	host._on_online_message({"type": "connected", "capacity": 4})
-	host._on_online_message({"type": "room_state", "capacity": 4, "level": 2,
+	host._online._online_lobby.open(2)
+	host._online._online_lobby.show_room("ABC234", 0)
+	host._online._on_online_message({"type": "connected", "capacity": 4})
+	host._online._on_online_message({"type": "room_state", "capacity": 4, "level": 2,
 		"phase": "waiting", "connected": [true, false, false, false]})
-	host._on_online_message({"type": "peer_status", "player": 2, "connected": true})
-	check("2/4 CONNECTED" in host._online_lobby._occupancy.text,
+	host._online._on_online_message({"type": "peer_status", "player": 2, "connected": true})
+	check("2/4 CONNECTED" in host._online._online_lobby._occupancy.text,
 		"Host occupancy must refresh when another player's socket connects")
-	check(host._online_lobby.level == 2, "Presence changes must preserve the host arena")
+	check(host._online._online_lobby.level == 2, "Presence changes must preserve the host arena")
 	for level in Levels.count():
 		for game in games:
 			game.online_mode = false
 			game.team_mode = true
-			game.class_lab = true
-			game.real_time_mode = true
 			game.execution_duration = 1.5
-			game._start_online_match(level, 12345, 1, [0, 0, 0, 0])
-			check(game.players.size() == 4 and not game.team_mode and not game.class_lab \
-				and not game.real_time_mode, "Online start must clear local modes and spawn four humans")
+			game._online._start_online_match(level, 12345, 1, [0, 0, 0, 0])
+			check(game.players.size() == 4 and not game.team_mode, "Online start must clear local modes and spawn four humans")
 			check(game.execution_duration == 0.75, "Online start must reset local tuning")
-			check(game._keyboard_player() == game.online_player, "Every slot must own its local keyboard")
+			check(game._player_input._keyboard_player() == game.online_player, "Every slot must own its local keyboard")
 			for i in 4:
 				check(not game.is_ai(i), "Online slots must never run AI")
-		var first_digest: String = games[0]._online_state_digest()
+		var first_digest: String = games[0]._online._online_state_digest()
 		for game in games:
-			check(game._online_state_digest() == first_digest, "Initial states must match across all clients")
+			check(game._online._online_state_digest() == first_digest, "Initial states must match across all clients")
 		for slot in [2, 3]:
 			games[0].score[slot] += 1
-			check(games[0]._online_state_digest() != first_digest, "P3/P4 score drift must change checksum")
+			check(games[0]._online._online_state_digest() != first_digest, "P3/P4 score drift must change checksum")
 			games[0].score[slot] -= 1
 			games[0].player_weapons[slot] = 2
-			check(games[0]._online_state_digest() != first_digest, "P3/P4 kit drift must change checksum")
+			check(games[0]._online._online_state_digest() != first_digest, "P3/P4 kit drift must change checksum")
 			games[0].player_weapons[slot] = 0
 		for round_index in 3:
 			var plans: Array = []
@@ -66,9 +63,9 @@ func run() -> void:
 				plan.power = 0.6
 				plans.append(plan.to_network_dict())
 			for game in games:
-				game._apply_online_turn_plans({"turn": game.turn, "plans": plans.slice(0, 3)})
+				game._online._apply_online_turn_plans({"turn": game.turn, "plans": plans.slice(0, 3)})
 				check(game.state == Phase.PLANNING, "Three plans cannot execute a four-player turn")
-				game._apply_online_turn_plans({"turn": game.turn, "plans": plans})
+				game._online._apply_online_turn_plans({"turn": game.turn, "plans": plans})
 				check(game.state == Phase.COMMITTING, "All four plans must commit")
 				for i in 4:
 					check(game.players[i].plan.confirmed, "Every received plan must be applied")
@@ -78,40 +75,40 @@ func run() -> void:
 					game._sim_tick(1.0 / 60.0)
 				game._end_execution()
 				check(game.state == Phase.ONLINE_WAIT, "Client must wait for the server turn barrier")
-			var digest: String = games[0]._online_state_digest()
+			var digest: String = games[0]._online._online_state_digest()
 			for game in games:
-				check(game._online_state_digest() == digest, "Four simulations must agree after level %d turn %d" % [level, round_index])
-				game._on_online_message({"type": "turn_start", "turn": game.turn + 1})
+				check(game._online._online_state_digest() == digest, "Four simulations must agree after level %d turn %d" % [level, round_index])
+				game._online._on_online_message({"type": "turn_start", "turn": game.turn + 1})
 				check(game.state == Phase.PLANNING, "Server advance must resume all clients")
 	var game = games[0]
-	game._on_online_message({"type": "peer_status", "player": 2, "connected": false})
-	game._on_online_message({"type": "peer_status", "player": 3, "connected": false})
-	game._on_online_message({"type": "peer_status", "player": 2, "connected": true})
-	check(game.online_peer_lost, "One reconnect cannot hide another disconnected player")
-	game._on_online_message({"type": "peer_status", "player": 3, "connected": true})
-	check(not game.online_peer_lost, "All reconnects must restore room health")
+	game._online._on_online_message({"type": "peer_status", "player": 2, "connected": false})
+	game._online._on_online_message({"type": "peer_status", "player": 3, "connected": false})
+	game._online._on_online_message({"type": "peer_status", "player": 2, "connected": true})
+	check(game._online.online_peer_lost, "One reconnect cannot hide another disconnected player")
+	game._online._on_online_message({"type": "peer_status", "player": 3, "connected": true})
+	check(not game._online.online_peer_lost, "All reconnects must restore room health")
 	game.state = Phase.ONLINE_WAIT
 	var next_turn: int = game.turn + 1
-	game._on_online_message({"type": "room_state", "connected": [true, true, true, true],
+	game._online._on_online_message({"type": "room_state", "connected": [true, true, true, true],
 		"capacity": 4, "phase": "planning", "turn": next_turn, "seed": 12345})
 	check(game.state == Phase.PLANNING and game.turn == next_turn,
 		"Reconnect must recover a missed turn_start from the room state")
 	game.turn = 1
 	game.score[3] = 2
-	game._start_online_match(0, 999, 1, [0, 0, 0, 0])
+	game._online._start_online_match(0, 999, 1, [0, 0, 0, 0])
 	check(game.score[3] == 2, "Reconnect during first turn must not reset the match")
 	game.state = Phase.GAME_OVER
-	game._start_online_match(1, 999, 1, [0, 0, 0, 0])
+	game._online._start_online_match(1, 999, 1, [0, 0, 0, 0])
 	check(game.score[3] == 0 and game.players.size() == 4 and game.level_index == 1,
 		"Rematch must reset all four slots on the host-selected level")
 	game.state = Phase.REPLAY
-	game._online_waiting_rematch = true
-	game._start_online_match(2, 1000, 1, [0, 0, 0, 0])
+	game._online._online_waiting_rematch = true
+	game._online._start_online_match(2, 1000, 1, [0, 0, 0, 0])
 	check(game.state == Phase.PLANNING and game.level_index == 2,
 		"An agreed rematch must exit replay instead of stranding that participant")
 	# Online arenas are voted after REMATCH, so the result screen no longer picks one.
 	game.state = Phase.GAME_OVER
-	game._online_waiting_rematch = false
+	game._online._online_waiting_rematch = false
 	var before: int = game.rematch_level_index
 	game._cycle_rematch_level(1)
 	check(game.rematch_level_index == before, "The online result screen must not pick the arena")
@@ -119,31 +116,31 @@ func run() -> void:
 	var guest = games[1]
 	guest.state = Phase.GAME_OVER
 	guest.online_mode = true
-	guest._on_online_message({"type": "selection_state", "phase": "selecting", "capacity": 4,
+	guest._online._on_online_message({"type": "selection_state", "phase": "selecting", "capacity": 4,
 		"weapons": [0, 0, 0, 0], "level_votes": [3, 3, 1, 1], "lives_votes": [7, 5, 5, 5],
 		"ready": [false, true, false, false], "connected": [true, true, true, true],
 		"names": ["HOST", "", "", ""]})
-	check(guest.state == Phase.ONLINE_SELECT and guest._online_roster.visible \
+	check(guest.state == Phase.ONLINE_SELECT and guest._online._online_roster.visible \
 		and not guest.online_mode, "The selection phase must open the online lineup screen")
-	check(guest._online_pick["level"] == 3 and guest._online_pick["lives"] == 5,
+	check(guest._online._online_pick["level"] == 3 and guest._online._online_pick["lives"] == 5,
 		"A returning player starts from the votes the room remembers")
-	guest._online_roster._confirm()
-	check(guest._online_setup.visible and guest._online_setup.level == 3,
+	guest._online._online_roster._confirm()
+	check(guest._online._online_setup.visible and guest._online._online_setup.level == 3,
 		"Confirming the fighter must open the arena vote on the current vote")
-	guest._online_setup._step_row(1)
-	guest._online_setup._adjust(1)
-	check(guest._online_pick["lives"] == 7, "Changing the match length must update the vote")
-	guest._online_setup._start_match()
-	check(guest._online_pick["ready"], "READY must be sent to the room")
-	guest._on_online_message({"type": "match_start", "level": 1, "lives": 7, "seed": 77, "turn": 1,
+	guest._online._online_setup._step_row(1)
+	guest._online._online_setup._adjust(1)
+	check(guest._online._online_pick["lives"] == 7, "Changing the match length must update the vote")
+	guest._online._online_setup._start_match()
+	check(guest._online._online_pick["ready"], "READY must be sent to the room")
+	guest._online._on_online_message({"type": "match_start", "level": 1, "lives": 7, "seed": 77, "turn": 1,
 		"weapons": [0, 0, 0, 0], "names": []})
 	check(guest.online_mode and guest.hits_to_win == 7 and guest.level_index == 1 \
-		and not guest._online_setup.visible, "The room's counted vote must start the match")
+		and not guest._online._online_setup.visible, "The room's counted vote must start the match")
 	# A player leaving between matches sends everyone back to the room code.
 	guest.state = Phase.GAME_OVER
-	guest._on_online_message({"type": "peer_left", "player": 2})
-	check(guest.state == Phase.ONLINE_LOBBY and guest._online_lobby.visible \
-		and "LEFT" in guest._online_lobby._status.text,
+	guest._online._on_online_message({"type": "peer_left", "player": 2})
+	check(guest.state == Phase.ONLINE_LOBBY and guest._online._online_lobby.visible \
+		and "LEFT" in guest._online._online_lobby._status.text,
 		"A departed player must return the table to the room screen")
 	for entry in games:
 		entry.queue_free()

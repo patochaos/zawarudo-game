@@ -14,7 +14,7 @@ func execute(game) -> void:
 	game._begin_execution()
 	while game.state == Phase.EXECUTING and game.exec_tick < game.exec_ticks_total:
 		game._sim_tick(game.tick_dt())
-		game._capture_replay_frame()
+		game._replay._capture_replay_frame()
 		game.exec_tick += 1
 	if game.state == Phase.EXECUTING: game._end_execution()
 
@@ -25,8 +25,8 @@ func run() -> void:
 	game.set_physics_process(false)
 	game._sfx.muted = true
 	# Ladder progress is saved on a demo win; keep it off the player's settings.
-	game.settings_path = "user://test-coredemotest-settings.cfg"
-	game._settings["ladder_progress"] = 0
+	game._settings_store.settings_path = "user://test-coredemotest-settings.cfg"
+	game._settings_store._settings["ladder_progress"] = 0
 	check(game._menu._page_names() == ["START DUEL", "CUSTOM MATCH", "INTERCEPTION", "LEARN TO PLAY", "ONLINE", "CONTROLS", "OPTIONS", "GAME TUNING", "SEND FEEDBACK", "QUIT"], "public demo must expose Custom Match, Interception and offline tuning alongside its primary destinations")
 	game._menu._activate(game._menu.ROW_PLAY)
 	check(game.demo_match and game.state == Phase.PLANNING and game.hits_to_win == 3, "Start Duel must directly launch first to three")

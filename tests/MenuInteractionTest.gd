@@ -17,9 +17,9 @@ func _run() -> void:
 	root.add_child(menu)
 	await process_frame
 
-	menu.configure_bindings(GAME_MANAGER.DEFAULT_BINDINGS.duplicate(true))
+	menu.configure_bindings(PlayerInput.DEFAULT_BINDINGS.duplicate(true))
 	var controls_node_count: int = menu._controls_sheet.get_child_count()
-	menu.configure_bindings(GAME_MANAGER.DEFAULT_BINDINGS.duplicate(true))
+	menu.configure_bindings(PlayerInput.DEFAULT_BINDINGS.duplicate(true))
 	_check(menu._controls_sheet.get_child_count() == controls_node_count,
 		"refreshing live bindings must not rebuild the controls sheet")
 	_check(menu._row_buttons.size() == menu.ROWS,
@@ -68,17 +68,12 @@ func _run() -> void:
 		and menu._page_names()[menu.ROW_CUSTOM] == "CUSTOM MATCH",
 		"developer tools must retain Game Tuning and Custom Match as separate destinations")
 	menu._activate(menu.ROW_EXPERIMENTS)
-	_check(menu._page_names().size() == 6, "experiments must have five modes and Back")
+	_check(menu._page_names().size() == 3, "experiments must have two modes and Back")
 	var trial_opened := [0]
 	menu.fate_trial_requested.connect(func(): trial_opened[0] += 1)
 	menu._row_buttons[menu.ROW_FATE_TRIAL].pressed.emit()
 	_check(trial_opened[0] == 1 and menu._page == menu.MenuPage.EXPERIMENTS,
 		"Fate Trial must request its direct single-player launch")
-	var close_camera_opened := [0]
-	menu.close_camera_requested.connect(func(): close_camera_opened[0] += 1)
-	menu._row_buttons[menu.ROW_CLOSE_CAMERA].pressed.emit()
-	_check(close_camera_opened[0] == 1 and menu._page == menu.MenuPage.EXPERIMENTS,
-		"Close Camera must request its isolated prototype launch")
 	var sandbox_opened := [0]
 	menu.sandbox_requested.connect(func(): sandbox_opened[0] += 1)
 	menu._row_buttons[menu.ROW_SANDBOX].pressed.emit()

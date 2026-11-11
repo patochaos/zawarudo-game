@@ -58,7 +58,7 @@ func _run() -> void:
 	_check(not game.is_ai(0) and not game.is_ai(1) and game.is_ai(2) and game.is_ai(3),
 		"mixed human/CPU ownership must be evaluated per slot")
 	# The keyboard seat is Player 1 in every mode now; a second human is a pad.
-	_check(game._keyboard_player() == 0 and game._input_map_for(0) == game.key_bindings,
+	_check(game._player_input._keyboard_player() == 0 and game._player_input._input_map_for(0) == game._player_input.key_bindings,
 		"the keyboard seat must drive the slot it holds on the roster screen")
 	_check(game._ai_target_for(2) in [1, 3],
 		"a Crimson CPU fighter must target only Azure opponents")

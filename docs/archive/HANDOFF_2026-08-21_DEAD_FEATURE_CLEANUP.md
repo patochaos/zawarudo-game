@@ -206,8 +206,8 @@ cd backend && npm test && npm run typecheck
 
 - **`tests/` contains three different kinds of file.** 20 are real assertion
   suites. 19 are screenshot capture scripts (identified by preloading
-  `tests/VisualCaptureHelper.gd`, *not* by filename).
-  `tests/CharacterBalanceSimulation.gd` is a multi-minute AI tournament research
+  `tools/captures/VisualCaptureHelper.gd`, *not* by filename).
+  `tools/sims/CharacterBalanceSimulation.gd` is a multi-minute AI tournament research
   tool, not a test. Never put it in a normal run.
 - **Do not filter suites with `grep -v Visual`.** `tests/FighterVisualTest.gd`
   is a real headless suite. Filter by the helper preload, as CI does.

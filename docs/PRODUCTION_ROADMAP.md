@@ -1,14 +1,16 @@
 # ZAWARUDO: Production roadmap
 
 **Current public demo:** [Core playtest](CORE_PLAYTEST.md) defines the focused
-0.3.0 entry flow, timed lessons, readability, feedback and observation gates.
+0.4.2 entry flow, timed lessons, readability, feedback and observation gates.
 The experiment and art-production notes below remain development context.
 
-**Experimental Class Lab:** the menu now offers redesigned Rook (lance), Pulse (delayed split), and Eclipse (fixed return) against CPU in planning or real time. Normal roster stays Duelist-only. See [Class Lab](CLASS_LAB.md).
-
-**Current roster scope, September 4, 2026:** Duelist only. Rook, Pulse and
-Eclipse are benched, with code and assets preserved. Their production work
-below is deferred while we focus on prediction and projectile placement.
+**Current roster scope:** Duelist only since September 4, 2026. The benched
+Rook, Pulse and Eclipse kits were removed from the tree on 2026-11-10, with
+their weapons, tuning and assets, together with the Class Lab, Real Time and
+Close Camera experiments. Their last state is preserved at git tag
+`archive/pre-prune-2026-11-10` and their specifications are in
+[archive/characters](archive/characters/). Their production work below is
+deferred while we focus on prediction and projectile placement.
 
 ## Current Duelist polish
 
@@ -25,14 +27,6 @@ plan → lock → execute rhythm without changing its deterministic simulation.
 The production pipeline is hybrid: one canonical character model and rig in
 Blender, rendered to layered 2D sprites, with a procedural aiming arm and
 event-driven presentation in Godot.
-
-## Current handoff
-
-The maintenance pass of 2026-08-21 (retired-feature removal, the online
-protocol 2 pin, the forfeit path and the CI hardening) is written up in
-[`HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md`](archive/HANDOFF_2026-08-21_DEAD_FEATURE_CLEANUP.md),
-together with the open backlog and the acceptance commands. Read it before
-picking up new work.
 
 ## Direction decisions
 
@@ -63,13 +57,20 @@ These rules cannot change as a side effect of the art pass:
 
 Goal: preserve a known-good version before changing the renderer.
 
-- [ ] Review the current dirty worktree and separate intentional source changes
-  from generated captures and previews.
-- [ ] Create a recoverable checkpoint after explicit scope review.
-- [x] Run all Godot suites, backend tests and typecheck.
-- [x] Rebuild Web and run the Windows smoke test.
+- Obsolete: "Review the current dirty worktree and separate intentional source
+  changes from generated captures and previews." This item described the
+  worktree of August 2026. Capture scripts now live in `tools/captures/` and
+  long simulations in `tools/sims/`, outside `tests/`.
+- [ ] Create a recoverable checkpoint after explicit scope review. The tag
+  `archive/pre-prune-2026-11-10` preserves the tree before the November prune;
+  it has not been reviewed as this gate's checkpoint.
+- [x] Run all Godot suites, backend tests and typecheck. Last recorded run:
+  2026-08-17, in the baseline log below. Every push and pull request now runs
+  them in `.github/workflows/publish.yml`.
+- [x] Rebuild Web and run the Windows smoke test. Last recorded run: 2026-08-17.
 - [ ] Record reference screenshots and basic Web performance.
-- [x] Use the standard camera as the provisional vertical-slice target.
+- [x] Use the standard camera as the provisional vertical-slice target. The
+  Close Camera experiment has since been removed.
 
 Exit criteria: green verification, reference captures and a recoverable commit.
 No final character production starts before this gate passes.
@@ -124,8 +125,9 @@ motion, dishonest launch origin or visible Web performance regression.
 Goal: create one reusable theatrical grammar instead of isolated effects.
 
 Implemented 2026-10-14 in `scripts/EventDirection.gd`, `SuperFreezeFrame.gd`,
-`FighterVisual.gd` and the result screen; see "Event direction" in the README
-and `EventDirectionTest` / `EventDirectionVisualTest`.
+`FighterVisual.gd` and the result screen; see
+["Event direction"](REFERENCE.md#event-direction) in the reference,
+`tests/EventDirectionTest.gd` and `tools/captures/EventDirectionVisualTest.gd`.
 
 - [x] Palette presets for lock, impact, SUPER and result.
 - [x] Lock-in pose and spotlight.

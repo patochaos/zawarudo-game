@@ -19,6 +19,8 @@ func _run() -> void:
 	await process_frame
 	game.set_physics_process(false)
 	game._sfx.muted = true
+	# Fixed seats: a random spawn can put the run against a wall and fail the travel check.
+	game.randomize_spawns = false
 	game.start_quick_match(false, 0, 2)
 	game._transition.visible = false
 	var p0: Player = game.players[0]
@@ -130,8 +132,8 @@ func _run() -> void:
 	quit(failures)
 
 
-func _knife(game, shooter: int, from: Vector2, to: Vector2) -> Arrow:
-	var a := Arrow.new()
+func _knife(game, shooter: int, from: Vector2, to: Vector2) -> Knife:
+	var a := Knife.new()
 	a.cfg = game
 	a.shooter = shooter
 	a.prev_pos = from

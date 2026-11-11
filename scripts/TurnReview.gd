@@ -23,11 +23,11 @@ func _ready() -> void:
 
 
 func open_last_turn() -> bool:
-	if gm.online_mode or gm._touch_controls.enabled or gm.state != Phase.PLANNING or gm._replay_frames.is_empty():
+	if gm.online_mode or gm._touch_controls.enabled or gm.state != Phase.PLANNING or gm._replay._replay_frames.is_empty():
 		return false
 	frames.clear()
-	var previous: int = gm._replay_frames.back()["turn"]
-	for frame in gm._replay_frames:
+	var previous: int = gm._replay._replay_frames.back()["turn"]
+	for frame in gm._replay._replay_frames:
 		if int(frame["turn"]) == previous:
 			frames.append(frame)
 	cursor = 0.0

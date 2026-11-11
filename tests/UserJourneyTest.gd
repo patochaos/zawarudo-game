@@ -62,13 +62,13 @@ func _run() -> void:
 		"the result screen must always provide a route back to the title")
 
 	game._setup.level = 1
-	game._on_menu_online()
+	game._online._on_menu_online()
 	game._transition.visible = false
-	_check(game.state == Phase.ONLINE_LOBBY and game._online_lobby.visible,
+	_check(game.state == Phase.ONLINE_LOBBY and game._online._online_lobby.visible,
 		"Online must open its private-room lobby instead of entering an ambiguous match state")
-	game._leave_online()
+	game._online._leave_online()
 	game._transition.visible = false
-	_check(game.state == Phase.MENU and not game._online_lobby.visible,
+	_check(game.state == Phase.MENU and not game._online._online_lobby.visible,
 		"cancelling Online must disconnect and restore the menu")
 
 	game.start_quick_freeplay(3)

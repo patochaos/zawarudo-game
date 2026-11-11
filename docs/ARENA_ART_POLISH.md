@@ -89,7 +89,7 @@ Rendering picks OptiX or CUDA when available and falls back to the CPU.
 Verification on October 16: `ArenaArtTest`, `KenneyPolishTest`,
 `PrototypeArenasTest` and `KineticArenaTest` passed headless. The windowed
 `ArenaArtVisualTest` captures were reviewed for all five arenas, and the new
-`tests/ArenaParallaxVisualTest.gd` writes `previews/arena-parallax-*.png`: the
+`tools/captures/ArenaParallaxVisualTest.gd` writes `previews/arena-parallax-*.png`: the
 same arena in planning, then execution settled at the left and right edges.
 Measured on Crosshair Court, the mid layer shifts 6 px between the two edges
 and the far layer about 18 px, and the lit strip reads about 1.6x brighter in
@@ -112,7 +112,7 @@ so the damage states have their own script and `platform-damage-v1.blend`.
 
 The match setup plan now draws the chosen arena's far and mid layers at plan
 scale, dimmed under the diagram, so the rules screen shows the room as well as
-the layout. `tests/PlatformDamageVisualTest.gd` captures cracked, broken, the
+the layout. `tools/captures/PlatformDamageVisualTest.gd` captures cracked, broken, the
 shard burst a third of the way through its flight, and the setup screen for two
 arenas under `previews/platform-damage-*.png`.
 
@@ -178,7 +178,7 @@ KineticArenaTest, LevelLayoutTest and PrototypeArenasTest. The new atmosphere
 checks exercise freeze/resume/reset and unchanged online state on all seven
 arenas.
 
-The source launcher ran `tests/ArenaArtVisualTest.gd` successfully. Its 24
+The source launcher ran `tools/captures/ArenaArtVisualTest.gd` successfully. Its 24
 captures cover all six arenas in planning, execution, 1024×576 high-contrast
 planning, and four-player matches with damaged cover. Rendered review artifacts
 are in `previews/arena-art-*.png`; the six-panel gallery is
@@ -186,7 +186,7 @@ are in `previews/arena-art-*.png`; the six-panel gallery is
 right, top to bottom. These local previews are ignored by Git.
 
 ```powershell
-.\Play.bat --rendering-method gl_compatibility --audio-driver Dummy --script tests/ArenaArtVisualTest.gd
+.\Play.bat --rendering-method gl_compatibility --audio-driver Dummy --script tools/captures/ArenaArtVisualTest.gd
 ```
 
 This verification establishes rendering and the affected source behavior; it
