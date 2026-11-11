@@ -26,6 +26,7 @@ export function plan(overrides: Partial<PlayerPlanPayload> = {}): PlayerPlanPayl
     power: 0.5,
     attack_mode: 0,
     super_shot: false,
+    lock_permille: 0,
     ...overrides,
   };
 }
